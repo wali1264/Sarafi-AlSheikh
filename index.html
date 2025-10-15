@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF--8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SarrafAI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Teko:wght@300..700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.4",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.24.0"
+  }
+}
+</script>
+<style>
+  body {
+    font-family: 'Teko', sans-serif;
+  }
+  @media print {
+    body {
+      background-color: white !important;
+    }
+    #root > div {
+      display: block !important;
+    }
+    aside, #voice-assistant, #header-container, #report-controls {
+      display: none !important;
+    }
+    main {
+      padding: 0 !important;
+    }
+    #report-view {
+      color: black !important;
+      border: none !important;
+      box-shadow: none !important;
+      background: none !important;
+    }
+    #report-view * {
+      color: black !important;
+      background-color: transparent !important;
+    }
+     #report-view table, #report-view th, #report-view td {
+      border: 1px solid #ccc !important;
+    }
+  }
+</style>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-[#0D0C22]">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

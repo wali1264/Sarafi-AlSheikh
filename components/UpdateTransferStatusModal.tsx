@@ -1,0 +1,117 @@
+import React, { useState, FormEvent, useEffect } from 'react';
+import { useApi } from '../hooks/useApi';
+import { DomesticTransfer, TransferStatus, UpdateTransferStatusPayload, User } from '../types';
+import { statusTranslations } from '../utils/translations';
+
+interface UpdateTransferStatusModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSuccess: () => void;
+    currentUser: User;
+    transfer: DomesticTransfer;
+}
+
+const UpdateTransferStatusModal: React.FC<UpdateTransferStatusModalProps> = ({ isOpen, onClose, onSuccess, currentUser, transfer }) => {
+    const api = useApi();
+    const [newStatus, setNewStatus] = useState<TransferStatus>(transfer.status);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        // Reset status when a new transfer is selected
+        setNewStatus(transfer.status);
+        setError(null);
+    }, [transfer]);
+    
+    if (!isOpen) return null;
+
+    const availableStatuses = [
+        { value: TransferStatus.Executed, label: statusTranslations[TransferStatus.Executed] },
+        { value: TransferStatus.Paid, label: statusTranslations[TransferStatus.Paid] },
+    ].filter(status => {
+        // You can't set status to pending, and can only move forward
+        if (transfer.status === TransferStatus.Pending) return true;
+        if (transfer.status === TransferStatus.Executed) return status.value === TransferStatus.Paid;
+        return false;
+    });
+
+    const handleSubmit = async (e: FormEvent) => {
+        e.preventDefault();
+        if (newStatus === transfer.status) {
+            setError("لطفاً یک وضعیت جدید انتخاب کنید.");
+            return;
+        }
+        setIsLoading(true);
+        setError(null);
+
+        const payload: UpdateTransferStatusPayload = {
+            transferId: transfer.id,
+            newStatus,
+            user: currentUser,
+        };
+
+        const result = await api.updateTransferStatus(payload);
+        setIsLoading(false);
+
+        if ('error' in result) {
+            setError(result.error);
+        } else {
+            onSuccess();
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-[#0D0C22]/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity animate-fadeIn" style={{ direction: 'rtl' }}>
+            <div className="bg-[#12122E]/90 w-full max-w-xl border-2 border-cyan-400/30 shadow-[0_0_40px_rgba(0,255,255,0.2)]"
+                style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 30px), calc(100% - 30px) 100%, 0 100%)' }}>
+                <form onSubmit={handleSubmit}>
+                    <div className="px-8 py-5 border-b-2 border-cyan-400/20">
+                        <h2 className="text-4xl font-bold text-cyan-300 tracking-wider">به‌روزرسانی وضعیت حواله</h2>
+                        <p className="text-lg text-slate-400 font-mono mt-1">{transfer.id}</p>
+                    </div>
+                    <div className="p-8 space-y-6">
+                        {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
+                        
+                        <div className="text-xl">
+                            <span className="font-medium text-slate-400">وضعیت فعلی: </span>
+                            <span className="font-bold text-slate-100">{statusTranslations[transfer.status]}</span>
+                        </div>
+
+                        <div>
+                            <label htmlFor="newStatus" className="block text-lg font-medium text-cyan-300 mb-2 text-right tracking-wider">وضعیت جدید</label>
+                            <select 
+                                id="newStatus"
+                                name="newStatus"
+                                value={newStatus}
+                                onChange={(e) => setNewStatus(e.target.value as TransferStatus)}
+                                className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right transition-colors duration-300"
+                                disabled={availableStatuses.length === 0}
+                            >
+                                <option value={transfer.status} disabled>-- انتخاب کنید --</option>
+                                {availableStatuses.map(s => (
+                                    <option key={s.value} value={s.value}>{s.label}</option>
+                                ))}
+                            </select>
+                            {availableStatuses.length === 0 && (
+                                <p className="text-base text-yellow-400 mt-2">این حواله به وضعیت نهایی خود رسیده است.</p>
+                            )}
+                        </div>
+                    </div>
+                    <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end space-x-4 space-x-reverse">
+                        <button type="button" onClick={onClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md transition-colors">لغو</button>
+                        <button type="submit" disabled={isLoading || availableStatuses.length === 0} 
+                                className="px-8 py-3 text-xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                                style={{
+                                    clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)',
+                                    boxShadow: '0 0 25px rgba(0, 255, 255, 0.5)'
+                                }}>
+                            {isLoading ? 'در حال ذخیره...' : 'ذخیره تغییرات'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+export default UpdateTransferStatusModal;
