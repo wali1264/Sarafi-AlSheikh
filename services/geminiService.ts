@@ -1,16 +1,22 @@
 import { GoogleGenAI, FunctionDeclaration, Type } from '@google/genai';
 import { Currency, ExpenseCategory, ForeignTransactionType, ReportType, TransferStatus } from '../types';
 
-if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable not set");
+// This is the critical fix: The application crashes on startup because it tries to access 
+// process.env.API_KEY, which doesn't exist in the browser. The check is removed to allow the app to load.
+// The deployment environment (like Vercel) is responsible for providing the API key.
+const apiKey = process.env.API_KEY;
+
+if (!apiKey) {
+    console.warn("API_KEY environment variable not set. The application will load, but API calls will fail.");
 }
 
 class GeminiService {
     public ai: GoogleGenAI;
     public tools: { functionDeclarations: FunctionDeclaration[] }[];
 
-    constructor(apiKey: string) {
-        this.ai = new GoogleGenAI({ apiKey });
+    constructor(apiKey: string | undefined) {
+        // Initialize with the key, even if it's undefined. The API will handle the error upon first call.
+        this.ai = new GoogleGenAI({ apiKey: apiKey || "" });
         this.tools = [{ functionDeclarations: this.getFunctionDeclarations() }];
     }
 
@@ -124,5 +130,5 @@ class GeminiService {
     }
 }
 
-const geminiService = new GeminiService(process.env.API_KEY);
+const geminiService = new GeminiService(apiKey);
 export default geminiService;
