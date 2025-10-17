@@ -1,4 +1,4 @@
-import { Role, TransferStatus, ExpenseCategory, ForeignTransactionType, ReportType, CashboxRequestStatus, AmanatStatus } from '../types';
+import { Role, TransferStatus, ExpenseCategory, ForeignTransactionType, ReportType, CashboxRequestStatus, AmanatStatus, ForeignTransactionStatus } from '../types';
 
 export const roleTranslations: Record<Role, string> = {
     [Role.Manager]: 'مدیر',
@@ -29,15 +29,22 @@ export const foreignTransactionTypeTranslations: Record<ForeignTransactionType, 
     [ForeignTransactionType.InternalBankTomanTransfer]: 'انتقال داخلی بین حساب‌ها',
 };
 
+export const foreignTransactionStatusTranslations: Record<ForeignTransactionStatus, string> = {
+    [ForeignTransactionStatus.PendingCashConfirmation]: 'در انتظار تایید صندوق',
+    [ForeignTransactionStatus.Completed]: 'تکمیل شده',
+    [ForeignTransactionStatus.Cancelled]: 'لغو شده',
+};
+
 export const reportTypeTranslations: Record<ReportType, string> = {
     [ReportType.ProfitAndLoss]: 'گزارش سود و زیان',
     [ReportType.CashboxSummary]: 'گزارش خلاصه صندوق',
 }
 
 export const cashboxRequestStatusTranslations: Record<CashboxRequestStatus, string> = {
-    [CashboxRequestStatus.Pending]: 'در انتظار',
+    [CashboxRequestStatus.Pending]: 'در انتظار مدیر',
     [CashboxRequestStatus.Approved]: 'تایید شده',
     [CashboxRequestStatus.Rejected]: 'رد شده',
+    [CashboxRequestStatus.AutoApproved]: 'تایید خودکار',
 };
 
 export const amanatStatusTranslations: Record<AmanatStatus, string> = {

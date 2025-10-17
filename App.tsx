@@ -13,9 +13,13 @@ import ExpensesPage from './pages/ExpensesPage';
 import VoiceAssistant from './components/VoiceAssistant';
 import PartnerAccountsPage from './pages/PartnerAccountsPage';
 import PartnerAccountDetailPage from './pages/PartnerAccountDetailPage';
-import ForeignTransfersPage from './pages/ForeignTransfersPage';
+import AccountTransfersPage from './pages/AccountTransfersPage';
 import ReportsPage from './pages/ReportsPage';
 import AmanatPage from './pages/AmanatPage';
+import SettingsPage from './pages/SettingsPage';
+import PrintableView from './components/PrintableView';
+import CustomersPage from './pages/CustomersPage';
+import CustomerDetailPage from './pages/CustomerDetailPage';
 
 const App: React.FC = () => {
     return (
@@ -35,6 +39,24 @@ const ProtectedRoute: React.FC<{ allowedRoles: Role[] }> = ({ allowedRoles }) =>
     return allowedRoles.includes(user.role) ? <Outlet /> : <Navigate to="/dashboard" />;
 };
 
+const MainLayout: React.FC = () => (
+    <div className="flex h-screen bg-[#0D0C22] text-slate-100 font-sans" style={{ direction: 'rtl' }}>
+        <Sidebar />
+        <div className="flex-1 flex flex-col overflow-hidden">
+            <div id="header-container">
+                <Header />
+            </div>
+            <main className="flex-1 overflow-x-hidden overflow-y-auto p-8">
+                <Outlet />
+            </main>
+        </div>
+        <div id="voice-assistant">
+            <VoiceAssistant />
+        </div>
+    </div>
+);
+
+
 const SarrafAIApp: React.FC = () => {
     const { user } = useAuth();
     
@@ -44,47 +66,44 @@ const SarrafAIApp: React.FC = () => {
 
     return (
         <HashRouter>
-            <div className="flex h-screen bg-[#0D0C22] text-slate-100 font-sans" style={{ direction: 'rtl' }}>
-                <Sidebar />
-                <div className="flex-1 flex flex-col overflow-hidden">
-                    <div id="header-container">
-                        <Header />
-                    </div>
-                    <main className="flex-1 overflow-x-hidden overflow-y-auto p-8">
-                        <Routes>
-                            <Route path="/dashboard" element={<DashboardPage />} />
-                            <Route path="/reports" element={<ReportsPage />} />
+            <Routes>
+                {/* Routes with the main layout */}
+                <Route element={<MainLayout />}>
+                    <Route path="/dashboard" element={<DashboardPage />} />
+                    <Route path="/reports" element={<ReportsPage />} />
 
-                            <Route element={<ProtectedRoute allowedRoles={[Role.Manager, Role.Cashier]} />}>
-                                <Route path="/cashbox" element={<CashboxPage />} />
-                            </Route>
+                    <Route element={<ProtectedRoute allowedRoles={[Role.Manager, Role.Cashier]} />}>
+                        <Route path="/cashbox" element={<CashboxPage />} />
+                    </Route>
 
-                            <Route element={<ProtectedRoute allowedRoles={[Role.Manager, Role.Domestic_Clerk]} />}>
-                                <Route path="/domestic-transfers" element={<DomesticTransfersPage />} />
-                                <Route path="/partner-accounts" element={<PartnerAccountsPage />} />
-                                <Route path="/partner-accounts/:partnerId" element={<PartnerAccountDetailPage />} />
-                            </Route>
+                    <Route element={<ProtectedRoute allowedRoles={[Role.Manager, Role.Domestic_Clerk]} />}>
+                        <Route path="/domestic-transfers" element={<DomesticTransfersPage />} />
+                        <Route path="/partner-accounts" element={<PartnerAccountsPage />} />
+                        <Route path="/partner-accounts/:partnerId" element={<PartnerAccountDetailPage />} />
+                    </Route>
 
-                            <Route element={<ProtectedRoute allowedRoles={[Role.Manager, Role.Foreign_Clerk]} />}>
-                                <Route path="/foreign-transfers" element={<ForeignTransfersPage />} />
-                            </Route>
-                             
-                            <Route element={<ProtectedRoute allowedRoles={[Role.Manager, Role.Foreign_Clerk, Role.Domestic_Clerk]} />}>
-                                <Route path="/amanat" element={<AmanatPage />} />
-                            </Route>
+                    <Route element={<ProtectedRoute allowedRoles={[Role.Manager, Role.Foreign_Clerk, Role.Domestic_Clerk]} />}>
+                        <Route path="/account-transfers" element={<AccountTransfersPage />} />
+                    </Route>
+                     
+                    <Route element={<ProtectedRoute allowedRoles={[Role.Manager, Role.Foreign_Clerk, Role.Domestic_Clerk]} />}>
+                        <Route path="/amanat" element={<AmanatPage />} />
+                        <Route path="/customers" element={<CustomersPage />} />
+                        <Route path="/customers/:customerId" element={<CustomerDetailPage />} />
+                    </Route>
 
-                            <Route element={<ProtectedRoute allowedRoles={[Role.Manager]} />}>
-                                <Route path="/expenses" element={<ExpensesPage />} />
-                            </Route>
-                            
-                            <Route path="*" element={<Navigate to="/dashboard" />} />
-                        </Routes>
-                    </main>
-                </div>
-                <div id="voice-assistant">
-                    <VoiceAssistant />
-                </div>
-            </div>
+                    <Route element={<ProtectedRoute allowedRoles={[Role.Manager]} />}>
+                        <Route path="/expenses" element={<ExpensesPage />} />
+                        <Route path="/settings" element={<SettingsPage />} />
+                    </Route>
+                    
+                    <Route path="*" element={<Navigate to="/dashboard" />} />
+                </Route>
+                
+                {/* Routes without the main layout (e.g., for printing) */}
+                <Route path="/print/cashbox/:requestId" element={<PrintableView />} />
+
+            </Routes>
         </HashRouter>
     );
 };

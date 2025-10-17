@@ -1,15 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { MOCK_USERS } from '../constants';
 import { roleTranslations } from '../utils/translations';
+import { useApi } from '../hooks/useApi';
+import { User } from '../types';
 
 const Login: React.FC = () => {
-    const [selectedUserId, setSelectedUserId] = useState<string>(MOCK_USERS[0].id);
+    const [users, setUsers] = useState<User[]>([]);
+    const [selectedUserId, setSelectedUserId] = useState<string>('');
     const { login } = useAuth();
+    const api = useApi();
+
+    useEffect(() => {
+        const fetchUsers = async () => {
+            const userList = await api.getUsers();
+            setUsers(userList);
+            if (userList.length > 0) {
+                setSelectedUserId(userList[0].id);
+            }
+        };
+        fetchUsers();
+    }, [api]);
+
 
     const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
-        const user = MOCK_USERS.find(u => u.id === selectedUserId);
+        const user = users.find(u => u.id === selectedUserId);
         if (user) {
             login(user);
         }
@@ -42,7 +57,7 @@ const Login: React.FC = () => {
                                 onChange={(e) => setSelectedUserId(e.target.value)}
                                 className="w-full appearance-none text-xl px-4 py-3 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right transition-colors duration-300"
                             >
-                                {MOCK_USERS.map(user => (
+                                {users.map(user => (
                                     <option key={user.id} value={user.id}>
                                         {user.name} ({roleTranslations[user.role]})
                                     </option>
@@ -55,7 +70,8 @@ const Login: React.FC = () => {
                     </div>
                     <button
                         type="submit"
-                        className="w-full py-4 px-4 text-2xl font-bold tracking-widest text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105"
+                        disabled={!selectedUserId}
+                        className="w-full py-4 px-4 text-2xl font-bold tracking-widest text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105 disabled:opacity-50"
                         style={{
                             clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)',
                              boxShadow: '0 0 25px rgba(0, 255, 255, 0.5)'

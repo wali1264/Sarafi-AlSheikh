@@ -9,6 +9,8 @@ export enum Currency {
     USD = 'USD',
     AFN = 'AFN',
     IRR = 'IRR',
+    PKR = 'PKR',
+    IRT = 'IRT',
 }
 
 export enum TransferStatus {
@@ -33,6 +35,12 @@ export enum ForeignTransactionType {
     InternalBankTomanTransfer = 'InternalBankTomanTransfer', // Moving Toman between our own accounts
 }
 
+export enum ForeignTransactionStatus {
+    PendingCashConfirmation = 'PendingCashConfirmation',
+    Completed = 'Completed',
+    Cancelled = 'Cancelled',
+}
+
 
 export enum ReportType {
     ProfitAndLoss = 'ProfitAndLoss',
@@ -43,6 +51,7 @@ export enum CashboxRequestStatus {
     Pending = 'Pending',
     Approved = 'Approved',
     Rejected = 'Rejected',
+    AutoApproved = 'AutoApproved',
 }
 
 export enum AmanatStatus {
@@ -50,10 +59,26 @@ export enum AmanatStatus {
     Returned = 'Returned',
 }
 
+export type CashboxRequestLinkType = 'DomesticTransfer' | 'ForeignTransaction' | 'Amanat' | 'AmanatReturn' | 'Expense' | 'PartnerSettlement' | 'AccountTransfer';
+
+export interface CashboxRequestLink {
+    type: CashboxRequestLinkType;
+    id: string;
+    description: string;
+}
+
 export interface User {
     id: string;
     name: string;
     role: Role;
+}
+
+export interface Customer {
+    id: string;
+    name: string;
+    code: string;
+    whatsappNumber: string;
+    balances: Partial<Record<Currency, number>>;
 }
 
 export interface DomesticTransfer {
@@ -69,6 +94,7 @@ export interface DomesticTransfer {
     status: TransferStatus;
     createdBy: string;
     history: { status: TransferStatus, timestamp: Date, user: string }[];
+    customerId?: string;
 }
 
 export interface Expense {
@@ -79,6 +105,7 @@ export interface Expense {
     amount: number;
     currency: Currency;
     user: string;
+    linkedCashboxRequestId?: string;
 }
 
 export interface PartnerAccount {
@@ -98,6 +125,18 @@ export interface PartnerTransaction {
     description: string;
 }
 
+export interface CustomerTransaction {
+    id: string;
+    customerId: string;
+    timestamp: Date;
+    type: 'debit' | 'credit'; // debit means amount was taken from their account, credit means added
+    amount: number;
+    currency: Currency;
+    description: string;
+    linkedEntityId?: string;
+    linkedEntityType?: 'DomesticTransfer' | 'ForeignTransfer' | 'CashDeposit' | 'CashWithdrawal' | 'AccountTransfer' | 'AccountTransferReassignment';
+}
+
 export interface CashboxBalance {
     currency: Currency;
     balance: number;
@@ -114,6 +153,11 @@ export interface CashboxRequest {
     status: CashboxRequestStatus;
     resolvedBy?: string;
     resolvedAt?: Date;
+    linkedEntity?: CashboxRequestLink;
+    customerId?: string;
+    reviewed: boolean;
+    reviewedBy?: string;
+    reviewedAt?: Date;
 }
 
 export interface ForeignTransaction {
@@ -125,14 +169,13 @@ export interface ForeignTransaction {
     rate: number;
     description: string;
     user: string;
-    
-    // New detailed fields
     bankAccountId: string;
-    commission: number; // Can be positive (we earned) or negative (we paid)
+    commission: number;
     commissionCurrency: Currency;
-    cashTransactionAmount?: number; // The physical cash amount involved
-    cashTransactionCurrency?: Currency; // The currency of the physical cash
-    linkedCashboxRequestId?: string; // Link to the cashbox request
+    cashTransactionAmount?: number;
+    cashTransactionCurrency?: Currency;
+    linkedCashboxRequestId?: string;
+    status: ForeignTransactionStatus;
 }
 
 
@@ -159,6 +202,27 @@ export interface Amanat {
     returnedAt?: Date;
     linkedCashboxRequestId?: string; // For the initial deposit
     linkedReturnCashboxRequestId?: string; // For the return withdrawal
+}
+
+export interface AccountTransfer {
+    id: string;
+    timestamp: Date;
+    fromCustomerId: string;
+    toCustomerId: string;
+    amount: number;
+    currency: Currency;
+    description: string;
+    user: string;
+    debitTransactionId: string;
+    creditTransactionId: string;
+    status: 'Completed' | 'PendingAssignment';
+    finalCustomerId?: string;
+}
+
+export interface SystemSettings {
+    approvalThresholds: {
+        [key in Currency]?: number;
+    };
 }
 
 
@@ -194,6 +258,8 @@ export interface CreateDomesticTransferPayload {
     destinationProvince: string;
     partnerSarraf: string;
     user: User;
+    isCashPayment: boolean;
+    customerCode?: string;
 }
 
 export interface UpdateTransferStatusPayload {
@@ -237,6 +303,21 @@ export interface GetPartnerAccountByNamePayload {
     partnerName: string;
 }
 
+export interface CreateAccountTransferPayload {
+    fromCustomerCode: string;
+    toCustomerCode: string;
+    amount: number;
+    currency: Currency;
+    description: string;
+    user: User;
+    isPendingAssignment: boolean;
+}
+
+export interface ReassignTransferPayload {
+    transferId: string;
+    finalCustomerCode: string;
+    user: User;
+}
 
 export interface CreateCashboxRequestPayload {
     requestType: 'deposit' | 'withdrawal';
@@ -244,11 +325,19 @@ export interface CreateCashboxRequestPayload {
     currency: Currency;
     reason: string;
     user: User;
+    linkedEntity?: CashboxRequestLink;
+    customerCode?: string;
 }
 
 export interface ResolveCashboxRequestPayload {
     requestId: string;
     resolution: 'approve' | 'reject';
+    user: User;
+}
+
+export interface UpdateCashboxRequestReviewedStatusPayload {
+    requestId: string;
+    reviewed: boolean;
     user: User;
 }
 
@@ -296,6 +385,31 @@ export interface CreateAmanatPayload {
 export interface ReturnAmanatPayload {
     amanatId: string;
     user: User;
+}
+
+export interface CreateUserPayload {
+    name: string;
+    role: Role;
+}
+
+export interface DeleteUserPayload {
+    id: string;
+}
+
+export interface CreatePartnerPayload {
+    name: string;
+    initialBalance: number;
+    currency: Currency;
+}
+
+export interface CreateCustomerPayload {
+    name: string;
+    code: string;
+    whatsappNumber: string;
+}
+
+export interface UpdateSystemSettingsPayload {
+    settings: SystemSettings;
 }
 
 export interface ProfitAndLossReportData {

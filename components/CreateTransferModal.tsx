@@ -1,4 +1,4 @@
-import React, { useState, FormEvent } from 'react';
+import React, { useState, FormEvent, useEffect } from 'react';
 import { useApi } from '../hooks/useApi';
 import { CreateDomesticTransferPayload, Currency, User } from '../types';
 import { CURRENCIES } from '../constants';
@@ -41,19 +41,37 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({ isOpen, onClo
         commission: '',
         destinationProvince: '',
         partnerSarraf: '',
+        isCashPayment: true,
+        customerCode: '',
     });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    useEffect(() => {
+        // Reset customer code if switching back to cash payment
+        if (formData.isCashPayment) {
+            setFormData(prev => ({...prev, customerCode: ''}));
+        }
+    }, [formData.isCashPayment]);
+
     if (!isOpen) return null;
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        // For numeric fields, convert any Persian numerals to English ones
-        if (name === 'amount' || name === 'commission') {
-            setFormData(prev => ({ ...prev, [name]: persianToEnglishNumber(value) }));
+        const { name, value, type } = e.target;
+        
+        if (type === 'checkbox') {
+            const { checked } = e.target as HTMLInputElement;
+            setFormData(prev => ({ ...prev, [name]: checked }));
+        }
+        else if (name === 'isCashPayment') {
+             setFormData(prev => ({ ...prev, [name]: value === 'true' }));
         } else {
-            setFormData(prev => ({ ...prev, [name]: value }));
+            const numericFields = ['amount', 'commission', 'customerCode'];
+            if (numericFields.includes(name)) {
+                setFormData(prev => ({ ...prev, [name]: persianToEnglishNumber(value) }));
+            } else {
+                setFormData(prev => ({ ...prev, [name]: value }));
+            }
         }
     };
 
@@ -67,6 +85,7 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({ isOpen, onClo
             amount: parseFloat(formData.amount) || 0,
             commission: parseFloat(formData.commission) || 0,
             currency: formData.currency as Currency,
+            customerCode: formData.isCashPayment ? undefined : formData.customerCode,
             user: currentUser,
         };
 
@@ -90,6 +109,28 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({ isOpen, onClo
                     </div>
                     <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
                         {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
+                        
+                        <div>
+                            <label className="block text-lg font-medium text-cyan-300 mb-3 text-right tracking-wider">نوع پرداخت</label>
+                            <div className="flex gap-x-6 bg-slate-900/50 border-2 border-slate-600/50 p-2 rounded-md">
+                               <label className={`flex-1 text-center text-xl p-2 rounded-md cursor-pointer transition-colors ${formData.isCashPayment ? 'bg-cyan-400 text-slate-900 font-bold' : 'text-slate-300 hover:bg-slate-700/50'}`}>
+                                   <input type="radio" name="isCashPayment" value="true" checked={formData.isCashPayment} onChange={handleChange} className="hidden" />
+                                   پرداخت نقدی (مشتری گذری)
+                                </label>
+                                 <label className={`flex-1 text-center text-xl p-2 rounded-md cursor-pointer transition-colors ${!formData.isCashPayment ? 'bg-cyan-400 text-slate-900 font-bold' : 'text-slate-300 hover:bg-slate-700/50'}`}>
+                                   <input type="radio" name="isCashPayment" value="false" checked={!formData.isCashPayment} onChange={handleChange} className="hidden" />
+                                   کسر از حساب مشتری
+                                </label>
+                            </div>
+                        </div>
+
+                        {!formData.isCashPayment && (
+                             <div className="p-4 border-2 border-cyan-400/30 bg-cyan-400/10 rounded-md animate-fadeIn">
+                                <InputField name="customerCode" label="کد مشتری" value={formData.customerCode} onChange={handleChange} placeholder="کد مشتری ثبت شده را وارد کنید" required={!formData.isCashPayment} />
+                                <p className="text-sm text-yellow-400 mt-2">با انتخاب این گزینه، مبلغ کل (مبلغ + کارمزد) از موجودی حساب این مشتری کسر خواهد شد.</p>
+                             </div>
+                        )}
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                            <InputField name="senderName" label="نام فرستنده" value={formData.senderName} onChange={handleChange} placeholder="مثلا: احمد احمدی" />
                            <InputField name="senderTazkereh" label="شماره تذکره فرستنده" value={formData.senderTazkereh} onChange={handleChange} placeholder="123456789" />

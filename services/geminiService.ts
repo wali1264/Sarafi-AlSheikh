@@ -23,6 +23,34 @@ class GeminiService {
     private getFunctionDeclarations(): FunctionDeclaration[] {
         return [
             {
+                name: 'createAccountTransfer',
+                description: 'انتقال مبلغ بین حساب دو مشتری ثبت شده در سیستم',
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                        fromCustomerCode: { type: Type.STRING, description: 'کد مشتری که پول از حساب او کسر می‌شود' },
+                        toCustomerCode: { type: Type.STRING, description: 'کد مشتری که پول به حساب او اضافه می‌شود' },
+                        amount: { type: Type.NUMBER, description: 'مبلغ انتقال' },
+                        currency: { type: Type.STRING, description: 'واحد پولی انتقال', enum: Object.values(Currency) },
+                        description: { type: Type.STRING, description: 'توضیحات مربوط به انتقال' },
+                    },
+                    required: ['fromCustomerCode', 'toCustomerCode', 'amount', 'currency', 'description'],
+                },
+            },
+            {
+                name: 'createCustomer',
+                description: 'ثبت یک مشتری جدید در سیستم',
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                        name: { type: Type.STRING, description: 'نام کامل مشتری' },
+                        code: { type: Type.STRING, description: 'کد منحصر به فرد مشتری' },
+                        whatsappNumber: { type: Type.STRING, description: 'شماره واتس‌اپ مشتری' },
+                    },
+                    required: ['name', 'code', 'whatsappNumber'],
+                },
+            },
+            {
                 name: 'createDomesticTransfer',
                 description: 'ایجاد یک حواله داخلی جدید',
                 parameters: {

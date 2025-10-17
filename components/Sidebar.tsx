@@ -7,11 +7,13 @@ const allNavLinks = [
     { to: '/dashboard', label: 'داشبورد', roles: [Role.Manager, Role.Cashier, Role.Domestic_Clerk, Role.Foreign_Clerk] },
     { to: '/cashbox', label: 'صندوق', roles: [Role.Manager, Role.Cashier] },
     { to: '/domestic-transfers', label: 'حواله جات داخلی', roles: [Role.Manager, Role.Domestic_Clerk] },
-    { to: '/foreign-transfers', label: 'حواله جات خارجی', roles: [Role.Manager, Role.Foreign_Clerk] },
+    { to: '/account-transfers', label: 'انتقالات بین حسابی', roles: [Role.Manager, Role.Foreign_Clerk, Role.Domestic_Clerk] },
+    { to: '/customers', label: 'مشتریان', roles: [Role.Manager, Role.Domestic_Clerk, Role.Foreign_Clerk] },
     { to: '/amanat', label: 'امانات', roles: [Role.Manager, Role.Foreign_Clerk, Role.Domestic_Clerk] },
     { to: '/partner-accounts', label: 'حساب همکاران', roles: [Role.Manager, Role.Domestic_Clerk] },
     { to: '/expenses', label: 'مصارف', roles: [Role.Manager] },
     { to: '/reports', label: 'گزارشات', roles: [Role.Manager, Role.Cashier, Role.Domestic_Clerk, Role.Foreign_Clerk] },
+    { to: '/settings', label: 'تنظیمات', roles: [Role.Manager] },
 ];
 
 

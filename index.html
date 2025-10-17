@@ -27,29 +27,27 @@
   }
   @media print {
     body {
-      background-color: white !important;
+        background-color: white !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
     }
-    #root > div {
-      display: block !important;
+    body * {
+        visibility: hidden;
     }
-    aside, #voice-assistant, #header-container, #report-controls {
-      display: none !important;
+    #printable-area, #printable-area * {
+        visibility: visible;
     }
-    main {
-      padding: 0 !important;
+    #printable-area {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 20px;
     }
-    #report-view {
-      color: black !important;
-      border: none !important;
-      box-shadow: none !important;
-      background: none !important;
-    }
-    #report-view * {
-      color: black !important;
-      background-color: transparent !important;
-    }
-     #report-view table, #report-view th, #report-view td {
-      border: 1px solid #ccc !important;
+    #root {
+        display: none !important;
     }
   }
 </style>
@@ -57,6 +55,7 @@
 </head>
   <body class="bg-[#0D0C22]">
     <div id="root"></div>
+    <div id="printable-area-container"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
