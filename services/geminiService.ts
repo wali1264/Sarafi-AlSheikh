@@ -1,14 +1,9 @@
 import { GoogleGenAI, FunctionDeclaration, Type } from '@google/genai';
 import { Currency, ExpenseCategory, ReportType, TransferStatus } from '../types';
 
-// This is the critical fix: The application crashes on startup because it tries to access 
-// process.env.API_KEY, which doesn't exist in the browser. The check is removed to allow the app to load.
-// The deployment environment (like Vercel) is responsible for providing the API key.
-const apiKey = process.env.API_KEY;
-
-if (!apiKey) {
-    console.warn("API_KEY environment variable not set. The application will load, but API calls will fail.");
-}
+// TODO: For production, this key should be moved to a secure environment variable (e.g., Vercel Environment Variables)
+// and accessed via `process.env.API_KEY`. Hardcoding is for temporary experimental deployment only.
+const apiKey = 'AIzaSyDja-PjvYDlcBaRV3g0dNxJU0LEonda2As';
 
 class GeminiService {
     public ai: GoogleGenAI;

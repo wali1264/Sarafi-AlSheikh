@@ -37,7 +37,7 @@ const StatementPrintView: React.FC<StatementPrintViewProps> = ({ type }) => {
                     // This assumes customer statements are per-currency, which is a simplification.
                     // A more complex implementation would handle multi-currency balances.
                     let runningBalance = 0;
-                    const processedTxs: Transaction[] = txData.sort((a,b) => a.timestamp.getTime() - b.timestamp.getTime()).map(tx => {
+                    const processedTxs: Transaction[] = txData.sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map(tx => {
                         runningBalance += (tx.type === 'credit' ? tx.amount : -tx.amount);
                         return { ...tx, balanceAfter: runningBalance };
                     });
@@ -52,7 +52,7 @@ const StatementPrintView: React.FC<StatementPrintViewProps> = ({ type }) => {
                     const txData = await api.getTransactionsForPartner(id);
                     
                     let runningBalance = 0;
-                    const processedTxs: Transaction[] = txData.sort((a,b) => a.timestamp.getTime() - b.timestamp.getTime()).map(tx => {
+                    const processedTxs: Transaction[] = txData.sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()).map(tx => {
                         // For partners, 'debit' means we owe them (negative balance), 'credit' means they owe us (positive)
                         runningBalance += (tx.type === 'credit' ? tx.amount : -tx.amount);
                         return { ...tx, balanceAfter: runningBalance };
@@ -79,7 +79,7 @@ const StatementPrintView: React.FC<StatementPrintViewProps> = ({ type }) => {
     if (!entity) return <div className="text-center p-10">اطلاعات مورد نظر یافت نشد.</div>;
 
     const isCustomer = (e: Customer | PartnerAccount): e is Customer => 'code' in e;
-    // FIX: Operator '+' cannot be applied to types 'unknown' and 'number'. Explicitly cast value to Number to handle 'unknown' type from Object.values().
+    // FIX: Object.values() can return `unknown[]`, causing a type error. Explicitly cast `balance` to a Number before adding it to the sum.
     const finalBalance = Object.values(entity.balances).reduce((sum, balance) => sum + (Number(balance) || 0), 0);
 
     const finalCurrency = isCustomer(entity)
@@ -123,8 +123,9 @@ const StatementPrintView: React.FC<StatementPrintViewProps> = ({ type }) => {
                                 <td className="p-2 text-left font-mono text-red-700">
                                     {tx.type === 'debit' ? new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.amount) : '-'}
                                 </td>
-                                {/* FIX: Operator '>=' cannot be applied to types 'unknown' and 'number', and argument of type 'unknown' is not assignable to parameter of type 'number | bigint'. Explicitly cast tx.balanceAfter to Number to handle potential 'unknown' type. */}
+                                {/* FIX: Operator '>=' cannot be applied to types 'unknown' and 'number'. Explicitly cast tx.balanceAfter to a Number for comparison. */}
                                 <td className={`p-2 text-left font-mono font-bold ${Number(tx.balanceAfter) >= 0 ? 'text-black' : 'text-red-700'}`}>
+                                    {/* FIX: Argument of type 'unknown' is not assignable to parameter of type 'number'. Explicitly cast tx.balanceAfter to a Number. */}
                                     {new Intl.NumberFormat('fa-IR-u-nu-latn').format(Number(tx.balanceAfter))}
                                 </td>
                             </tr>
