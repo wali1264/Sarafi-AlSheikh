@@ -1,6 +1,5 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { roleTranslations } from '../utils/translations';
 
 const LogoutIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -15,13 +14,13 @@ const Header: React.FC = () => {
     return (
         <header className="flex items-center justify-between h-24 px-8 border-b-2 border-cyan-400/20">
             <div>
-                 <h1 className="text-4xl font-bold text-slate-100 tracking-wider">به صراف AI خوش آمدید</h1>
+                 <h1 className="text-4xl font-bold text-slate-100 tracking-wider">به صرافی الشیخ خوش آمدید</h1>
                  <p className="text-lg text-slate-400">سیستم عامل صرافی مبتنی بر صدا</p>
             </div>
             <div className="flex items-center space-x-6 space-x-reverse">
                 <div className="text-right">
                     <p className="text-2xl text-slate-100 font-semibold">{user?.name}</p>
-                    <p className="text-lg font-medium bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 to-fuchsia-500">{user ? roleTranslations[user.role] : ''}</p>
+                    <p className="text-lg font-medium bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 to-fuchsia-500">{user?.role?.name || ''}</p>
                 </div>
                 <button 
                     onClick={logout}

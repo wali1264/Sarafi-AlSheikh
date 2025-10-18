@@ -1,7 +1,8 @@
 import React, { useState, FormEvent } from 'react';
 import { useApi } from '../hooks/useApi';
-import { SettlePartnerBalancePayload, User, PartnerAccount } from '../types';
+import { SettlePartnerBalancePayload, User, PartnerAccount, Currency } from '../types';
 import { persianToEnglishNumber } from '../utils/translations';
+import { CURRENCIES } from '../constants';
 
 interface SettleBalanceModalProps {
     isOpen: boolean;
@@ -14,13 +15,20 @@ interface SettleBalanceModalProps {
 const SettleBalanceModal: React.FC<SettleBalanceModalProps> = ({ isOpen, onClose, onSuccess, currentUser, partner }) => {
     const api = useApi();
     const [amount, setAmount] = useState('');
+    const [currency, setCurrency] = useState<Currency>(CURRENCIES[0]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     if (!isOpen) return null;
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setAmount(persianToEnglishNumber(e.target.value));
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        if (name === 'amount') {
+            setAmount(persianToEnglishNumber(value));
+        }
+        if (name === 'currency') {
+            setCurrency(value as Currency);
+        }
     };
 
     const handleSubmit = async (e: FormEvent) => {
@@ -31,7 +39,7 @@ const SettleBalanceModal: React.FC<SettleBalanceModalProps> = ({ isOpen, onClose
         const payload: SettlePartnerBalancePayload = {
             partnerId: partner.id,
             amount: parseFloat(amount) || 0,
-            currency: partner.currency,
+            currency: currency,
             user: currentUser,
         };
 
@@ -58,22 +66,38 @@ const SettleBalanceModal: React.FC<SettleBalanceModalProps> = ({ isOpen, onClose
                     <div className="p-8 space-y-6">
                         {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
                         
-                        <div>
-                            <label htmlFor="amount" className="block text-lg font-medium text-cyan-300 mb-2 text-right tracking-wider">
-                                مبلغ تسویه ({partner.currency})
-                            </label>
-                            <input
-                                type="text"
-                                id="amount"
-                                name="amount"
-                                value={amount}
-                                onChange={handleChange}
-                                placeholder="مبلغ تسویه شده را وارد کنید"
-                                required
-                                inputMode="decimal"
-                                className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right transition-colors duration-300"
-                            />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label htmlFor="amount" className="block text-lg font-medium text-cyan-300 mb-2">
+                                    مبلغ تسویه
+                                </label>
+                                <input
+                                    type="text"
+                                    id="amount"
+                                    name="amount"
+                                    value={amount}
+                                    onChange={handleChange}
+                                    placeholder="مبلغ را وارد کنید"
+                                    required
+                                    inputMode="decimal"
+                                    className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right"
+                                />
+                                <p className="text-sm text-yellow-400 mt-2">مبلغ مثبت برای دریافت و منفی برای پرداخت.</p>
+                            </div>
+                            <div>
+                                <label htmlFor="currency" className="block text-lg font-medium text-cyan-300 mb-2">واحد پولی</label>
+                                <select
+                                    id="currency"
+                                    name="currency"
+                                    value={currency}
+                                    onChange={handleChange}
+                                    className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right"
+                                >
+                                    {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
                         </div>
+
                     </div>
                     <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end space-x-4 space-x-reverse">
                         <button type="button" onClick={onClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md transition-colors">لغو</button>

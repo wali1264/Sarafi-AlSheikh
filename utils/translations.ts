@@ -1,16 +1,36 @@
-import { Role, TransferStatus, ExpenseCategory, ForeignTransactionType, ReportType, CashboxRequestStatus, AmanatStatus, ForeignTransactionStatus } from '../types';
 
-export const roleTranslations: Record<Role, string> = {
-    [Role.Manager]: 'مدیر',
-    [Role.Cashier]: 'صندوق‌دار',
-    [Role.Domestic_Clerk]: 'مامور حواله داخلی',
-    [Role.Foreign_Clerk]: 'مامور حواله خارجی',
+
+import { TransferStatus, ExpenseCategory, ReportType, CashboxRequestStatus, AmanatStatus, PermissionModule } from '../types';
+
+export const permissionModuleTranslations: Record<PermissionModule, string> = {
+    dashboard: 'داشبورد',
+    cashbox: 'صندوق',
+    domesticTransfers: 'حواله جات داخلی',
+    foreignTransfers: 'تبادلات',
+    commissionTransfers: 'حواله جات کمیشن‌کاری',
+    accountTransfers: 'انتقال داخلی بین مشتریان',
+    customers: 'مشتریان',
+    partnerAccounts: 'حساب همکاران',
+    expenses: 'مصارف',
+    reports: 'گزارشات',
+    amanat: 'امانات',
+    settings: 'تنظیمات',
+};
+
+export const permissionActionTranslations: Record<string, string> = {
+    view: 'مشاهده',
+    create: 'ایجاد',
+    edit: 'ویرایش',
+    delete: 'حذف',
+    approve: 'تایید نهایی / ملاحظه',
+    process: 'پردازش / پرداخت',
 };
 
 export const statusTranslations: Record<TransferStatus, string> = {
     [TransferStatus.Pending]: 'در انتظار',
     [TransferStatus.Executed]: 'اجرا شده',
     [TransferStatus.Paid]: 'پرداخت شده',
+    [TransferStatus.Cancelled]: 'لغو شده',
 };
 
 export const expenseCategoryTranslations: Record<ExpenseCategory, string> = {
@@ -18,26 +38,14 @@ export const expenseCategoryTranslations: Record<ExpenseCategory, string> = {
     [ExpenseCategory.Rent]: 'کرایه',
     [ExpenseCategory.Utilities]: 'خدمات رفاهی',
     [ExpenseCategory.Hospitality]: 'پذیرایی',
+    [ExpenseCategory.Commission]: 'کمیسیون/کارمزد',
     [ExpenseCategory.Other]: 'متفرقه',
-};
-
-export const foreignTransactionTypeTranslations: Record<ForeignTransactionType, string> = {
-    [ForeignTransactionType.SellBankTomanForForeignCash]: 'فروش تومان بانکی / تحویل ارز نقد',
-    [ForeignTransactionType.BuyBankTomanWithForeignCash]: 'خرید تومان بانکی / دریافت ارز نقد',
-    [ForeignTransactionType.BuyBankTomanWithTomanCash]: 'خرید تومان بانکی / دریافت تومان نقد',
-    [ForeignTransactionType.SellBankTomanForTomanCash]: 'فروش تومان بانکی / تحویل تومان نقد',
-    [ForeignTransactionType.InternalBankTomanTransfer]: 'انتقال داخلی بین حساب‌ها',
-};
-
-export const foreignTransactionStatusTranslations: Record<ForeignTransactionStatus, string> = {
-    [ForeignTransactionStatus.PendingCashConfirmation]: 'در انتظار تایید صندوق',
-    [ForeignTransactionStatus.Completed]: 'تکمیل شده',
-    [ForeignTransactionStatus.Cancelled]: 'لغو شده',
 };
 
 export const reportTypeTranslations: Record<ReportType, string> = {
     [ReportType.ProfitAndLoss]: 'گزارش سود و زیان',
     [ReportType.CashboxSummary]: 'گزارش خلاصه صندوق',
+    [ReportType.InternalLedger]: 'گزارش دفتر حساب داخلی',
 }
 
 export const cashboxRequestStatusTranslations: Record<CashboxRequestStatus, string> = {

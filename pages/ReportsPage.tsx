@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useApi } from '../hooks/useApi';
-import { ReportType, Currency, ProfitAndLossReportData, CashboxSummaryReportData, GenerateReportPayload } from '../types';
+import { ReportType, Currency, ProfitAndLossReportData, CashboxSummaryReportData, GenerateReportPayload, InternalLedgerReportData } from '../types';
 import { reportTypeTranslations } from '../utils/translations';
 import { CURRENCIES } from '../constants';
 import ReportViewer from '../components/ReportViewer';
 
-type ReportData = ProfitAndLossReportData | CashboxSummaryReportData;
+type ReportData = ProfitAndLossReportData | CashboxSummaryReportData | InternalLedgerReportData;
 
 const ReportsPage: React.FC = () => {
     const api = useApi();
@@ -38,6 +38,9 @@ const ReportsPage: React.FC = () => {
             setReportData(result as ReportData);
         }
     };
+    
+    const isCurrencyFilterVisible = reportType !== ReportType.InternalLedger;
+
 
     return (
         <div style={{ direction: 'rtl' }}>
@@ -50,18 +53,20 @@ const ReportsPage: React.FC = () => {
                         <label htmlFor="reportType" className="block text-lg font-medium text-cyan-300 mb-2">نوع گزارش</label>
                         <select id="reportType" value={reportType} onChange={e => setReportType(e.target.value as ReportType)} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400">
                             {Object.values(ReportType).map(rt => (
-// FIX: Cast enum value to its type for safe indexing.
+                                // FIX: Cast enum value to its type for safe indexing.
                                 <option key={rt} value={rt}>{reportTypeTranslations[rt as ReportType]}</option>
                             ))}
                         </select>
                     </div>
                     {/* Currency */}
-                    <div>
-                        <label htmlFor="currency" className="block text-lg font-medium text-cyan-300 mb-2">واحد پولی</label>
-                        <select id="currency" value={currency} onChange={e => setCurrency(e.target.value as Currency)} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400">
-                            {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                    </div>
+                    {isCurrencyFilterVisible && (
+                        <div>
+                            <label htmlFor="currency" className="block text-lg font-medium text-cyan-300 mb-2">واحد پولی</label>
+                            <select id="currency" value={currency} onChange={e => setCurrency(e.target.value as Currency)} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400">
+                                {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                    )}
                     {/* Start Date */}
                     <div>
                         <label htmlFor="startDate" className="block text-lg font-medium text-cyan-300 mb-2">تاریخ شروع</label>

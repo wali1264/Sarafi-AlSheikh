@@ -1,9 +1,9 @@
 import React from 'react';
-import { ReportType, ProfitAndLossReportData, CashboxSummaryReportData } from '../types';
+import { ReportType, ProfitAndLossReportData, CashboxSummaryReportData, InternalLedgerReportData } from '../types';
 import { reportTypeTranslations } from '../utils/translations';
 
 interface ReportViewerProps {
-    reportData: ProfitAndLossReportData | CashboxSummaryReportData;
+    reportData: ProfitAndLossReportData | CashboxSummaryReportData | InternalLedgerReportData;
     reportType: ReportType;
 }
 
@@ -41,7 +41,12 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ reportData, reportType }) =
             const rd = reportData as CashboxSummaryReportData;
             headers = ["Timestamp", "Type", "Amount", "Currency", "Reason", "User"];
             data = rd.transactions;
+        } else if (reportType === ReportType.InternalLedger) {
+            const rd = reportData as InternalLedgerReportData;
+            headers = ["timestamp", "description", "fromAsset", "fromAmount", "fromCurrency", "toAsset", "toAmount", "toCurrency"];
+            data = rd.transactions;
         }
+
 
         csvContent += headers.join(",") + "\r\n";
         data.forEach(row => {
@@ -135,6 +140,33 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ reportData, reportType }) =
         </>
     );
 
+    const renderInternalLedger = (data: InternalLedgerReportData) => (
+        <table className="w-full text-lg text-right text-slate-300">
+            <thead className="text-xl text-slate-400 uppercase">
+                <tr>
+                    <th className="px-6 py-4 font-medium">تاریخ</th>
+                    <th className="px-6 py-4 font-medium">شرح</th>
+                    <th className="px-6 py-4 font-medium">برد از (فروش)</th>
+                    <th className="px-6 py-4 font-medium text-left">مبلغ فروش</th>
+                    <th className="px-6 py-4 font-medium">رسید به (خرید)</th>
+                    <th className="px-6 py-4 font-medium text-left">مبلغ خرید</th>
+                </tr>
+            </thead>
+            <tbody>
+                {data.transactions.map(tx => (
+                    <tr key={tx.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">{new Date(tx.timestamp).toLocaleString('fa-IR-u-nu-latn')}</td>
+                        <td className="px-6 py-4 text-slate-100">{tx.description}</td>
+                        <td className="px-6 py-4 font-semibold text-cyan-300">{tx.fromAsset}</td>
+                        <td className="px-6 py-4 font-mono text-left text-red-400">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.fromAmount)} {tx.fromCurrency}</td>
+                        <td className="px-6 py-4 font-semibold text-fuchsia-400">{tx.toAsset}</td>
+                        <td className="px-6 py-4 font-mono text-left text-green-400">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.toAmount)} {tx.toCurrency}</td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    );
+
     return (
         <div id="report-view" className="bg-[#12122E]/80 border-2 border-cyan-400/20 shadow-[0_0_40px_rgba(0,255,255,0.2)] animate-fadeIn" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)' }}>
             <div className="p-6 border-b-2 border-cyan-400/20 flex justify-between items-center">
@@ -153,6 +185,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ reportData, reportType }) =
             <div className="p-6 overflow-x-auto">
                 {reportType === ReportType.ProfitAndLoss && renderProfitAndLoss(reportData as ProfitAndLossReportData)}
                 {reportType === ReportType.CashboxSummary && renderCashboxSummary(reportData as CashboxSummaryReportData)}
+                {reportType === ReportType.InternalLedger && renderInternalLedger(reportData as InternalLedgerReportData)}
             </div>
         </div>
     );

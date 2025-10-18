@@ -1,5 +1,5 @@
 import { GoogleGenAI, FunctionDeclaration, Type } from '@google/genai';
-import { Currency, ExpenseCategory, ForeignTransactionType, ReportType, TransferStatus } from '../types';
+import { Currency, ExpenseCategory, ReportType, TransferStatus } from '../types';
 
 // This is the critical fix: The application crashes on startup because it tries to access 
 // process.env.API_KEY, which doesn't exist in the browser. The check is removed to allow the app to load.
@@ -39,13 +39,25 @@ class GeminiService {
             },
             {
                 name: 'createCustomer',
-                description: 'ثبت یک مشتری جدید در سیستم',
+                description: 'ثبت یک مشتری جدید در سیستم با موجودی‌های اولیه',
                 parameters: {
                     type: Type.OBJECT,
                     properties: {
                         name: { type: Type.STRING, description: 'نام کامل مشتری' },
                         code: { type: Type.STRING, description: 'کد منحصر به فرد مشتری' },
                         whatsappNumber: { type: Type.STRING, description: 'شماره واتس‌اپ مشتری' },
+                        balances: {
+                            type: Type.OBJECT,
+                            description: 'موجودی‌های اولیه برای هر ارز. برای بدهکاری از مقادیر منفی استفاده کنید.',
+                            properties: {
+                                AFN: { type: Type.NUMBER, description: 'موجودی اولیه به افغانی', nullable: true },
+                                USD: { type: Type.NUMBER, description: 'موجودی اولیه به دالر آمریکا', nullable: true },
+                                PKR: { type: Type.NUMBER, description: 'موجودی اولیه به روپیه پاکستان', nullable: true },
+                                EUR: { type: Type.NUMBER, description: 'موجودی اولیه به یورو', nullable: true },
+                                IRT_BANK: { type: Type.NUMBER, description: 'موجودی اولیه به تومان بانکی', nullable: true },
+                                IRT_CASH: { type: Type.NUMBER, description: 'موجودی اولیه به تومان نقدی', nullable: true },
+                            }
+                        }
                     },
                     required: ['name', 'code', 'whatsappNumber'],
                 },
@@ -67,6 +79,78 @@ class GeminiService {
                         partnerSarraf: { type: Type.STRING, description: 'نام صراف همکار در مقصد' },
                     },
                     required: ['senderName', 'senderTazkereh', 'receiverName', 'receiverTazkereh', 'amount', 'currency', 'commission', 'destinationProvince', 'partnerSarraf'],
+                },
+            },
+            {
+                name: 'createPartner',
+                description: 'ثبت یک صراف همکار جدید با موجودی‌های اولیه برای ارزهای مختلف',
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                        name: { type: Type.STRING, description: 'نام کامل صراف همکار' },
+                        balances: {
+                            type: Type.OBJECT,
+                            description: 'موجودی‌های اولیه برای هر ارز. برای بدهکاری از مقادیر منفی استفاده کنید.',
+                            properties: {
+                                AFN: { type: Type.NUMBER, description: 'موجودی اولیه به افغانی', nullable: true },
+                                USD: { type: Type.NUMBER, description: 'موجودی اولیه به دالر آمریکا', nullable: true },
+                                PKR: { type: Type.NUMBER, description: 'موجودی اولیه به روپیه پاکستان', nullable: true },
+                                EUR: { type: Type.NUMBER, description: 'موجودی اولیه به یورو', nullable: true },
+                                IRT_BANK: { type: Type.NUMBER, description: 'موجودی اولیه به تومان بانکی', nullable: true },
+                                IRT_CASH: { type: Type.NUMBER, description: 'موجودی اولیه به تومان نقدی', nullable: true },
+                            }
+                        }
+                    },
+                    required: ['name', 'balances'],
+                },
+            },
+             {
+                name: 'updatePartner',
+                description: 'ویرایش نام یک صراف همکار',
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                        id: { type: Type.STRING, description: 'ID همکار مورد نظر' },
+                        name: { type: Type.STRING, description: 'نام جدید برای همکار' },
+                    },
+                    required: ['id', 'name'],
+                },
+            },
+            {
+                name: 'deletePartner',
+                description: 'غیرفعال کردن (حذف ایمن) یک صراف همکار',
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                        id: { type: Type.STRING, description: 'ID همکاری که باید غیرفعال شود' },
+                    },
+                    required: ['id'],
+                },
+            },
+             {
+                name: 'updateBankAccount',
+                description: 'ویرایش اطلاعات یک حساب بانکی',
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                        id: { type: Type.STRING, description: 'ID حساب بانکی' },
+                        accountHolder: { type: Type.STRING, description: 'نام جدید صاحب حساب' },
+                        bankName: { type: Type.STRING, description: 'نام جدید بانک' },
+                        accountNumber: { type: Type.STRING, description: 'شماره حساب جدید' },
+                        cardToCardNumber: { type: Type.STRING, description: 'شماره کارت جدید (اختیاری)' },
+                    },
+                    required: ['id', 'accountHolder', 'bankName', 'accountNumber'],
+                },
+            },
+            {
+                name: 'deleteBankAccount',
+                description: 'غیرفعال کردن (حذف ایمن) یک حساب بانکی',
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                        id: { type: Type.STRING, description: 'ID حساب بانکی که باید غیرفعال شود' },
+                    },
+                    required: ['id'],
                 },
             },
             {
@@ -104,6 +188,24 @@ class GeminiService {
                         description: { type: Type.STRING, description: 'توضیحات مربوط به هزینه' },
                     },
                     required: ['category', 'amount', 'currency', 'description'],
+                },
+            },
+             {
+                name: 'logForeignTransaction',
+                description: 'ثبت یک معامله تبادله ارز. این تابع می‌تواند تراکنش‌های پیچیده شامل مشتری و کارمزد را مدیریت کند.',
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                        description: { type: Type.STRING, description: 'شرح تبادله' },
+                        fromAssetId: { type: Type.STRING, description: 'کد دارایی مبدا (مانند cashbox_USD یا bank_ba-1). این مبلغ واقعی است که از دارایی شما کسر می‌شود.' },
+                        fromAmount: { type: Type.NUMBER, description: 'مبلغ برداشتی از مبدا' },
+                        toAssetId: { type: Type.STRING, description: 'کد دارایی مقصد (مانند cashbox_AFN یا bank_ba-2). این مبلغ واقعی است که به دارایی شما اضافه می‌شود.' },
+                        toAmount: { type: Type.NUMBER, description: 'مبلغ واریزی به مقصد' },
+                        customerCode: { type: Type.STRING, description: 'کد مشتری (اختیاری)' },
+                        customerAmount: { type: Type.NUMBER, description: 'مبلغی که باید در حساب مشتری ثبت شود (اختیاری)' },
+                        customerTransactionType: { type: Type.STRING, description: 'نوع تراکنش برای مشتری: debit (بدهکار) یا credit (بستانکار) (اختیاری)', enum: ['debit', 'credit'] },
+                    },
+                    required: ['description', 'fromAssetId', 'fromAmount', 'toAssetId', 'toAmount'],
                 },
             },
             {

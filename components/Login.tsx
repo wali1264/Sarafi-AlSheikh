@@ -1,32 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { roleTranslations } from '../utils/translations';
 import { useApi } from '../hooks/useApi';
-import { User } from '../types';
 
 const Login: React.FC = () => {
-    const [users, setUsers] = useState<User[]>([]);
-    const [selectedUserId, setSelectedUserId] = useState<string>('');
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
     const { login } = useAuth();
     const api = useApi();
 
-    useEffect(() => {
-        const fetchUsers = async () => {
-            const userList = await api.getUsers();
-            setUsers(userList);
-            if (userList.length > 0) {
-                setSelectedUserId(userList[0].id);
-            }
-        };
-        fetchUsers();
-    }, [api]);
-
-
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        const user = users.find(u => u.id === selectedUserId);
-        if (user) {
-            login(user);
+        setIsLoading(true);
+        setError(null);
+        
+        const result = await api.login(username, password);
+
+        setIsLoading(false);
+        if ('error' in result) {
+            setError(result.error);
+        } else {
+            login(result);
         }
     };
 
@@ -40,44 +35,51 @@ const Login: React.FC = () => {
                 }}
             >
                 <div className="text-center space-y-2">
-                    <h1 className="text-7xl font-bold tracking-widest bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 to-fuchsia-500" style={{'--tw-text-opacity': 1, textShadow: '0 0 15px rgba(0, 255, 255, 0.4)'} as React.CSSProperties}>
-                        SarrafAI
+                    <h1 className="text-6xl font-bold tracking-widest bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 to-fuchsia-500" style={{'--tw-text-opacity': 1, textShadow: '0 0 15px rgba(0, 255, 255, 0.4)'} as React.CSSProperties}>
+                        Sarrafi Alsheikh
                     </h1>
-                    <p className="text-slate-400 text-xl">لطفاً برای ورود یک کاربر را انتخاب کنید</p>
+                    <p className="text-slate-400 text-xl">سیستم عامل هوشمند صرافی</p>
                 </div>
-                <form onSubmit={handleLogin} className="space-y-8">
+                <form onSubmit={handleLogin} className="space-y-6">
+                    {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-center">{error}</div>}
                     <div>
-                        <label htmlFor="user-select" className="block text-lg font-medium text-cyan-300 mb-2 text-right tracking-wider">
-                            انتخاب کاربر
+                        <label htmlFor="username" className="block text-lg font-medium text-cyan-300 mb-2 text-right tracking-wider">
+                            نام کاربری
                         </label>
-                        <div className="relative">
-                            <select
-                                id="user-select"
-                                value={selectedUserId}
-                                onChange={(e) => setSelectedUserId(e.target.value)}
-                                className="w-full appearance-none text-xl px-4 py-3 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right transition-colors duration-300"
-                            >
-                                {users.map(user => (
-                                    <option key={user.id} value={user.id}>
-                                        {user.name} ({roleTranslations[user.role]})
-                                    </option>
-                                ))}
-                            </select>
-                             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center px-2 text-slate-400">
-                                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                            </div>
-                        </div>
+                        <input
+                            id="username"
+                            type="text"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            required
+                            className="w-full text-xl px-4 py-3 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-left transition-colors duration-300"
+                            style={{direction: 'ltr'}}
+                        />
+                    </div>
+                     <div>
+                        <label htmlFor="password" aria-label="Password" className="block text-lg font-medium text-cyan-300 mb-2 text-right tracking-wider">
+                           رمز عبور
+                        </label>
+                        <input
+                            id="password"
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required
+                            className="w-full text-xl px-4 py-3 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-left transition-colors duration-300"
+                             style={{direction: 'ltr'}}
+                        />
                     </div>
                     <button
                         type="submit"
-                        disabled={!selectedUserId}
-                        className="w-full py-4 px-4 text-2xl font-bold tracking-widest text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105 disabled:opacity-50"
+                        disabled={isLoading}
+                        className="w-full py-4 px-4 text-2xl font-bold tracking-widest text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-wait"
                         style={{
                             clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)',
                              boxShadow: '0 0 25px rgba(0, 255, 255, 0.5)'
                         }}
                     >
-                        ورود
+                        {isLoading ? 'در حال ورود...' : 'ورود'}
                     </button>
                 </form>
             </div>

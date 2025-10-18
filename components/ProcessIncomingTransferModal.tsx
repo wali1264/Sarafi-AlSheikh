@@ -12,20 +12,21 @@ interface ProcessIncomingTransferModalProps {
 
 const ProcessIncomingTransferModal: React.FC<ProcessIncomingTransferModalProps> = ({ isOpen, onClose, onSuccess, currentUser }) => {
     const api = useApi();
-    const [transferId, setTransferId] = useState('');
-    const [foundTransfer, setFoundTransfer] = useState<DomesticTransfer | null>(null);
+    const [query, setQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<DomesticTransfer[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [step, setStep] = useState<'search' | 'confirm'>('search');
+    const [searched, setSearched] = useState(false);
+
 
     if (!isOpen) return null;
 
     const resetState = () => {
-        setTransferId('');
-        setFoundTransfer(null);
+        setQuery('');
+        setSearchResults([]);
         setError(null);
         setIsLoading(false);
-        setStep('search');
+        setSearched(false);
     };
 
     const handleClose = () => {
@@ -37,25 +38,24 @@ const ProcessIncomingTransferModal: React.FC<ProcessIncomingTransferModalProps> 
         e.preventDefault();
         setIsLoading(true);
         setError(null);
-        setFoundTransfer(null);
+        setSearchResults([]);
+        setSearched(true);
         
-        const result = await api.findTransferById({ transferId });
+        const result = await api.findTransfersByQuery({ query });
         setIsLoading(false);
         if ('error' in result) {
             setError(result.error);
         } else {
-            setFoundTransfer(result);
-            setStep('confirm');
+            setSearchResults(result);
         }
     };
 
-    const handlePayout = async () => {
-        if (!foundTransfer) return;
+    const handlePayout = async (transferId: string) => {
         setIsLoading(true);
         setError(null);
 
         const payload: PayoutIncomingTransferPayload = {
-            transferId: foundTransfer.id,
+            transferId,
             user: currentUser,
         };
         
@@ -69,11 +69,10 @@ const ProcessIncomingTransferModal: React.FC<ProcessIncomingTransferModalProps> 
         }
     };
 
-    const isPayoutDisabled = !foundTransfer || foundTransfer.status !== TransferStatus.Executed;
 
     return (
         <div className="fixed inset-0 bg-[#0D0C22]/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity animate-fadeIn" style={{ direction: 'rtl' }}>
-            <div className="bg-[#12122E]/90 w-full max-w-2xl border-2 border-cyan-400/30 shadow-[0_0_40px_rgba(0,255,255,0.2)]"
+            <div className="bg-[#12122E]/90 w-full max-w-4xl border-2 border-cyan-400/30 shadow-[0_0_40px_rgba(0,255,255,0.2)]"
                 style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 30px), calc(100% - 30px) 100%, 0 100%)' }}>
                 
                 <div className="px-8 py-5 border-b-2 border-cyan-400/20">
@@ -81,73 +80,71 @@ const ProcessIncomingTransferModal: React.FC<ProcessIncomingTransferModalProps> 
                 </div>
                 
                 <div className="p-8 space-y-6">
+                    <form onSubmit={handleSearch} className="flex gap-4">
+                        <input
+                            type="text"
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            placeholder="جستجو بر اساس کد رهگیری، کد همکار، نام گیرنده یا فرستنده..."
+                            required
+                            className="flex-grow text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400"
+                        />
+                        <button type="submit" disabled={isLoading} 
+                            className="px-8 py-2 text-xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300 rounded-md transition-colors disabled:opacity-50">
+                            {isLoading ? '...' : 'جستجو'}
+                        </button>
+                    </form>
+
                     {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
                     
-                    {step === 'search' && (
-                         <form onSubmit={handleSearch} className="space-y-4">
-                            <div>
-                                <label htmlFor="transferId" className="block text-lg font-medium text-cyan-300 mb-2 text-right tracking-wider">کد رهگیری حواله</label>
-                                <input
-                                    type="text"
-                                    id="transferId"
-                                    name="transferId"
-                                    value={transferId}
-                                    onChange={(e) => setTransferId(e.target.value.toUpperCase())}
-                                    placeholder="مثلا: DT-12345"
-                                    required
-                                    className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right font-mono"
-                                />
-                            </div>
-                            <div className="pt-2">
-                                <button type="submit" disabled={isLoading} 
-                                    className="w-full px-8 py-3 text-xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    style={{
-                                        clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)',
-                                        boxShadow: '0 0 25px rgba(0, 255, 255, 0.5)'
-                                    }}>
-                                    {isLoading ? 'در حال جستجو...' : 'جستجوی حواله'}
-                                </button>
-                            </div>
-                         </form>
-                    )}
-
-                    {step === 'confirm' && foundTransfer && (
-                        <div className="space-y-4 text-xl animate-fadeIn">
-                             <div className="grid grid-cols-2 gap-x-6 gap-y-3 p-4 border border-cyan-400/20 rounded-md bg-slate-900/30">
-                                <div className="text-slate-400">مبلغ:</div>
-                                <div className="font-bold font-mono text-cyan-300">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(foundTransfer.amount)} {foundTransfer.currency}</div>
-                                
-                                <div className="text-slate-400">فرستنده:</div>
-                                <div className="font-bold">{foundTransfer.sender.name}</div>
-                                
-                                <div className="text-slate-400">گیرنده:</div>
-                                <div className="font-bold">{foundTransfer.receiver.name}</div>
-
-                                <div className="text-slate-400">صراف همکار:</div>
-                                <div className="font-bold">{foundTransfer.partnerSarraf}</div>
-
-                                <div className="text-slate-400">وضعیت فعلی:</div>
-                                <div className="font-bold">{statusTranslations[foundTransfer.status]}</div>
-                            </div>
-                            {isPayoutDisabled && (
-                                <p className="text-yellow-400 text-base">این حواله آماده پرداخت نیست. وضعیت آن باید "اجرا شده" باشد.</p>
-                            )}
-                        </div>
-                    )}
+                    <div className="max-h-[50vh] overflow-y-auto">
+                        {isLoading && <p className="text-center text-slate-400">در حال جستجو...</p>}
+                        {!isLoading && searched && searchResults.length === 0 && (
+                            <p className="text-center text-yellow-400 text-lg">هیچ حواله‌ای با این مشخصات یافت نشد.</p>
+                        )}
+                        {searchResults.length > 0 && (
+                             <table className="w-full text-lg text-right text-slate-300">
+                                <thead className="text-xl text-slate-400">
+                                    <tr>
+                                        <th className="px-4 py-2">کد / فرستنده</th>
+                                        <th className="px-4 py-2">گیرنده</th>
+                                        <th className="px-4 py-2">مبلغ</th>
+                                        <th className="px-4 py-2">وضعیت</th>
+                                        <th className="px-4 py-2"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {searchResults.map(t => {
+                                        const isPayable = t.status === TransferStatus.Executed;
+                                        return (
+                                            <tr key={t.id} className="border-b border-cyan-400/10">
+                                                <td className="px-4 py-3">
+                                                    <div className="font-mono text-cyan-300">{t.id}</div>
+                                                    <div className="text-sm">{t.sender.name}</div>
+                                                </td>
+                                                <td className="px-4 py-3 font-semibold">{t.receiver.name}</td>
+                                                <td className="px-4 py-3 font-mono">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(t.amount)} {t.currency}</td>
+                                                <td className="px-4 py-3">{statusTranslations[t.status]}</td>
+                                                <td className="px-4 py-3 text-left">
+                                                    <button 
+                                                        onClick={() => handlePayout(t.id)} 
+                                                        disabled={!isPayable || isLoading}
+                                                        className="px-4 py-2 text-base font-bold text-slate-900 bg-green-500 hover:bg-green-400 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-600"
+                                                    >
+                                                        پرداخت
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        )
+                                    })}
+                                </tbody>
+                             </table>
+                        )}
+                    </div>
                 </div>
 
-                <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end space-x-4 space-x-reverse">
+                <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end">
                     <button type="button" onClick={handleClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md transition-colors">بستن</button>
-                    {step === 'confirm' && (
-                        <button type="button" onClick={handlePayout} disabled={isLoading || isPayoutDisabled} 
-                            className="px-8 py-3 text-xl font-bold tracking-wider text-slate-900 bg-green-500 hover:bg-green-400 focus:outline-none focus:ring-4 focus:ring-green-500/50 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                            style={{
-                                clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)',
-                                boxShadow: '0 0 25px rgba(74, 222, 128, 0.5)'
-                            }}>
-                            {isLoading ? 'در حال پرداخت...' : 'تایید و پرداخت نهایی'}
-                        </button>
-                    )}
                 </div>
 
             </div>

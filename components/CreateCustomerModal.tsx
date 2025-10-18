@@ -1,6 +1,8 @@
 import React, { useState, FormEvent } from 'react';
 import { useApi } from '../hooks/useApi';
-import { CreateCustomerPayload } from '../types';
+import { CreateCustomerPayload, Currency } from '../types';
+import { CURRENCIES } from '../constants';
+import { persianToEnglishNumber } from '../utils/translations';
 
 interface CreateCustomerModalProps {
     isOpen: boolean;
@@ -15,6 +17,7 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({ isOpen, onClo
         code: '',
         whatsappNumber: '',
     });
+    const [balances, setBalances] = useState<{ [key: string]: string }>({});
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -25,8 +28,16 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({ isOpen, onClo
         setFormData(prev => ({ ...prev, [name]: value }));
     };
     
+    const handleBalanceChange = (currency: Currency, value: string) => {
+        setBalances(prev => ({
+            ...prev,
+            [currency]: persianToEnglishNumber(value)
+        }));
+    };
+
     const resetForm = () => {
         setFormData({ name: '', code: '', whatsappNumber: '' });
+        setBalances({});
         setError(null);
         setIsLoading(false);
     };
@@ -41,7 +52,15 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({ isOpen, onClo
         setIsLoading(true);
         setError(null);
 
-        const payload: CreateCustomerPayload = { ...formData };
+        const numericBalances: { [key in Currency]?: number } = {};
+        for (const currency of CURRENCIES) {
+            const value = balances[currency];
+            if (value && value.trim() !== '') {
+                numericBalances[currency] = parseFloat(value);
+            }
+        }
+
+        const payload: CreateCustomerPayload = { ...formData, balances: numericBalances };
         const result = await api.createCustomer(payload);
 
         setIsLoading(false);
@@ -55,11 +74,11 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({ isOpen, onClo
 
     return (
         <div className="fixed inset-0 bg-[#0D0C22]/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity animate-fadeIn" style={{ direction: 'rtl' }}>
-            <div className="bg-[#12122E]/90 w-full max-w-2xl border-2 border-cyan-400/30 shadow-[0_0_40px_rgba(0,255,255,0.2)]"
+            <div className="bg-[#12122E]/90 w-full max-w-3xl border-2 border-cyan-400/30 shadow-[0_0_40px_rgba(0,255,255,0.2)]"
                 style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 30px), calc(100% - 30px) 100%, 0 100%)' }}>
                 <form onSubmit={handleSubmit}>
                     <div className="px-8 py-5 border-b-2 border-cyan-400/20"><h2 className="text-4xl font-bold text-cyan-300 tracking-wider">ثبت مشتری جدید</h2></div>
-                    <div className="p-8 space-y-6">
+                    <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
                         {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
                         
                         <div>
@@ -80,6 +99,29 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({ isOpen, onClo
                                     className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-left font-mono" />
                             </div>
                         </div>
+
+                        <div className="p-4 border-2 border-cyan-400/30 bg-cyan-400/10 rounded-md">
+                            <h4 className="text-xl font-bold text-cyan-300 mb-2">موجودی‌های اولیه</h4>
+                             <p className="text-sm text-yellow-400 mb-4">اگر مشتری بدهکار است، مبلغ را منفی وارد کنید. فیلدهای خالی صفر در نظر گرفته می‌شوند.</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                                {CURRENCIES.map(currency => (
+                                     <div key={currency}>
+                                        <label htmlFor={`balance_${currency}`} className="block text-lg font-medium text-cyan-300 mb-2">{currency}</label>
+                                        <input
+                                            type="text"
+                                            inputMode="decimal"
+                                            id={`balance_${currency}`}
+                                            name={`balance_${currency}`}
+                                            value={balances[currency] || ''}
+                                            onChange={(e) => handleBalanceChange(currency, e.target.value)}
+                                            placeholder="مثلا: -500 یا 12000"
+                                            className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                         </div>
+
                     </div>
                     <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end space-x-4 space-x-reverse">
                         <button type="button" onClick={handleClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md">لغو</button>

@@ -1,7 +1,7 @@
-import React, { useState, FormEvent, useEffect } from 'react';
+import React, { useState, FormEvent, useEffect, useCallback } from 'react';
 import { useApi } from '../hooks/useApi';
-import { CreateDomesticTransferPayload, Currency, User } from '../types';
-import { CURRENCIES } from '../constants';
+import { CreateDomesticTransferPayload, Currency, User, PartnerAccount } from '../types';
+import { CURRENCIES, AFGHANISTAN_PROVINCES } from '../constants';
 import { persianToEnglishNumber } from '../utils/translations';
 
 interface CreateTransferModalProps {
@@ -41,9 +41,12 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({ isOpen, onClo
         commission: '',
         destinationProvince: '',
         partnerSarraf: '',
+        partnerReference: '',
         isCashPayment: true,
         customerCode: '',
     });
+    const [allPartners, setAllPartners] = useState<PartnerAccount[]>([]);
+    const [filteredPartners, setFilteredPartners] = useState<PartnerAccount[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -53,6 +56,26 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({ isOpen, onClo
             setFormData(prev => ({...prev, customerCode: ''}));
         }
     }, [formData.isCashPayment]);
+    
+    useEffect(() => {
+        if (isOpen) {
+            const fetchPartners = async () => {
+                const partnersData = await api.getPartnerAccounts();
+                setAllPartners(partnersData.filter(p => p.status === 'Active'));
+            };
+            fetchPartners();
+        } else {
+             // Reset form state when modal closes
+            setFormData({
+                senderName: '', senderTazkereh: '', receiverName: '', receiverTazkereh: '',
+                amount: '', currency: Currency.USD, commission: '', destinationProvince: '',
+                partnerSarraf: '', partnerReference: '', isCashPayment: true, customerCode: '',
+            });
+            setFilteredPartners([]);
+            setError(null);
+        }
+    }, [isOpen, api]);
+
 
     if (!isOpen) return null;
 
@@ -74,6 +97,18 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({ isOpen, onClo
             }
         }
     };
+    
+    const handleProvinceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const selectedProvince = e.target.value;
+        setFormData(prev => ({
+            ...prev,
+            destinationProvince: selectedProvince,
+            partnerSarraf: '' // Reset partner when province changes
+        }));
+
+        const partnersInProvince = allPartners.filter(p => p.province === selectedProvince);
+        setFilteredPartners(partnersInProvince);
+    };
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
@@ -86,6 +121,7 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({ isOpen, onClo
             commission: parseFloat(formData.commission) || 0,
             currency: formData.currency as Currency,
             customerCode: formData.isCashPayment ? undefined : formData.customerCode,
+            partnerReference: formData.partnerReference || undefined,
             user: currentUser,
         };
 
@@ -151,8 +187,42 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({ isOpen, onClo
                             <InputField name="commission" label="کارمزد" value={formData.commission} onChange={handleChange} placeholder="20" type="text" inputMode="decimal" />
                         </div>
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <InputField name="destinationProvince" label="ولایت مقصد" value={formData.destinationProvince} onChange={handleChange} placeholder="مثلا: هرات" />
-                            <InputField name="partnerSarraf" label="صراف همکار" value={formData.partnerSarraf} onChange={handleChange} placeholder="مثلا: صرافی اعتماد" />
+                            <div>
+                                <label htmlFor="destinationProvince" className="block text-lg font-medium text-cyan-300 mb-2 text-right tracking-wider">ولایت مقصد</label>
+                                <select 
+                                    id="destinationProvince" 
+                                    name="destinationProvince" 
+                                    value={formData.destinationProvince} 
+                                    onChange={handleProvinceChange} 
+                                    required 
+                                    className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right transition-colors duration-300"
+                                >
+                                    <option value="" disabled>-- انتخاب ولایت --</option>
+                                    {AFGHANISTAN_PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                            </div>
+                             <div>
+                                <label htmlFor="partnerSarraf" className="block text-lg font-medium text-cyan-300 mb-2 text-right tracking-wider">صراف همکار</label>
+                                <select 
+                                    id="partnerSarraf" 
+                                    name="partnerSarraf" 
+                                    value={formData.partnerSarraf} 
+                                    onChange={handleChange} 
+                                    required 
+                                    disabled={!formData.destinationProvince}
+                                    className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right transition-colors duration-300 disabled:bg-slate-800 disabled:cursor-not-allowed"
+                                >
+                                    <option value="" disabled>{formData.destinationProvince ? '-- انتخاب همکار --' : 'ابتدا ولایت را انتخاب کنید'}</option>
+                                    {filteredPartners.length > 0 ? (
+                                        filteredPartners.map(p => <option key={p.id} value={p.name}>{p.name}</option>)
+                                    ) : (
+                                        formData.destinationProvince && <option value="" disabled>هیچ همکاری در این ولایت یافت نشد</option>
+                                    )}
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                             <InputField name="partnerReference" label="کد رهگیری همکار (اختیاری)" value={formData.partnerReference} onChange={handleChange} placeholder="برای حواله های ورودی استفاده میشود" required={false} />
                         </div>
                     </div>
                     <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end space-x-4 space-x-reverse">

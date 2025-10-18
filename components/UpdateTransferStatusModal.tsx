@@ -35,18 +35,15 @@ const UpdateTransferStatusModal: React.FC<UpdateTransferStatusModalProps> = ({ i
         return false;
     });
 
-    const handleSubmit = async (e: FormEvent) => {
-        e.preventDefault();
-        if (newStatus === transfer.status) {
-            setError("لطفاً یک وضعیت جدید انتخاب کنید.");
-            return;
-        }
+    const canBeCancelled = transfer.status === TransferStatus.Pending || transfer.status === TransferStatus.Executed;
+
+    const handleUpdate = async (statusToUpdate: TransferStatus) => {
         setIsLoading(true);
         setError(null);
 
         const payload: UpdateTransferStatusPayload = {
             transferId: transfer.id,
-            newStatus,
+            newStatus: statusToUpdate,
             user: currentUser,
         };
 
@@ -59,6 +56,23 @@ const UpdateTransferStatusModal: React.FC<UpdateTransferStatusModalProps> = ({ i
             onSuccess();
         }
     };
+
+    const handleSubmit = (e: FormEvent) => {
+        e.preventDefault();
+        if (newStatus === transfer.status) {
+            setError("لطفاً یک وضعیت جدید انتخاب کنید.");
+            return;
+        }
+        handleUpdate(newStatus);
+    };
+
+    const handleCancelTransfer = () => {
+        if (!canBeCancelled) return;
+        if (window.confirm("آیا از لغو این حواله اطمینان دارید؟ این عمل قابل بازگشت نیست.")) {
+             handleUpdate(TransferStatus.Cancelled);
+        }
+    };
+
 
     return (
         <div className="fixed inset-0 bg-[#0D0C22]/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity animate-fadeIn" style={{ direction: 'rtl' }}>
@@ -97,16 +111,26 @@ const UpdateTransferStatusModal: React.FC<UpdateTransferStatusModalProps> = ({ i
                             )}
                         </div>
                     </div>
-                    <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end space-x-4 space-x-reverse">
-                        <button type="button" onClick={onClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md transition-colors">لغو</button>
-                        <button type="submit" disabled={isLoading || availableStatuses.length === 0} 
-                                className="px-8 py-3 text-xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                                style={{
-                                    clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)',
-                                    boxShadow: '0 0 25px rgba(0, 255, 255, 0.5)'
-                                }}>
-                            {isLoading ? 'در حال ذخیره...' : 'ذخیره تغییرات'}
+                    <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-between items-center">
+                        <button 
+                            type="button" 
+                            onClick={handleCancelTransfer} 
+                            disabled={!canBeCancelled || isLoading}
+                            className="px-6 py-3 text-xl font-bold tracking-wider text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            لغو حواله
                         </button>
+                        <div className="space-x-4 space-x-reverse">
+                            <button type="button" onClick={onClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md transition-colors">بستن</button>
+                            <button type="submit" disabled={isLoading || availableStatuses.length === 0} 
+                                    className="px-8 py-3 text-xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    style={{
+                                        clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)',
+                                        boxShadow: '0 0 25px rgba(0, 255, 255, 0.5)'
+                                    }}>
+                                {isLoading ? 'در حال ذخیره...' : 'ذخیره تغییرات'}
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>

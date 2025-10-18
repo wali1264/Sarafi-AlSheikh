@@ -1,8 +1,10 @@
+
+
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ApiProvider } from './contexts/ApiContext';
-import { Role } from './types';
+import { PermissionAction, PermissionModule } from './types';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Login from './components/Login';
@@ -20,6 +22,9 @@ import SettingsPage from './pages/SettingsPage';
 import PrintableView from './components/PrintableView';
 import CustomersPage from './pages/CustomersPage';
 import CustomerDetailPage from './pages/CustomerDetailPage';
+import StatementPrintView from './components/StatementPrintView';
+import ForeignTransfersPage from './pages/ForeignTransfersPage';
+import CommissionTransfersPage from './pages/CommissionTransfersPage';
 
 const App: React.FC = () => {
     return (
@@ -31,12 +36,12 @@ const App: React.FC = () => {
     );
 };
 
-const ProtectedRoute: React.FC<{ allowedRoles: Role[] }> = ({ allowedRoles }) => {
-    const { user } = useAuth();
+const PermissionRoute: React.FC<{ module: PermissionModule, action: PermissionAction }> = ({ module, action }) => {
+    const { user, hasPermission } = useAuth();
     if (!user) {
         return <Navigate to="/" />;
     }
-    return allowedRoles.includes(user.role) ? <Outlet /> : <Navigate to="/dashboard" />;
+    return hasPermission(module, action) ? <Outlet /> : <Navigate to="/dashboard" />;
 };
 
 const MainLayout: React.FC = () => (
@@ -69,31 +74,43 @@ const SarrafAIApp: React.FC = () => {
             <Routes>
                 {/* Routes with the main layout */}
                 <Route element={<MainLayout />}>
-                    <Route path="/dashboard" element={<DashboardPage />} />
-                    <Route path="/reports" element={<ReportsPage />} />
-
-                    <Route element={<ProtectedRoute allowedRoles={[Role.Manager, Role.Cashier]} />}>
+                    <Route element={<PermissionRoute module="dashboard" action="view" />}>
+                        <Route path="/dashboard" element={<DashboardPage />} />
+                    </Route>
+                    <Route element={<PermissionRoute module="reports" action="view" />}>
+                        <Route path="/reports" element={<ReportsPage />} />
+                    </Route>
+                    <Route element={<PermissionRoute module="cashbox" action="view" />}>
                         <Route path="/cashbox" element={<CashboxPage />} />
                     </Route>
-
-                    <Route element={<ProtectedRoute allowedRoles={[Role.Manager, Role.Domestic_Clerk]} />}>
+                    <Route element={<PermissionRoute module="domesticTransfers" action="view" />}>
                         <Route path="/domestic-transfers" element={<DomesticTransfersPage />} />
-                        <Route path="/partner-accounts" element={<PartnerAccountsPage />} />
+                    </Route>
+                    {/* FIX: Added route for foreign transfers */}
+                    <Route element={<PermissionRoute module="foreignTransfers" action="view" />}>
+                        <Route path="/foreign-transfers" element={<ForeignTransfersPage />} />
+                    </Route>
+                    <Route element={<PermissionRoute module="commissionTransfers" action="view" />}>
+                        <Route path="/commission-transfers" element={<CommissionTransfersPage />} />
+                    </Route>
+                    <Route element={<PermissionRoute module="partnerAccounts" action="view" />}>
+                         <Route path="/partner-accounts" element={<PartnerAccountsPage />} />
                         <Route path="/partner-accounts/:partnerId" element={<PartnerAccountDetailPage />} />
                     </Route>
-
-                    <Route element={<ProtectedRoute allowedRoles={[Role.Manager, Role.Foreign_Clerk, Role.Domestic_Clerk]} />}>
+                    <Route element={<PermissionRoute module="accountTransfers" action="view" />}>
                         <Route path="/account-transfers" element={<AccountTransfersPage />} />
                     </Route>
-                     
-                    <Route element={<ProtectedRoute allowedRoles={[Role.Manager, Role.Foreign_Clerk, Role.Domestic_Clerk]} />}>
+                     <Route element={<PermissionRoute module="amanat" action="view" />}>
                         <Route path="/amanat" element={<AmanatPage />} />
+                    </Route>
+                     <Route element={<PermissionRoute module="customers" action="view" />}>
                         <Route path="/customers" element={<CustomersPage />} />
                         <Route path="/customers/:customerId" element={<CustomerDetailPage />} />
                     </Route>
-
-                    <Route element={<ProtectedRoute allowedRoles={[Role.Manager]} />}>
+                    <Route element={<PermissionRoute module="expenses" action="view" />}>
                         <Route path="/expenses" element={<ExpensesPage />} />
+                    </Route>
+                    <Route element={<PermissionRoute module="settings" action="view" />}>
                         <Route path="/settings" element={<SettingsPage />} />
                     </Route>
                     
@@ -102,6 +119,8 @@ const SarrafAIApp: React.FC = () => {
                 
                 {/* Routes without the main layout (e.g., for printing) */}
                 <Route path="/print/cashbox/:requestId" element={<PrintableView />} />
+                <Route path="/print/customer-statement/:customerId" element={<StatementPrintView type="customer" />} />
+                <Route path="/print/partner-statement/:partnerId" element={<StatementPrintView type="partner" />} />
 
             </Routes>
         </HashRouter>

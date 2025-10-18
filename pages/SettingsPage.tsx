@@ -1,16 +1,23 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
-import { User, PartnerAccount, Role, Currency, SystemSettings } from '../types';
-import { roleTranslations } from '../utils/translations';
-import { ROLES, CURRENCIES } from '../constants';
+import { User, PartnerAccount, Role, Currency, SystemSettings, Permissions, PermissionModule, permissionModules, BankAccount } from '../types';
+import { permissionModuleTranslations, permissionActionTranslations } from '../utils/translations';
+import { CURRENCIES } from '../constants';
 import { persianToEnglishNumber } from '../utils/translations';
+import { useAuth } from '../contexts/AuthContext';
+import AddPartnerModal from '../components/AddPartnerModal';
+import AddBankAccountModal from '../components/AddBankAccountModal';
+import EditPartnerModal from '../components/EditPartnerModal';
+import EditBankAccountModal from '../components/EditBankAccountModal';
 
 // --- Reusable Components ---
 
-const SettingsCard: React.FC<{ title: string, children: React.ReactNode }> = ({ title, children }) => (
+const SettingsCard: React.FC<{ title: string, children: React.ReactNode, actions?: React.ReactNode }> = ({ title, children, actions }) => (
     <div className="bg-[#12122E]/80 border-2 border-cyan-400/20 overflow-hidden shadow-[0_0_40px_rgba(0,255,255,0.2)]" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)' }}>
-        <div className="p-6 border-b-2 border-cyan-400/20">
+        <div className="p-6 border-b-2 border-cyan-400/20 flex justify-between items-center flex-wrap gap-4">
             <h2 className="text-3xl font-semibold text-slate-100 tracking-wider">{title}</h2>
+            <div>{actions}</div>
         </div>
         <div className="p-6">
             {children}
@@ -33,33 +40,395 @@ const ActionButton: React.FC<{ onClick?: () => void; children: React.ReactNode; 
     </button>
 );
 
-// --- Settings Page ---
+const TabButton: React.FC<{ active: boolean, onClick: () => void, children: React.ReactNode }> = ({ active, onClick, children }) => (
+    <button
+        onClick={onClick}
+        className={`px-6 py-3 text-2xl font-bold transition-colors duration-300 border-b-4 ${
+            active
+                ? 'border-cyan-400 text-cyan-300'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+        }`}
+    >
+        {children}
+    </button>
+);
 
+
+// --- Main Page Component ---
 const SettingsPage: React.FC = () => {
+    const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'partners' | 'bankAccounts' | 'general'>('users');
+
+    return (
+         <div style={{direction: 'rtl'}} className="space-y-12">
+            <h1 className="text-5xl font-bold text-slate-100 mb-4 tracking-wider">تنظیمات و مدیریت</h1>
+
+            <div className="border-b-2 border-cyan-400/20 mb-8">
+                <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')}>مدیریت کاربران</TabButton>
+                <TabButton active={activeTab === 'roles'} onClick={() => setActiveTab('roles')}>مدیریت نقش‌ها</TabButton>
+                <TabButton active={activeTab === 'partners'} onClick={() => setActiveTab('partners')}>مدیریت همکاران</TabButton>
+                <TabButton active={activeTab === 'bankAccounts'} onClick={() => setActiveTab('bankAccounts')}>حسابات بانکی</TabButton>
+                <TabButton active={activeTab === 'general'} onClick={() => setActiveTab('general')}>تنظیمات عمومی</TabButton>
+            </div>
+            
+            {activeTab === 'users' && <UserManagement />}
+            {activeTab === 'roles' && <RoleManagement />}
+            {activeTab === 'partners' && <PartnerManagement />}
+            {activeTab === 'bankAccounts' && <BankAccountManagement />}
+            {activeTab === 'general' && <GeneralSettings />}
+
+        </div>
+    );
+};
+
+// --- Tab Content Components ---
+const UserManagement = () => {
     const api = useApi();
     const [users, setUsers] = useState<User[]>([]);
-    const [partners, setPartners] = useState<PartnerAccount[]>([]);
-    const [settings, setSettings] = useState<SystemSettings | null>(null);
+    const [roles, setRoles] = useState<Role[]>([]);
     const [isUserModalOpen, setUserModalOpen] = useState(false);
-    const [isPartnerModalOpen, setPartnerModalOpen] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [selectedUser, setSelectedUser] = useState<User | null>(null);
+
+    const rolesMap = new Map(roles.map(r => [r.id, r.name]));
 
     const fetchData = useCallback(async () => {
-        const [userData, partnerData, settingsData] = await Promise.all([
-            api.getUsers(),
-            api.getPartnerAccounts(),
-            api.getSystemSettings()
-        ]);
+        const [userData, roleData] = await Promise.all([api.getUsers(), api.getRoles()]);
         setUsers(userData);
-        setPartners(partnerData);
-        setSettings(settingsData);
+        setRoles(roleData);
+    }, [api]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    const handleSuccess = () => {
+        setUserModalOpen(false);
+        setSelectedUser(null);
+        fetchData();
+    };
+    
+    const handleDeleteUser = async (userId: string) => {
+        if (window.confirm('آیا از حذف این کاربر اطمینان دارید؟ این عمل قابل بازگشت نیست.')) {
+            const result = await api.deleteUser({ id: userId });
+            if ('error' in result) {
+                alert(`خطا: ${result.error}`);
+            } else {
+                fetchData();
+            }
+        }
+    };
+    
+    return (
+        <SettingsCard 
+            title="لیست کاربران سیستم"
+            actions={<ActionButton onClick={() => { setSelectedUser(null); setUserModalOpen(true); }}>افزودن کاربر جدید</ActionButton>}
+        >
+            <div className="overflow-x-auto">
+                <table className="w-full text-lg text-right text-slate-300">
+                    <thead className="text-xl text-slate-400 uppercase">
+                        <tr>
+                            <th scope="col" className="px-6 py-4 font-medium">نام کامل</th>
+                            <th scope="col" className="px-6 py-4 font-medium">نام کاربری</th>
+                            <th scope="col" className="px-6 py-4 font-medium">نقش</th>
+                            <th scope="col" className="px-6 py-4 font-medium"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {users.map(user => (
+                            <tr key={user.id} className="border-b border-cyan-400/10">
+                                <td className="px-6 py-4 font-semibold text-slate-100">{user.name}</td>
+                                <td className="px-6 py-4 font-mono text-cyan-300">{user.username}</td>
+                                <td className="px-6 py-4">{rolesMap.get(user.roleId) || 'نامشخص'}</td>
+                                <td className="px-6 py-4 text-left space-x-4 space-x-reverse">
+                                    <button onClick={() => { setSelectedUser(user); setUserModalOpen(true); }} className="text-amber-400 hover:text-amber-300">ویرایش</button>
+                                    <button onClick={() => handleDeleteUser(user.id)} className="text-red-400 hover:text-red-300">حذف</button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            {isUserModalOpen && <UserModal user={selectedUser} roles={roles} onClose={() => { setUserModalOpen(false); setSelectedUser(null); }} onSuccess={handleSuccess} />}
+        </SettingsCard>
+    );
+};
+
+const RoleManagement = () => {
+    const api = useApi();
+    const [roles, setRoles] = useState<Role[]>([]);
+    const [isRoleModalOpen, setRoleModalOpen] = useState(false);
+    const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+
+     const fetchData = useCallback(async () => {
+        setRoles(await api.getRoles());
     }, [api]);
 
     useEffect(() => {
         fetchData();
     }, [fetchData]);
     
-    const handleSettingsChange = (currency: Currency, value: string) => {
+     const handleSuccess = () => {
+        setRoleModalOpen(false);
+        setSelectedRole(null);
+        fetchData();
+    };
+
+    const handleDeleteRole = async (roleId: string) => {
+         if (window.confirm('آیا از حذف این نقش اطمینان دارید؟ کاربرانی که این نقش را دارند دسترسی خود را از دست خواهند داد.')) {
+            const result = await api.deleteRole({ id: roleId });
+            if ('error' in result) {
+                alert(`خطا: ${result.error}`);
+            } else {
+                fetchData();
+            }
+        }
+    };
+
+    return (
+        <SettingsCard 
+            title="نقش‌های کاربری و دسترسی‌ها"
+            actions={<ActionButton onClick={() => { setSelectedRole(null); setRoleModalOpen(true); }}>ایجاد نقش جدید</ActionButton>}
+        >
+             <div className="overflow-x-auto">
+                <table className="w-full text-lg text-right text-slate-300">
+                    <thead className="text-xl text-slate-400 uppercase">
+                        <tr>
+                            <th scope="col" className="px-6 py-4 font-medium">نام نقش</th>
+                            <th scope="col" className="px-6 py-4 font-medium"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {roles.map(role => (
+                            <tr key={role.id} className="border-b border-cyan-400/10">
+                                <td className="px-6 py-4 font-semibold text-slate-100 text-2xl">{role.name}</td>
+                                <td className="px-6 py-4 text-left space-x-4 space-x-reverse">
+                                     <button onClick={() => { setSelectedRole(role); setRoleModalOpen(true); }} className="text-amber-400 hover:text-amber-300">ویرایش دسترسی‌ها</button>
+                                     <button onClick={() => handleDeleteRole(role.id)} className="text-red-400 hover:text-red-300">حذف نقش</button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+             {isRoleModalOpen && <RoleModal role={selectedRole} onClose={() => { setRoleModalOpen(false); setSelectedRole(null); }} onSuccess={handleSuccess} />}
+        </SettingsCard>
+    );
+};
+
+const BalanceSummary: React.FC<{ balances: PartnerAccount['balances'] }> = ({ balances }) => {
+    const nonZeroBalances = CURRENCIES
+        .map(currency => ({ currency, amount: balances[currency] || 0 }))
+        .filter(b => b.amount !== 0);
+
+    if (nonZeroBalances.length === 0) {
+        return <span className="text-slate-400">بی حساب</span>;
+    }
+
+    return (
+        <div className="flex flex-wrap justify-end gap-x-4 gap-y-1 text-base font-mono">
+            {nonZeroBalances.map(({ currency, amount }) => (
+                <span key={currency} className={amount < 0 ? 'text-red-400' : 'text-green-400'}>
+                    {`${new Intl.NumberFormat('en-US').format(amount)} ${currency}`}
+                </span>
+            ))}
+        </div>
+    );
+};
+
+const PartnerManagement = () => {
+    const api = useApi();
+    const { user, hasPermission } = useAuth();
+    const [partners, setPartners] = useState<PartnerAccount[]>([]);
+    const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+    const [isEditModalOpen, setEditModalOpen] = useState(false);
+    const [selectedPartner, setSelectedPartner] = useState<PartnerAccount | null>(null);
+
+
+    const fetchData = useCallback(async () => {
+        setPartners(await api.getPartnerAccounts());
+    }, [api]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    const handleSuccess = () => {
+        setCreateModalOpen(false);
+        setEditModalOpen(false);
+        setSelectedPartner(null);
+        fetchData();
+    };
+
+    const handleEditClick = (partner: PartnerAccount) => {
+        setSelectedPartner(partner);
+        setEditModalOpen(true);
+    };
+
+    const handleDeleteClick = async (partner: PartnerAccount) => {
+        if (!user) return;
+        if (window.confirm(`آیا از غیرفعال کردن همکار "${partner.name}" اطمینان دارید؟ این همکار دیگر در لیست‌های انتخابی نمایش داده نخواهد شد.`)) {
+            const result = await api.deletePartner({ id: partner.id, user });
+            if ('error' in result) {
+                alert(`Error: ${result.error}`);
+            } else {
+                fetchData();
+            }
+        }
+    };
+
+    const getStatusStyle = (status: string) => status === 'Active' ? 'text-green-400' : 'text-slate-500';
+
+    return (
+        <SettingsCard 
+            title="لیست صرافان همکار"
+            actions={hasPermission('partnerAccounts', 'create') && (
+                 <ActionButton onClick={() => setCreateModalOpen(true)}>+ ثبت همکار جدید</ActionButton>
+            )}
+        >
+            <div className="overflow-x-auto">
+                <table className="w-full text-lg text-right text-slate-300">
+                    <thead className="text-xl text-slate-400 uppercase">
+                        <tr>
+                            <th scope="col" className="px-6 py-4 font-medium">نام همکار</th>
+                            <th scope="col" className="px-6 py-4 font-medium">ولایت</th>
+                            <th scope="col" className="px-6 py-4 font-medium">شماره واتس‌اپ</th>
+                            <th scope="col" className="px-6 py-4 font-medium">موجودی‌ها</th>
+                            <th scope="col" className="px-6 py-4 font-medium">وضعیت</th>
+                            <th scope="col" className="px-6 py-4 font-medium"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {partners.map(p => (
+                            <tr key={p.id} className={`border-b border-cyan-400/10 ${p.status === 'Inactive' ? 'opacity-50' : ''}`}>
+                                <td className="px-6 py-4 font-semibold text-slate-100">{p.name}</td>
+                                <td className="px-6 py-4">{p.province}</td>
+                                <td className="px-6 py-4 font-mono">{p.whatsappNumber}</td>
+                                <td className="px-6 py-4 text-left">
+                                    <BalanceSummary balances={p.balances} />
+                                </td>
+                                <td className={`px-6 py-4 font-bold ${getStatusStyle(p.status)}`}>{p.status === 'Active' ? 'فعال' : 'غیرفعال'}</td>
+                                <td className="px-6 py-4 text-left space-x-4 space-x-reverse">
+                                    {p.status === 'Active' && hasPermission('partnerAccounts', 'edit') && (
+                                        <button onClick={() => handleEditClick(p)} className="text-amber-400 hover:text-amber-300">ویرایش</button>
+                                    )}
+                                     {p.status === 'Active' && hasPermission('partnerAccounts', 'delete') && (
+                                        <button onClick={() => handleDeleteClick(p)} className="text-red-400 hover:text-red-300">حذف</button>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            {isCreateModalOpen && user && <AddPartnerModal isOpen={isCreateModalOpen} onClose={() => setCreateModalOpen(false)} onSuccess={handleSuccess} currentUser={user} />}
+            {isEditModalOpen && user && selectedPartner && <EditPartnerModal isOpen={isEditModalOpen} onClose={() => setEditModalOpen(false)} onSuccess={handleSuccess} currentUser={user} partner={selectedPartner} />}
+        </SettingsCard>
+    );
+};
+
+const BankAccountManagement = () => {
+    const api = useApi();
+    const { user, hasPermission } = useAuth();
+    const [accounts, setAccounts] = useState<BankAccount[]>([]);
+    const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+    const [isEditModalOpen, setEditModalOpen] = useState(false);
+    const [selectedAccount, setSelectedAccount] = useState<BankAccount | null>(null);
+
+    const fetchData = useCallback(async () => {
+        setAccounts(await api.getBankAccounts());
+    }, [api]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+    
+    const handleSuccess = () => {
+        setCreateModalOpen(false);
+        setEditModalOpen(false);
+        setSelectedAccount(null);
+        fetchData();
+    };
+
+    const handleEditClick = (account: BankAccount) => {
+        setSelectedAccount(account);
+        setEditModalOpen(true);
+    };
+
+    const handleDeleteClick = async (account: BankAccount) => {
+        if (!user) return;
+        if (window.confirm(`آیا از غیرفعال کردن حساب بانکی "${account.accountHolder}" اطمینان دارید؟`)) {
+            const result = await api.deleteBankAccount({ id: account.id, user });
+            if ('error' in result) {
+                alert(`Error: ${result.error}`);
+            } else {
+                fetchData();
+            }
+        }
+    };
+
+    const getStatusStyle = (status: string) => status === 'Active' ? 'text-green-400' : 'text-slate-500';
+
+
+    return (
+        <SettingsCard 
+            title="لیست حسابات بانکی (ایران)"
+            actions={hasPermission('settings', 'edit') && (
+                 <ActionButton onClick={() => setCreateModalOpen(true)}>+ افزودن حساب بانکی جدید</ActionButton>
+            )}
+        >
+            <div className="overflow-x-auto">
+                <table className="w-full text-lg text-right text-slate-300">
+                    <thead className="text-xl text-slate-400 uppercase">
+                        <tr>
+                            <th scope="col" className="px-6 py-4 font-medium">صاحب حساب</th>
+                            <th scope="col" className="px-6 py-4 font-medium">نام بانک</th>
+                            <th scope="col" className="px-6 py-4 font-medium">شماره حساب</th>
+                            <th scope="col" className="px-6 py-4 font-medium">موجودی فعلی</th>
+                            <th scope="col" className="px-6 py-4 font-medium">وضعیت</th>
+                            <th scope="col" className="px-6 py-4 font-medium"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {accounts.map(acc => (
+                            <tr key={acc.id} className={`border-b border-cyan-400/10 ${acc.status === 'Inactive' ? 'opacity-50' : ''}`}>
+                                <td className="px-6 py-4 font-semibold text-slate-100">{acc.accountHolder}</td>
+                                <td className="px-6 py-4">{acc.bankName}</td>
+                                <td className="px-6 py-4 font-mono text-cyan-300">{acc.accountNumber}</td>
+                                <td className="px-6 py-4 font-mono">{new Intl.NumberFormat('fa-IR').format(acc.balance)} {acc.currency}</td>
+                                <td className={`px-6 py-4 font-bold ${getStatusStyle(acc.status)}`}>{acc.status === 'Active' ? 'فعال' : 'غیرفعال'}</td>
+                                <td className="px-6 py-4 text-left space-x-4 space-x-reverse">
+                                     {acc.status === 'Active' && hasPermission('settings', 'edit') && (
+                                        <button onClick={() => handleEditClick(acc)} className="text-amber-400 hover:text-amber-300">ویرایش</button>
+                                    )}
+                                     {acc.status === 'Active' && hasPermission('settings', 'edit') && (
+                                        <button onClick={() => handleDeleteClick(acc)} className="text-red-400 hover:text-red-300">حذف</button>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            {isCreateModalOpen && user && <AddBankAccountModal isOpen={isCreateModalOpen} onClose={() => setCreateModalOpen(false)} onSuccess={handleSuccess} currentUser={user} />}
+            {isEditModalOpen && user && selectedAccount && <EditBankAccountModal isOpen={isEditModalOpen} onClose={() => setEditModalOpen(false)} onSuccess={handleSuccess} currentUser={user} bankAccount={selectedAccount} />}
+        </SettingsCard>
+    )
+};
+
+
+const GeneralSettings = () => {
+    const api = useApi();
+    const [settings, setSettings] = useState<SystemSettings | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    
+    const fetchData = useCallback(async () => {
+        setSettings(await api.getSystemSettings());
+    }, [api]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+     const handleSettingsChange = (currency: Currency, value: string) => {
         setSettings(prev => {
             if (!prev) return null;
             return {
@@ -79,28 +448,7 @@ const SettingsPage: React.FC = () => {
         fetchData();
     };
 
-    const handleUserCreated = () => {
-        setUserModalOpen(false);
-        fetchData();
-    };
-
-    const handlePartnerCreated = () => {
-        setPartnerModalOpen(false);
-        fetchData();
-    };
-    
-    const handleDeleteUser = async (userId: string) => {
-        if (window.confirm('آیا از حذف این کاربر اطمینان دارید؟ این عمل قابل بازگشت نیست.')) {
-            const result = await api.deleteUser({ id: userId });
-            if ('error' in result) {
-                alert(`خطا: ${result.error}`);
-            } else {
-                fetchData();
-            }
-        }
-    };
-    
-    const handleBackup = async () => {
+     const handleBackup = async () => {
         const backupData = await api.getBackupState();
         const jsonString = JSON.stringify(backupData, null, 2);
         const blob = new Blob([jsonString], { type: 'application/json' });
@@ -145,150 +493,82 @@ const SettingsPage: React.FC = () => {
         };
         reader.readAsText(file);
     };
-
-
+    
     return (
-        <div style={{direction: 'rtl'}} className="space-y-12">
-            <h1 className="text-5xl font-bold text-slate-100 mb-10 tracking-wider">تنظیمات و مدیریت</h1>
-
-             <SettingsCard title="پشتیبان‌گیری و بازیابی اطلاعات">
-                <div className="flex flex-col md:flex-row gap-6 items-start">
+        <div className="space-y-12">
+            <SettingsCard title="پشتیبان‌گیری و بازیابی اطلاعات">
+                 <div className="flex flex-col md:flex-row gap-6 items-start">
                     <div className="flex-1">
                         <h3 className="text-xl text-slate-200 font-bold">ایجاد فایل پشتیبان</h3>
-                        <p className="text-slate-400 mt-2 mb-4">از تمام اطلاعات سیستم (حواله‌ها، مصارف، حساب‌ها و غیره) یک فایل پشتیبان با فرمت JSON تهیه کنید و آن را در مکانی امن نگهداری کنید.</p>
+                        <p className="text-slate-400 mt-2 mb-4">از تمام اطلاعات سیستم یک فایل پشتیبان با فرمت JSON تهیه کنید.</p>
                         <ActionButton onClick={handleBackup}>دانلود فایل پشتیبان</ActionButton>
                     </div>
                      <div className="w-full md:w-px bg-cyan-400/20 self-stretch"></div>
                     <div className="flex-1">
                         <h3 className="text-xl text-slate-200 font-bold">بازیابی از فایل پشتیبان</h3>
-                        <p className="text-slate-400 mt-2 mb-4">
-                            <span className="font-bold text-red-400">هشدار:</span>
-                             این عمل تمام اطلاعات فعلی شما را پاک کرده و اطلاعات موجود در فایل پشتیبان را جایگزین می‌کند.
-                        </p>
+                        <p className="text-slate-400 mt-2 mb-4"><span className="font-bold text-red-400">هشدار:</span> این عمل تمام اطلاعات فعلی شما را پاک می‌کند.</p>
                         <ActionButton onClick={handleRestoreClick} className="bg-amber-500 hover:bg-amber-400 focus:ring-amber-500/50">بارگذاری فایل پشتیبان</ActionButton>
                         <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
                     </div>
                 </div>
             </SettingsCard>
-            
-            {settings && (
+
+             {settings && (
                 <SettingsCard title="تنظیمات صندوق">
                     <p className="text-slate-400 mb-6">مبالغی که از این حد تعیین شده کمتر باشند، به صورت خودکار تایید خواهند شد و نیازی به تایید مدیر نخواهند داشت.</p>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {CURRENCIES.map(currency => (
                             <div key={currency}>
                                 <label className="block text-lg font-medium text-cyan-300 mb-2">حد تایید برای {currency}</label>
-                                <input
-                                    type="text"
-                                    inputMode="decimal"
-                                    value={settings.approvalThresholds[currency] || ''}
-                                    onChange={(e) => handleSettingsChange(currency, e.target.value)}
-                                    className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right"
-                                />
+                                <input type="text" inputMode="decimal" value={settings.approvalThresholds[currency] || ''} onChange={(e) => handleSettingsChange(currency, e.target.value)}
+                                    className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right"/>
                             </div>
                         ))}
                     </div>
-                     <div className="mt-6 text-left">
-                        <ActionButton onClick={handleSaveSettings}>ذخیره تنظیمات</ActionButton>
-                    </div>
+                     <div className="mt-6 text-left"><ActionButton onClick={handleSaveSettings}>ذخیره تنظیمات</ActionButton></div>
                 </SettingsCard>
             )}
-
-            <SettingsCard title="مدیریت کاربران">
-                 <div className="overflow-x-auto mb-6">
-                    <table className="w-full text-lg text-right text-slate-300">
-                        <thead className="text-xl text-slate-400 uppercase">
-                            <tr>
-                                <th scope="col" className="px-6 py-4 font-medium">نام کاربر</th>
-                                <th scope="col" className="px-6 py-4 font-medium">نقش</th>
-                                <th scope="col" className="px-6 py-4 font-medium"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {users.map(user => (
-                                <tr key={user.id} className="border-b border-cyan-400/10">
-                                    <td className="px-6 py-4 font-semibold text-slate-100">{user.name}</td>
-                                    <td className="px-6 py-4">{roleTranslations[user.role]}</td>
-                                    <td className="px-6 py-4 text-left">
-                                        <button onClick={() => handleDeleteUser(user.id)} className="text-red-400 hover:text-red-300">حذف</button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-                <ActionButton onClick={() => setUserModalOpen(true)}>افزودن کاربر جدید</ActionButton>
-            </SettingsCard>
-            
-            <SettingsCard title="مدیریت همکاران">
-                <div className="overflow-x-auto mb-6">
-                    {/* Placeholder for partners list */}
-                     <table className="w-full text-lg text-right text-slate-300">
-                        <thead className="text-xl text-slate-400 uppercase">
-                            <tr>
-                                <th scope="col" className="px-6 py-4 font-medium">نام همکار</th>
-                                <th scope="col" className="px-6 py-4 font-medium">موجودی</th>
-                                <th scope="col" className="px-6 py-4 font-medium"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                             {partners.map(p => (
-                                <tr key={p.id} className="border-b border-cyan-400/10">
-                                    <td className="px-6 py-4 font-semibold text-slate-100">{p.name}</td>
-                                    <td className="px-6 py-4 font-mono">{new Intl.NumberFormat().format(p.balance)} {p.currency}</td>
-                                    <td className="px-6 py-4 text-left">
-                                        {/* Future actions like edit/delete */}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                     </table>
-                </div>
-                <ActionButton onClick={() => setPartnerModalOpen(true)}>افزودن همکار جدید</ActionButton>
-            </SettingsCard>
-
-            {isUserModalOpen && <CreateUserModal onClose={() => setUserModalOpen(false)} onSuccess={handleUserCreated} />}
-            {isPartnerModalOpen && <CreatePartnerModal onClose={() => setPartnerModalOpen(false)} onSuccess={handlePartnerCreated} />}
         </div>
     );
 };
 
-// --- Modals (defined in the same file for simplicity) ---
-
-interface CreateUserModalProps {
-    onClose: () => void;
-    onSuccess: () => void;
-}
-const CreateUserModal: React.FC<CreateUserModalProps> = ({ onClose, onSuccess }) => {
+// --- Modals ---
+interface UserModalProps { user: User | null; roles: Role[]; onClose: () => void; onSuccess: () => void; }
+const UserModal: React.FC<UserModalProps> = ({ user, roles, onClose, onSuccess }) => {
     const api = useApi();
-    const [name, setName] = useState('');
-    const [role, setRole] = useState<Role>(Role.Domestic_Clerk);
+    const [formData, setFormData] = useState({ name: '', username: '', password: '', roleId: roles[0]?.id || '' });
     const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        if (user) {
+            setFormData({ name: user.name, username: user.username, password: '', roleId: user.roleId });
+        }
+    }, [user]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        await api.createUser({ name, role });
+        if (user) {
+            await api.updateUser({ ...formData, id: user.id });
+        } else {
+            await api.createUser(formData);
+        }
         setIsLoading(false);
         onSuccess();
     };
 
-    return (
-         <div className="fixed inset-0 bg-[#0D0C22]/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity animate-fadeIn" style={{ direction: 'rtl' }}>
+    return ReactDOM.createPortal(
+        <div className="fixed inset-0 bg-[#0D0C22]/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity animate-fadeIn" style={{ direction: 'rtl' }}>
             <div className="bg-[#12122E]/90 w-full max-w-xl border-2 border-cyan-400/30 shadow-[0_0_40px_rgba(0,255,255,0.2)]">
                 <form onSubmit={handleSubmit}>
-                    <div className="px-8 py-5 border-b-2 border-cyan-400/20"><h2 className="text-3xl font-bold text-cyan-300">افزودن کاربر جدید</h2></div>
+                    <div className="px-8 py-5 border-b-2 border-cyan-400/20"><h2 className="text-3xl font-bold text-cyan-300">{user ? 'ویرایش کاربر' : 'افزودن کاربر جدید'}</h2></div>
                     <div className="p-8 space-y-6">
-                        <div>
-                            <label className="block text-lg font-medium text-cyan-300 mb-2">نام کاربر</label>
-                            <input type="text" value={name} onChange={e => setName(e.target.value)} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400"/>
-                        </div>
-                        <div>
-                            <label className="block text-lg font-medium text-cyan-300 mb-2">نقش</label>
-                            <select value={role} onChange={e => setRole(e.target.value as Role)} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400">
-                                {ROLES.map(r => <option key={r} value={r}>{roleTranslations[r]}</option>)}
-                            </select>
-                        </div>
+                        <input type="text" placeholder='نام کامل' value={formData.name} onChange={e => setFormData(f => ({...f, name: e.target.value}))} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400"/>
+                        <input type="text" placeholder='نام کاربری (انگلیسی)' value={formData.username} onChange={e => setFormData(f => ({...f, username: e.target.value}))} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-left" style={{direction: 'ltr'}}/>
+                        <input type="password" placeholder={user ? 'رمز عبور جدید (اختیاری)' : 'رمز عبور'} value={formData.password} onChange={e => setFormData(f => ({...f, password: e.target.value}))} required={!user} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-left" style={{direction: 'ltr'}}/>
+                        <select value={formData.roleId} onChange={e => setFormData(f => ({...f, roleId: e.target.value}))} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400">
+                           {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                        </select>
                     </div>
                     <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end gap-4">
                         <button type="button" onClick={onClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md">لغو</button>
@@ -296,61 +576,74 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ onClose, onSuccess })
                     </div>
                 </form>
             </div>
-        </div>
-    );
+        </div>,
+        document.getElementById('modal-root')!
+    )
 };
 
-interface CreatePartnerModalProps {
-    onClose: () => void;
-    onSuccess: () => void;
-}
-
-const CreatePartnerModal: React.FC<CreatePartnerModalProps> = ({ onClose, onSuccess }) => {
+interface RoleModalProps { role: Role | null; onClose: () => void; onSuccess: () => void; }
+const RoleModal: React.FC<RoleModalProps> = ({ role, onClose, onSuccess }) => {
     const api = useApi();
-    const [formData, setFormData] = useState({ name: '', initialBalance: '', currency: Currency.USD });
+    const [name, setName] = useState(role?.name || '');
+    const [permissions, setPermissions] = useState<Permissions>(role?.permissions || {} as Permissions);
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        if (name === 'initialBalance') {
-            setFormData(prev => ({ ...prev, [name]: persianToEnglishNumber(value) }));
-        } else {
-            setFormData(prev => ({ ...prev, [name]: value }));
-        }
+    const handlePermissionChange = (module: PermissionModule, action: keyof typeof permissions[PermissionModule], value: boolean) => {
+        setPermissions(prev => ({
+            ...prev,
+            [module]: {
+                ...prev[module],
+                [action]: value,
+            }
+        }));
     };
-    
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        await api.createPartner({ 
-            name: formData.name,
-            initialBalance: parseFloat(formData.initialBalance) || 0,
-            currency: formData.currency as Currency,
-        });
+        if (role) {
+            await api.updateRole({ id: role.id, name, permissions });
+        } else {
+            await api.createRole({ name, permissions });
+        }
         setIsLoading(false);
         onSuccess();
     };
-
-     return (
-         <div className="fixed inset-0 bg-[#0D0C22]/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity animate-fadeIn" style={{ direction: 'rtl' }}>
-            <div className="bg-[#12122E]/90 w-full max-w-xl border-2 border-cyan-400/30 shadow-[0_0_40px_rgba(0,255,255,0.2)]">
-                <form onSubmit={handleSubmit}>
-                    <div className="px-8 py-5 border-b-2 border-cyan-400/20"><h2 className="text-3xl font-bold text-cyan-300">افزودن همکار جدید</h2></div>
-                    <div className="p-8 space-y-6">
-                         <input type="text" name="name" value={formData.name} onChange={handleChange} placeholder="نام صراف همکار" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400"/>
-                         <input type="text" inputMode="decimal" name="initialBalance" value={formData.initialBalance} onChange={handleChange} placeholder="موجودی اولیه (اختیاری)" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400"/>
-                         <select name="currency" value={formData.currency} onChange={handleChange} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400">
-                             {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-                         </select>
+    
+    return ReactDOM.createPortal(
+        <div className="fixed inset-0 bg-[#0D0C22]/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity animate-fadeIn" style={{ direction: 'rtl' }}>
+            <div className="bg-[#12122E]/90 w-full max-w-4xl border-2 border-cyan-400/30 shadow-[0_0_40px_rgba(0,255,255,0.2)] flex flex-col max-h-[90vh]">
+                <form onSubmit={handleSubmit} className="flex flex-col flex-grow overflow-hidden">
+                    <div className="px-8 py-5 border-b-2 border-cyan-400/20 flex-shrink-0"><h2 className="text-3xl font-bold text-cyan-300">{role ? 'ویرایش نقش' : 'ایجاد نقش جدید'}</h2></div>
+                    <div className="p-8 space-y-6 flex-grow overflow-y-auto">
+                        <input type="text" placeholder="نام نقش" value={name} onChange={e => setName(e.target.value)} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400"/>
+                        <div className="space-y-4">
+                            {permissionModules.map(module => (
+                                <div key={module} className="p-4 border border-cyan-400/20 rounded-lg">
+                                    <h4 className="text-xl font-bold text-cyan-300 mb-2">{permissionModuleTranslations[module]}</h4>
+                                    <div className="flex gap-x-6 gap-y-2 flex-wrap">
+                                        {['view', 'create', 'edit', 'delete', 'approve', 'process'].map(action => (
+                                            <label key={action} className="flex items-center gap-2 text-lg">
+                                                <input type="checkbox" checked={permissions[module]?.[action as keyof typeof permissions[PermissionModule]] || false} onChange={e => handlePermissionChange(module, action as keyof typeof permissions[PermissionModule], e.target.checked)}
+                                                    className="w-5 h-5 rounded bg-slate-700 border-slate-500 text-cyan-400 focus:ring-cyan-500"/>
+                                                <span>{permissionActionTranslations[action]}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                    <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end gap-4">
+                    <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end gap-4 flex-shrink-0">
                         <button type="button" onClick={onClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md">لغو</button>
-                        <ActionButton type="submit" disabled={isLoading}>{isLoading ? 'در حال ثبت...' : 'ثبت همکار'}</ActionButton>
+                        <ActionButton type="submit" disabled={isLoading}>{isLoading ? 'در حال ذخیره...' : 'ذخیره نقش'}</ActionButton>
                     </div>
                 </form>
             </div>
-        </div>
-    );
+        </div>,
+        document.getElementById('modal-root')!
+    )
 };
+
 
 export default SettingsPage;

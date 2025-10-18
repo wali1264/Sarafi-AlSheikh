@@ -79,7 +79,7 @@ const CreateExpenseModal: React.FC<CreateExpenseModalProps> = ({ isOpen, onClose
                                 <label htmlFor="category" className="block text-lg font-medium text-cyan-300 mb-2 text-right tracking-wider">دسته‌بندی</label>
                                 <select id="category" name="category" value={formData.category} onChange={handleChange} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right transition-colors duration-300">
                                     {Object.values(ExpenseCategory).map(c => (
-// FIX: Cast enum value to its type for safe indexing.
+                                        // FIX: Cast enum value to its type for safe indexing.
                                         <option key={c} value={c}>{expenseCategoryTranslations[c as ExpenseCategory]}</option>
                                     ))}
                                 </select>

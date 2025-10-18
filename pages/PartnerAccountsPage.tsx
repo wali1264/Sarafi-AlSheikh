@@ -1,7 +1,29 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
-import { PartnerAccount } from '../types';
+import { PartnerAccount, Currency } from '../types';
+import { CURRENCIES } from '../constants';
+
+const BalanceSummary: React.FC<{ balances: PartnerAccount['balances'] }> = ({ balances }) => {
+    const nonZeroBalances = CURRENCIES
+        .map(currency => ({ currency, amount: balances[currency] || 0 }))
+        .filter(b => b.amount !== 0);
+
+    if (nonZeroBalances.length === 0) {
+        return <span className="text-slate-400">بی حساب</span>;
+    }
+
+    return (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-lg font-mono">
+            {nonZeroBalances.map(({ currency, amount }) => (
+                <span key={currency} className={amount < 0 ? 'text-red-400' : 'text-green-400'}>
+                    {`${new Intl.NumberFormat('en-US').format(amount)} ${currency}`}
+                </span>
+            ))}
+        </div>
+    );
+};
+
 
 const PartnerAccountsPage: React.FC = () => {
     const api = useApi();
@@ -16,18 +38,6 @@ const PartnerAccountsPage: React.FC = () => {
         fetchData();
     }, [api]);
 
-    const getBalanceStyle = (balance: number) => {
-        if (balance < 0) return 'text-red-400'; // We owe them
-        if (balance > 0) return 'text-green-400'; // They owe us
-        return 'text-slate-300';
-    };
-    
-    const getBalanceLabel = (balance: number) => {
-        if (balance < 0) return 'بدهکار';
-        if (balance > 0) return 'طلبکار';
-        return 'بی حساب';
-    };
-
     return (
         <div style={{ direction: 'rtl' }}>
             <h1 className="text-5xl font-bold text-slate-100 mb-10 tracking-wider">حساب همکاران</h1>
@@ -41,8 +51,7 @@ const PartnerAccountsPage: React.FC = () => {
                         <thead className="text-xl text-slate-400 uppercase">
                             <tr>
                                 <th scope="col" className="px-6 py-4 font-medium">نام صراف</th>
-                                <th scope="col" className="px-6 py-4 font-medium">موجودی حساب</th>
-                                <th scope="col" className="px-6 py-4 font-medium">وضعیت</th>
+                                <th scope="col" className="px-6 py-4 font-medium">موجودی‌ها</th>
                                 <th scope="col" className="px-6 py-4 font-medium"></th>
                             </tr>
                         </thead>
@@ -50,11 +59,8 @@ const PartnerAccountsPage: React.FC = () => {
                             {partners.map(p => (
                                 <tr key={p.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5 transition-colors">
                                     <td className="px-6 py-4 text-2xl font-semibold text-slate-100">{p.name}</td>
-                                    <td className={`px-6 py-4 text-2xl font-mono text-left ${getBalanceStyle(p.balance)}`}>
-                                        {new Intl.NumberFormat('fa-IR-u-nu-latn').format(Math.abs(p.balance))} {p.currency}
-                                    </td>
-                                    <td className={`px-6 py-4 text-xl font-bold ${getBalanceStyle(p.balance)}`}>
-                                        {getBalanceLabel(p.balance)}
+                                    <td className="px-6 py-4 text-left">
+                                        <BalanceSummary balances={p.balances} />
                                     </td>
                                     <td className="px-6 py-4 text-left">
                                         <button 

@@ -1,50 +1,21 @@
-export enum Role {
-    Manager = 'Manager',
-    Cashier = 'Cashier',
-    Domestic_Clerk = 'Domestic_Clerk',
-    Foreign_Clerk = 'Foreign_Clerk',
-}
+// types.ts
+
+// --- Enums ---
 
 export enum Currency {
-    USD = 'USD',
     AFN = 'AFN',
-    IRR = 'IRR',
+    USD = 'USD',
     PKR = 'PKR',
-    IRT = 'IRT',
+    EUR = 'EUR',
+    IRT_BANK = 'IRT_BANK',
+    IRT_CASH = 'IRT_CASH',
 }
 
 export enum TransferStatus {
     Pending = 'Pending',
     Executed = 'Executed',
     Paid = 'Paid',
-}
-
-export enum ExpenseCategory {
-    Salary = 'Salary',
-    Rent = 'Rent',
-    Utilities = 'Utilities',
-    Hospitality = 'Hospitality',
-    Other = 'Other',
-}
-
-export enum ForeignTransactionType {
-    SellBankTomanForForeignCash = 'SellBankTomanForForeignCash', // We get Toman in bank, give customer AFN/USD cash
-    BuyBankTomanWithForeignCash = 'BuyBankTomanWithForeignCash',   // Customer gives us AFN/USD cash, we send Toman to their bank
-    BuyBankTomanWithTomanCash = 'BuyBankTomanWithTomanCash', // Customer gives us Toman cash, we send Toman to their bank
-    SellBankTomanForTomanCash = 'SellBankTomanForTomanCash', // We get Toman in bank, give customer Toman cash
-    InternalBankTomanTransfer = 'InternalBankTomanTransfer', // Moving Toman between our own accounts
-}
-
-export enum ForeignTransactionStatus {
-    PendingCashConfirmation = 'PendingCashConfirmation',
-    Completed = 'Completed',
     Cancelled = 'Cancelled',
-}
-
-
-export enum ReportType {
-    ProfitAndLoss = 'ProfitAndLoss',
-    CashboxSummary = 'CashboxSummary',
 }
 
 export enum CashboxRequestStatus {
@@ -54,23 +25,53 @@ export enum CashboxRequestStatus {
     AutoApproved = 'AutoApproved',
 }
 
+export enum ExpenseCategory {
+    Salary = 'Salary',
+    Rent = 'Rent',
+    Utilities = 'Utilities',
+    Hospitality = 'Hospitality',
+    Commission = 'Commission', // Added for exchange fees
+    Other = 'Other',
+}
+
 export enum AmanatStatus {
     Active = 'Active',
     Returned = 'Returned',
 }
 
-export type CashboxRequestLinkType = 'DomesticTransfer' | 'ForeignTransaction' | 'Amanat' | 'AmanatReturn' | 'Expense' | 'PartnerSettlement' | 'AccountTransfer';
+export enum ReportType {
+    ProfitAndLoss = 'ProfitAndLoss',
+    CashboxSummary = 'CashboxSummary',
+    InternalLedger = 'InternalLedger',
+}
 
-export interface CashboxRequestLink {
-    type: CashboxRequestLinkType;
+// --- Permissions ---
+
+export const permissionModules = ['dashboard', 'cashbox', 'domesticTransfers', 'foreignTransfers', 'commissionTransfers', 'accountTransfers', 'customers', 'partnerAccounts', 'expenses', 'reports', 'amanat', 'settings'] as const;
+export type PermissionModule = typeof permissionModules[number];
+export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'approve' | 'process';
+
+export type Permissions = {
+    [key in PermissionModule]?: {
+        [key in PermissionAction]?: boolean;
+    };
+};
+
+// --- Core Models ---
+
+export interface Role {
     id: string;
-    description: string;
+    name: string;
+    permissions: Permissions;
 }
 
 export interface User {
     id: string;
     name: string;
-    role: Role;
+    username: string;
+    password?: string;
+    roleId: string;
+    role?: Role; // Populated on login
 }
 
 export interface Customer {
@@ -78,8 +79,36 @@ export interface Customer {
     name: string;
     code: string;
     whatsappNumber: string;
-    balances: Partial<Record<Currency, number>>;
+    balances: { [key in Currency]?: number };
 }
+
+export interface PartnerAccount {
+    id: string;
+    name: string;
+    balances: { [key in Currency]?: number };
+    status: 'Active' | 'Inactive';
+    province: string;
+    whatsappNumber: string;
+}
+
+export interface BankAccount {
+    id: string;
+    accountHolder: string;
+    bankName: string;
+    accountNumber: string;
+    cardToCardNumber?: string;
+    balance: number;
+    currency: Currency;
+    status: 'Active' | 'Inactive';
+}
+
+export interface SystemSettings {
+    approvalThresholds: {
+        [key in Currency]?: number;
+    };
+}
+
+// --- Transactional Models ---
 
 export interface DomesticTransfer {
     id: string;
@@ -93,53 +122,97 @@ export interface DomesticTransfer {
     partnerSarraf: string;
     status: TransferStatus;
     createdBy: string;
+    customerId?: string; // if paid from customer account
     history: { status: TransferStatus, timestamp: Date, user: string }[];
-    customerId?: string;
-}
-
-export interface Expense {
-    id: string;
-    createdAt: Date;
-    category: ExpenseCategory;
-    description: string;
-    amount: number;
-    currency: Currency;
-    user: string;
-    linkedCashboxRequestId?: string;
-}
-
-export interface PartnerAccount {
-    id: string;
-    name: string;
-    balance: number;
-    currency: Currency;
+    partnerReference?: string;
 }
 
 export interface PartnerTransaction {
     id: string;
     partnerId: string;
     timestamp: Date;
-    type: 'debit' | 'credit'; // debit means we owe them, credit means they owe us
+    type: 'credit' | 'debit';
     amount: number;
     currency: Currency;
     description: string;
+    linkedTransferId?: string;
 }
 
 export interface CustomerTransaction {
     id: string;
     customerId: string;
     timestamp: Date;
-    type: 'debit' | 'credit'; // debit means amount was taken from their account, credit means added
+    type: 'credit' | 'debit';
     amount: number;
     currency: Currency;
     description: string;
-    linkedEntityId?: string;
-    linkedEntityType?: 'DomesticTransfer' | 'ForeignTransfer' | 'CashDeposit' | 'CashWithdrawal' | 'AccountTransfer' | 'AccountTransferReassignment';
+    linkedEntityId: string;
+    linkedEntityType: 'DomesticTransfer' | 'CashDeposit' | 'CashWithdrawal' | 'AccountTransfer' | 'ForeignTransaction' | 'InternalExchange' | 'CommissionTransfer';
 }
 
-export interface CashboxBalance {
+export interface AccountTransfer {
+    id: string;
+    timestamp: Date;
+    fromCustomerId: string;
+    toCustomerId: string;
+    amount: number;
     currency: Currency;
-    balance: number;
+    description: string;
+    user: string;
+    status: 'Completed' | 'PendingAssignment';
+    debitTransactionId: string;
+    creditTransactionId: string;
+}
+
+export interface ForeignTransaction {
+    id: string;
+    timestamp: Date;
+    description: string;
+    fromAsset: string; // e.g., "صندوق دالر" or "بانک ملت"
+    fromCurrency: Currency;
+    fromAmount: number; // Actual amount that left our asset
+    toAsset: string; // e.g., "صندوق افغانی" or "بانک صادرات"
+    toCurrency: Currency;
+    toAmount: number; // Actual amount that entered our asset
+    user: string;
+    // Link to other ledgers for full traceability
+    linkedCustomerTransactionId?: string;
+    linkedExpenseId?: string;
+}
+
+export interface CommissionTransfer {
+    id: string;
+    createdAt: Date;
+    customerId: string;
+    amount: number;
+    currency: Currency;
+    receivedIntoBankAccountId: string;
+    commission: number; // Agreed upon commission
+    status: 'Pending' | 'Completed';
+    createdBy: string;
+    
+    // Details of the payout
+    completedAt?: Date;
+    paidFromBankAccountId?: string;
+    destinationAccountNumber?: string;
+    finalAmountPaid?: number;
+
+    // Link to other ledgers
+    linkedCustomerCreditTransactionId: string;
+    linkedCustomerDebitTransactionId?: string;
+}
+
+
+export interface Expense {
+    id: string;
+    createdAt: Date;
+    category: ExpenseCategory;
+    amount: number;
+    currency: Currency;
+    description: string;
+    user: string;
+    linkedCashboxRequestId?: string; // Optional for direct expenses
+    linkedForeignTransactionId?: string; // Link to the exchange transaction
 }
 
 export interface CashboxRequest {
@@ -153,40 +226,15 @@ export interface CashboxRequest {
     status: CashboxRequestStatus;
     resolvedBy?: string;
     resolvedAt?: Date;
-    linkedEntity?: CashboxRequestLink;
-    customerId?: string;
     reviewed: boolean;
     reviewedBy?: string;
     reviewedAt?: Date;
-}
-
-export interface ForeignTransaction {
-    id: string;
-    timestamp: Date;
-    type: ForeignTransactionType;
-    customerName: string;
-    tomanAmount: number;
-    rate: number;
-    description: string;
-    user: string;
-    bankAccountId: string;
-    commission: number;
-    commissionCurrency: Currency;
-    cashTransactionAmount?: number;
-    cashTransactionCurrency?: Currency;
-    linkedCashboxRequestId?: string;
-    status: ForeignTransactionStatus;
-}
-
-
-export interface BankAccount {
-    id: string;
-    accountHolder: string;
-    bankName: string;
-    accountNumber: string;
-    cardToCardNumber?: string;
-    balance: number; // Optional initial balance
-    currency: Currency;
+    customerCode?: string; // If linked to a customer for direct deposit/withdrawal
+    linkedEntity?: {
+        type: 'DomesticTransfer' | 'Expense' | 'Amanat' | 'ForeignTransaction' | 'Manual';
+        id: string;
+        description: string;
+    };
 }
 
 export interface Amanat {
@@ -195,58 +243,38 @@ export interface Amanat {
     customerName: string;
     amount: number;
     currency: Currency;
-    status: AmanatStatus;
     notes: string;
+    status: AmanatStatus;
     createdBy: string;
-    returnedBy?: string;
     returnedAt?: Date;
-    linkedCashboxRequestId?: string; // For the initial deposit
-    linkedReturnCashboxRequestId?: string; // For the return withdrawal
+    returnedBy?: string;
+    linkedCashboxDepositId: string;
+    linkedCashboxWithdrawalId?: string;
 }
 
-export interface AccountTransfer {
+// --- Other Models ---
+
+export interface CashboxBalance {
+    currency: Currency;
+    balance: number;
+}
+
+export interface ActivityLog {
     id: string;
     timestamp: Date;
-    fromCustomerId: string;
-    toCustomerId: string;
-    amount: number;
-    currency: Currency;
-    description: string;
     user: string;
-    debitTransactionId: string;
-    creditTransactionId: string;
-    status: 'Completed' | 'PendingAssignment';
-    finalCustomerId?: string;
+    action: string;
 }
 
-export interface SystemSettings {
-    approvalThresholds: {
-        [key in Currency]?: number;
-    };
+export interface Asset {
+    id: string; // e.g., 'cashbox_USD' or 'bank_ba-1'
+    name: string; // e.g., "صندوق دالر" or "بانک ملت"
+    currency: Currency;
 }
 
 
-// --- Dashboard Analytics Types ---
+// --- API Payloads ---
 
-export interface ChartDataItem {
-    label: string;
-    value: number;
-}
-
-export interface ProfitLossDataPoint {
-    month: string;
-    revenue: number;
-    expenses: number;
-}
-
-export interface DashboardAnalyticsData {
-    expensesByCategory: ChartDataItem[];
-    partnerActivity: ChartDataItem[];
-    profitLossTrend: ProfitLossDataPoint[];
-}
-
-
-// Payload Types for API
 export interface CreateDomesticTransferPayload {
     senderName: string;
     senderTazkereh: string;
@@ -257,65 +285,15 @@ export interface CreateDomesticTransferPayload {
     commission: number;
     destinationProvince: string;
     partnerSarraf: string;
-    user: User;
     isCashPayment: boolean;
     customerCode?: string;
+    partnerReference?: string;
+    user: User;
 }
 
 export interface UpdateTransferStatusPayload {
     transferId: string;
     newStatus: TransferStatus;
-    user: User;
-}
-
-export interface FindTransferByIdPayload {
-    transferId: string;
-}
-
-export interface PayoutIncomingTransferPayload {
-    transferId: string;
-    user: User;
-}
-
-export interface CreateExpensePayload {
-    category: ExpenseCategory;
-    description: string;
-    amount: number;
-    currency: Currency;
-    user: User;
-}
-
-export interface SettlePartnerBalancePayload {
-    partnerId: string;
-    amount: number;
-    currency: Currency;
-    user: User;
-}
-
-export interface SettlePartnerBalanceByNamePayload {
-    partnerName: string;
-    amount: number;
-    currency: Currency;
-    user: User;
-}
-
-export interface GetPartnerAccountByNamePayload {
-    partnerName: string;
-}
-
-export interface CreateAccountTransferPayload {
-    fromCustomerCode: string;
-    toCustomerCode: string;
-    amount: number;
-    currency: Currency;
-    description: string;
-    user: User;
-    isPendingAssignment: boolean;
-}
-
-export interface ReassignTransferPayload {
-    transferId: string;
-    finalCustomerCode: string;
     user: User;
 }
 
@@ -325,8 +303,8 @@ export interface CreateCashboxRequestPayload {
     currency: Currency;
     reason: string;
     user: User;
-    linkedEntity?: CashboxRequestLink;
     customerCode?: string;
+    linkedEntity?: CashboxRequest['linkedEntity'];
 }
 
 export interface ResolveCashboxRequestPayload {
@@ -335,43 +313,15 @@ export interface ResolveCashboxRequestPayload {
     user: User;
 }
 
-export interface UpdateCashboxRequestReviewedStatusPayload {
-    requestId: string;
-    reviewed: boolean;
-    user: User;
-}
-
-export interface AddBankAccountPayload {
-    accountHolder: string;
-    bankName: string;
-    accountNumber: string;
-    cardToCardNumber?: string;
-    initialBalance: number;
+export interface CreateExpensePayload {
+    category: ExpenseCategory;
+    amount: number;
     currency: Currency;
-}
-
-export interface LogForeignTransactionPayload {
-    transactionType: ForeignTransactionType;
-    customerName: string;
-    tomanAmount: number;
-    rate: number;
     description: string;
     user: User;
-    
-    // New detailed fields
-    bankAccountId: string;
-    commission: number;
-    commissionCurrency: Currency;
-    cashTransactionAmount?: number;
-    cashTransactionCurrency?: Currency;
-}
-
-
-export interface GenerateReportPayload {
-    reportType: ReportType;
-    startDate: string;
-    endDate: string;
-    currency: Currency;
+    // Optional fields for direct expense creation without cashbox
+    skipCashboxRequest?: boolean;
+    linkedForeignTransactionId?: string;
 }
 
 export interface CreateAmanatPayload {
@@ -389,54 +339,194 @@ export interface ReturnAmanatPayload {
 
 export interface CreateUserPayload {
     name: string;
-    role: Role;
+    username: string;
+    password?: string;
+    roleId: string;
 }
 
+export interface UpdateUserPayload extends CreateUserPayload {
+    id: string;
+}
 export interface DeleteUserPayload {
     id: string;
 }
 
-export interface CreatePartnerPayload {
+export interface CreateRolePayload {
     name: string;
-    initialBalance: number;
-    currency: Currency;
+    permissions: Permissions;
+}
+
+export interface UpdateRolePayload extends CreateRolePayload {
+    id: string;
 }
 
 export interface CreateCustomerPayload {
     name: string;
     code: string;
     whatsappNumber: string;
+    balances: { [key in Currency]?: number };
+}
+export interface UpdateCustomerPayload extends Omit<CreateCustomerPayload, 'balances'> {
+    id: string;
+    user: User;
+}
+export interface CreatePartnerPayload {
+    name: string;
+    balances: { [key in Currency]?: number };
+    province: string;
+    whatsappNumber: string;
+    user: User;
+}
+export interface UpdatePartnerPayload {
+    id: string;
+    name: string;
+    province: string;
+    whatsappNumber: string;
+    user: User;
+}
+export interface DeletePartnerPayload {
+    id: string;
+    user: User;
+}
+export interface AddBankAccountPayload {
+    accountHolder: string;
+    bankName: string;
+    accountNumber: string;
+    cardToCardNumber?: string;
+    initialBalance: number;
+    currency: Currency;
+    user: User;
+}
+export interface UpdateBankAccountPayload {
+    id: string;
+    accountHolder: string;
+    bankName: string;
+    accountNumber: string;
+    cardToCardNumber?: string;
+    user: User;
+}
+export interface DeleteBankAccountPayload {
+    id: string;
+    user: User;
+}
+
+export interface LogForeignTransactionPayload {
+    description: string;
+    user: User;
+
+    // This describes the physical/internal money movement
+    fromAssetId: string;
+    fromAmount: number; // The actual amount that left our asset
+    toAssetId: string;
+    toAmount: number; // The actual amount that entered our asset
+
+    // This describes the customer-facing side of the transaction (optional)
+    customerCode?: string;
+    customerAmount?: number; // The amount on the customer's book
+    customerTransactionType?: 'debit' | 'credit';
+}
+
+export interface LogCommissionTransferPayload {
+    customerCode: string;
+    amount: number;
+    currency: Currency;
+    receivedIntoBankAccountId: string;
+    commission: number;
+    user: User;
+}
+
+export interface ExecuteCommissionTransferPayload {
+    transferId: string;
+    paidFromBankAccountId: string;
+    destinationAccountNumber: string;
+    user: User;
+}
+
+export interface InternalCustomerExchangePayload {
+    customerId: string;
+    fromCurrency: Currency;
+    fromAmount: number;
+    toCurrency: Currency;
+    toAmount: number;
+    rate: number;
+    user: User;
+}
+
+
+export interface FindTransfersByQueryPayload {
+    query: string;
+}
+
+export interface PayoutIncomingTransferPayload {
+    transferId: string;
+    user: User;
+}
+export interface SettlePartnerBalancePayload {
+    partnerId: string;
+    amount: number;
+    currency: Currency;
+    user: User;
+}
+export interface GetPartnerAccountByNamePayload {
+    partnerName: string;
+}
+export interface SettlePartnerBalanceByNamePayload {
+    partnerName: string;
+    amount: number;
+    currency: Currency;
+    user: User;
+}
+export interface CreateAccountTransferPayload {
+    fromCustomerCode: string;
+    toCustomerCode: string;
+    amount: number;
+    currency: Currency;
+    description: string;
+    user: User;
+    isPendingAssignment: boolean;
+}
+export interface ReassignTransferPayload {
+    transferId: string;
+    finalCustomerCode: string;
+    user: User;
 }
 
 export interface UpdateSystemSettingsPayload {
     settings: SystemSettings;
 }
 
+// --- Analytics & Reports ---
+
+export interface DashboardAnalyticsData {
+    expensesByCategory: { label: string, value: number }[];
+    partnerActivity: { label: string, value: number }[];
+    profitLossTrend: { month: string, revenue: number, expenses: number }[];
+}
+
 export interface ProfitAndLossReportData {
-    startDate: string;
-    endDate: string;
     currency: Currency;
     totalRevenue: number;
     totalExpenses: number;
     netProfit: number;
-    revenueItems: { date: Date; description: string; amount: number }[];
-    expenseItems: { date: Date; description: string; amount: number }[];
+    revenueItems: { description: string, amount: number, date: Date }[];
+    expenseItems: { description: string, amount: number, date: Date }[];
 }
-
 export interface CashboxSummaryReportData {
-    startDate: string;
-    endDate: string;
     currency: Currency;
     totalInflow: number;
     totalOutflow: number;
     netChange: number;
-    transactions: {
-        id: string;
-        timestamp: Date;
-        type: 'inflow' | 'outflow';
-        amount: number;
-        currency: Currency;
-        reason: string;
-        user: string
-    }[];
+    transactions: { id: string, timestamp: Date, type: 'inflow' | 'outflow', amount: number, reason: string, user: string }[];
+}
+
+export interface InternalLedgerReportData {
+    transactions: ForeignTransaction[];
+}
+
+
+export interface GenerateReportPayload {
+    reportType: ReportType;
+    startDate: string;
+    endDate: string;
+    currency: Currency;
 }
