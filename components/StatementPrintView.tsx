@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
@@ -79,7 +80,8 @@ const StatementPrintView: React.FC<StatementPrintViewProps> = ({ type }) => {
     if (!entity) return <div className="text-center p-10">اطلاعات مورد نظر یافت نشد.</div>;
 
     const isCustomer = (e: Customer | PartnerAccount): e is Customer => 'code' in e;
-    // FIX: Object.values() can return `unknown[]`, causing a type error. Explicitly cast `balance` to a Number before adding it to the sum.
+    // FIX: Operator '+' cannot be applied to types 'unknown' and 'number'.
+    // Object.values() can return `unknown[]`. Explicitly cast `balance` to a Number before adding it to the sum.
     const finalBalance = Object.values(entity.balances).reduce((sum, balance) => sum + (Number(balance) || 0), 0);
 
     const finalCurrency = isCustomer(entity)
