@@ -1,14 +1,20 @@
 
 
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useApi } from '../hooks/useApi';
 import { DomesticTransfer, TransferStatus, User } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import CreateTransferModal from '../components/CreateTransferModal';
+import CreateOutgoingTransferModal from '../components/CreateOutgoingTransferModal';
+import CreateIncomingTransferModal from '../components/CreateIncomingTransferModal';
 import UpdateTransferStatusModal from '../components/UpdateTransferStatusModal';
-import ProcessIncomingTransferModal from '../components/ProcessIncomingTransferModal';
 import { statusTranslations } from '../utils/translations';
+
+const PrintIcon: React.FC = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm7-8a2 2 0 01-2-2V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 01-2 2" />
+    </svg>
+);
+
 
 const DomesticTransfersPage: React.FC = () => {
     const api = useApi();
@@ -19,9 +25,9 @@ const DomesticTransfersPage: React.FC = () => {
     const [statusFilter, setStatusFilter] = useState<TransferStatus | 'all'>('all');
 
     // Modal States
-    const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+    const [isOutgoingModalOpen, setOutgoingModalOpen] = useState(false);
+    const [isIncomingModalOpen, setIncomingModalOpen] = useState(false);
     const [isUpdateModalOpen, setUpdateModalOpen] = useState(false);
-    const [isProcessModalOpen, setProcessModalOpen] = useState(false);
     const [selectedTransfer, setSelectedTransfer] = useState<DomesticTransfer | null>(null);
 
     const fetchData = useCallback(async () => {
@@ -36,30 +42,35 @@ const DomesticTransfersPage: React.FC = () => {
     }, [fetchData]);
     
     const handleSuccess = () => {
-        setCreateModalOpen(false);
+        setOutgoingModalOpen(false);
+        setIncomingModalOpen(false);
         setUpdateModalOpen(false);
-        setProcessModalOpen(false);
         setSelectedTransfer(null);
         fetchData();
     };
 
     const handleUpdateClick = (transfer: DomesticTransfer) => {
-        if (transfer.status === TransferStatus.Paid || transfer.status === TransferStatus.Cancelled) {
-            // Do not open modal for transfers in a final state
+        if (transfer.status === TransferStatus.Executed || transfer.status === TransferStatus.Cancelled) {
             return;
         }
         setSelectedTransfer(transfer);
         setUpdateModalOpen(true);
     };
 
+    const handlePrint = (transferId: string) => {
+        const printUrl = `#/print/transfer/${transferId}`;
+        window.open(printUrl, '_blank');
+    };
+
     const filteredTransfers = useMemo(() => {
         return transfers.filter(t => {
             const matchesStatus = statusFilter === 'all' || t.status === statusFilter;
             const searchTermLower = searchTerm.toLowerCase();
+            const isOutgoing = !t.partnerReference;
             const matchesSearch = searchTerm === '' ||
                 t.id.toLowerCase().includes(searchTermLower) ||
                 (t.partnerReference && t.partnerReference.toLowerCase().includes(searchTermLower)) ||
-                t.sender.name.toLowerCase().includes(searchTermLower) ||
+                (isOutgoing && t.sender.name.toLowerCase().includes(searchTermLower)) ||
                 t.receiver.name.toLowerCase().includes(searchTermLower) ||
                 t.partnerSarraf.toLowerCase().includes(searchTermLower);
             return matchesStatus && matchesSearch;
@@ -68,11 +79,9 @@ const DomesticTransfersPage: React.FC = () => {
 
     const getStatusStyle = (status: TransferStatus) => {
         switch (status) {
-            case TransferStatus.Paid:
-                return 'bg-green-500/20 text-green-300';
             case TransferStatus.Executed:
-                return 'bg-blue-500/20 text-blue-300';
-            case TransferStatus.Pending:
+                return 'bg-green-500/20 text-green-300';
+            case TransferStatus.Unexecuted:
                 return 'bg-yellow-500/20 text-yellow-300';
             case TransferStatus.Cancelled:
                 return 'bg-red-500/20 text-red-300';
@@ -87,15 +96,15 @@ const DomesticTransfersPage: React.FC = () => {
              <div className="flex justify-between items-center mb-10 flex-wrap gap-4">
                 <h1 className="text-5xl font-bold text-slate-100 tracking-wider">مدیریت حواله‌جات داخلی</h1>
                 <div className="flex gap-4">
-                    {hasPermission('domesticTransfers', 'process') && (
-                         <button onClick={() => setProcessModalOpen(true)} className="px-5 py-2 bg-slate-600/50 text-slate-100 hover:bg-cyan-400/20 hover:text-cyan-300 text-lg transition-colors border border-slate-500/50 hover:border-cyan-400/60 rounded">
-                            پرداخت حواله ورودی
-                        </button>
-                    )}
                     {hasPermission('domesticTransfers', 'create') && (
-                        <button onClick={() => setCreateModalOpen(true)} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105" style={{clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)', boxShadow: '0 0 25px rgba(0, 255, 255, 0.5)'}}>
-                            + ایجاد حواله جدید
-                        </button>
+                        <>
+                            <button onClick={() => setIncomingModalOpen(true)} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-900 bg-amber-500 hover:bg-amber-400 focus:outline-none focus:ring-4 focus:ring-amber-500/50 transition-all transform hover:scale-105" style={{clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)', boxShadow: '0 0 25px rgba(234, 179, 8, 0.5)'}}>
+                                + ثبت حواله ورودی
+                            </button>
+                            <button onClick={() => setOutgoingModalOpen(true)} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105" style={{clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)', boxShadow: '0 0 25px rgba(0, 255, 255, 0.5)'}}>
+                                + ثبت حواله خروجی
+                            </button>
+                        </>
                     )}
                 </div>
             </div>
@@ -125,7 +134,7 @@ const DomesticTransfersPage: React.FC = () => {
                                 <th className="px-6 py-4 font-medium">کد / تاریخ</th>
                                 <th className="px-6 py-4 font-medium">فرستنده</th>
                                 <th className="px-6 py-4 font-medium">گیرنده</th>
-                                <th className="px-6 py-4 font-medium">مقصد</th>
+                                <th className="px-6 py-4 font-medium">مقصد / مبدا</th>
                                 <th className="px-6 py-4 font-medium">مبلغ</th>
                                 <th className="px-6 py-4 font-medium">وضعیت</th>
                                 <th className="px-6 py-4 font-medium"></th>
@@ -151,12 +160,15 @@ const DomesticTransfersPage: React.FC = () => {
                                             {statusTranslations[t.status]}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-left">
-                                        {hasPermission('domesticTransfers', 'edit') && t.status !== TransferStatus.Paid && t.status !== TransferStatus.Cancelled && (
+                                    <td className="px-6 py-4 text-left whitespace-nowrap space-x-2 space-x-reverse">
+                                        {hasPermission('domesticTransfers', 'edit') && t.status !== TransferStatus.Executed && t.status !== TransferStatus.Cancelled && (
                                             <button onClick={() => handleUpdateClick(t)} className="px-5 py-2 bg-slate-600/50 text-slate-100 hover:bg-cyan-400/20 hover:text-cyan-300 text-lg transition-colors border border-slate-500/50 hover:border-cyan-400/60 rounded">
                                                 تغییر وضعیت
                                             </button>
                                         )}
+                                        <button onClick={() => handlePrint(t.id)} className="p-2 rounded-full text-slate-400 hover:bg-cyan-400/10 hover:text-cyan-300 transition-colors" aria-label="چاپ رسید">
+                                            <PrintIcon />
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
@@ -165,10 +177,18 @@ const DomesticTransfersPage: React.FC = () => {
                  </div>
             </div>
 
-            {isCreateModalOpen && user && (
-                <CreateTransferModal 
-                    isOpen={isCreateModalOpen}
-                    onClose={() => setCreateModalOpen(false)}
+            {isOutgoingModalOpen && user && (
+                <CreateOutgoingTransferModal 
+                    isOpen={isOutgoingModalOpen}
+                    onClose={() => setOutgoingModalOpen(false)}
+                    onSuccess={handleSuccess}
+                    currentUser={user}
+                />
+            )}
+             {isIncomingModalOpen && user && (
+                <CreateIncomingTransferModal 
+                    isOpen={isIncomingModalOpen}
+                    onClose={() => setIncomingModalOpen(false)}
                     onSuccess={handleSuccess}
                     currentUser={user}
                 />
@@ -180,14 +200,6 @@ const DomesticTransfersPage: React.FC = () => {
                     onSuccess={handleSuccess}
                     currentUser={user}
                     transfer={selectedTransfer}
-                />
-            )}
-            {isProcessModalOpen && user && (
-                 <ProcessIncomingTransferModal
-                    isOpen={isProcessModalOpen}
-                    onClose={() => setProcessModalOpen(false)}
-                    onSuccess={handleSuccess}
-                    currentUser={user}
                 />
             )}
         </div>

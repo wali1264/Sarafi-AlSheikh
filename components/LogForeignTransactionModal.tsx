@@ -20,85 +20,23 @@ const LogForeignTransactionModal: React.FC<LogForeignTransactionModalProps> = ({
         toAssetId: '',
         toAmount: '',
         description: '',
-        involvesCustomer: false,
-        customerCode: '',
-        customerAmount: '',
-        customerTransactionType: 'debit' as 'debit' | 'credit',
     });
     
-    const [customer, setCustomer] = useState<Customer | null | undefined>(undefined);
-    const [isCheckingCustomer, setIsCheckingCustomer] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
     const fromAsset = useMemo(() => assets.find(a => a.id === formData.fromAssetId), [assets, formData.fromAssetId]);
     const toAsset = useMemo(() => assets.find(a => a.id === formData.toAssetId), [assets, formData.toAssetId]);
 
-    const checkCustomerCode = useCallback(debounce(async (code: string) => {
-        if (!code) {
-            setCustomer(undefined);
-            return;
-        }
-        setIsCheckingCustomer(true);
-        const result = await api.getCustomerByCode(code);
-        setCustomer(result || null);
-        setIsCheckingCustomer(false);
-    }, 500), [api]);
-
-    useEffect(() => {
-        if (formData.customerCode) {
-            checkCustomerCode(formData.customerCode);
-        } else {
-            setCustomer(undefined);
-        }
-    }, [formData.customerCode, checkCustomerCode]);
-
-
-    const calculatedFee = useMemo(() => {
-        if (!formData.involvesCustomer || !formData.customerAmount) return null;
-        const customerAmount = parseFloat(formData.customerAmount);
-        const fromAmount = parseFloat(formData.fromAmount);
-        const toAmount = parseFloat(formData.toAmount);
-        
-        if(isNaN(customerAmount) || (isNaN(fromAmount) && isNaN(toAmount))) return null;
-
-        let fee = 0;
-        let feeCurrency = '';
-
-        if(formData.customerTransactionType === 'debit') { // Customer gives/owes money
-            if(!isNaN(toAmount) && toAsset?.currency === fromAsset?.currency) {
-                 fee = customerAmount - toAmount;
-                 feeCurrency = toAsset.currency;
-            }
-        } else { // Customer receives money
-             if(!isNaN(fromAmount) && toAsset?.currency === fromAsset?.currency) {
-                fee = fromAmount - customerAmount;
-                feeCurrency = fromAsset.currency;
-            }
-        }
-
-        if (fee === 0) return null;
-
-        return {
-            amount: fee,
-            currency: feeCurrency,
-            text: fee > 0 ? `کارمزد/هزینه: ${new Intl.NumberFormat().format(fee)} ${feeCurrency}` : `سود: ${new Intl.NumberFormat().format(Math.abs(fee))} ${feeCurrency}`
-        }
-
-    }, [formData, fromAsset, toAsset]);
-
-
     if (!isOpen) return null;
 
     const resetForm = () => {
         setFormData({
             fromAssetId: '', fromAmount: '', toAssetId: '', toAmount: '',
-            description: '', involvesCustomer: false, customerCode: '',
-            customerAmount: '', customerTransactionType: 'debit',
+            description: '',
         });
         setError(null);
         setIsLoading(false);
-        setCustomer(undefined);
     };
 
     const handleClose = () => {
@@ -107,15 +45,9 @@ const LogForeignTransactionModal: React.FC<LogForeignTransactionModalProps> = ({
     };
     
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-        const { name, value, type } = e.target;
+        const { name, value } = e.target;
         
-        if (type === 'checkbox') {
-            const { checked } = e.target as HTMLInputElement;
-            setFormData(prev => ({ ...prev, [name]: checked }));
-            return;
-        }
-        
-        const numericFields = ['fromAmount', 'toAmount', 'customerAmount', 'customerCode'];
+        const numericFields = ['fromAmount', 'toAmount'];
         if (numericFields.includes(name)) {
             setFormData(prev => ({ ...prev, [name]: persianToEnglishNumber(value) }));
         } else {
@@ -125,10 +57,6 @@ const LogForeignTransactionModal: React.FC<LogForeignTransactionModalProps> = ({
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        if (formData.involvesCustomer && !customer) {
-            setError("کد مشتری وارد شده معتبر نیست. لطفاً مجدداً بررسی کنید.");
-            return;
-        }
         setIsLoading(true);
         setError(null);
 
@@ -139,11 +67,6 @@ const LogForeignTransactionModal: React.FC<LogForeignTransactionModalProps> = ({
             toAssetId: formData.toAssetId,
             toAmount: parseFloat(formData.toAmount) || 0,
             user: currentUser,
-            ...(formData.involvesCustomer && {
-                customerCode: formData.customerCode,
-                customerAmount: parseFloat(formData.customerAmount) || 0,
-                customerTransactionType: formData.customerTransactionType,
-            }),
         };
         
         const result = await api.logForeignTransaction(payload);
@@ -202,44 +125,15 @@ const LogForeignTransactionModal: React.FC<LogForeignTransactionModalProps> = ({
                                 </div>
                             </div>
                         </div>
-                        
-                         <div className="p-4 border-2 border-cyan-400/30 bg-cyan-400/10 rounded-md space-y-4">
-                            <label className="flex items-center gap-3 text-2xl font-bold text-cyan-300 cursor-pointer">
-                                <input type="checkbox" name="involvesCustomer" checked={formData.involvesCustomer} onChange={handleChange} className="w-6 h-6 rounded bg-slate-700 border-slate-500 text-cyan-400 focus:ring-cyan-500" />
-                                این تراکنش مربوط به یک مشتری است
-                            </label>
-                            {formData.involvesCustomer && (
-                                <div className="animate-fadeIn space-y-4 pt-4 border-t border-cyan-400/20">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div>
-                                            <label className="block text-lg font-medium text-slate-200 mb-2">کد مشتری</label>
-                                            <input name="customerCode" value={formData.customerCode} onChange={handleChange} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md" />
-                                            {isCheckingCustomer && <p className="text-sm text-slate-400 mt-1">در حال بررسی...</p>}
-                                            {customer && <p className="text-sm text-green-400 mt-1">✓ {customer.name}</p>}
-                                            {customer === null && formData.customerCode && !isCheckingCustomer && <p className="text-sm text-red-400 mt-1">مشتری یافت نشد.</p>}
-                                        </div>
-                                        <div>
-                                             <label className="block text-lg font-medium text-slate-200 mb-2">مبلغ در دفتر مشتری</label>
-                                             <input name="customerAmount" value={formData.customerAmount} onChange={handleChange} required type="text" inputMode="decimal" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md" />
-                                        </div>
-                                    </div>
-                                    <div>
-                                         <label className="block text-lg font-medium text-slate-200 mb-2">نوع تراکنش مشتری</label>
-                                          <select name="customerTransactionType" value={formData.customerTransactionType} onChange={handleChange} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md">
-                                             <option value="debit">بدهکار (مشتری به ما پول می‌دهد/بدهکار می‌شود)</option>
-                                             <option value="credit">بستانکار (ما به مشتری پول می‌دهیم/بستانکار می‌شویم)</option>
-                                          </select>
-                                    </div>
-                                </div>
-                            )}
-                         </div>
-                        
-                         {calculatedFee && (
-                             <div className={`text-center p-3 rounded-md text-xl font-bold ${calculatedFee.amount > 0 ? 'bg-red-500/20 text-red-300' : 'bg-green-500/20 text-green-300'}`}>
-                                {calculatedFee.text}
-                             </div>
-                         )}
 
+                        <div className="p-4 border-2 border-amber-500/30 bg-amber-500/10 rounded-md">
+                            <h4 className="text-xl font-bold text-amber-300 mb-2">نکته مهم</h4>
+                            <p className="text-slate-300 text-lg">
+                                این فرم فقط برای تبادلات داخلی بین دارایی‌های صرافی (صندوق‌ها و بانک‌ها) است.
+                                <br />
+                                برای انجام تبادله برای یک مشتری، لطفاً ابتدا وجه را از طریق بخش <strong>«صندوق»</strong> به حساب مشتری واریز/برداشت کرده، سپس به صفحه جزئیات مشتری رفته و از گزینه <strong>«تبدیل ارز داخلی»</strong> استفاده نمایید.
+                            </p>
+                        </div>
                     </div>
                     <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end space-x-4 space-x-reverse">
                         <button type="button" onClick={handleClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md">لغو</button>

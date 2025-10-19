@@ -155,14 +155,14 @@ class GeminiService {
                     type: Type.OBJECT,
                     properties: {
                         transferId: { type: Type.STRING, description: 'کد رهگیری حواله، مثلا DT-12345' },
-                        newStatus: { type: Type.STRING, description: 'وضعیت جدید حواله', enum: [TransferStatus.Executed, TransferStatus.Paid] },
+                        newStatus: { type: Type.STRING, description: 'وضعیت جدید حواله', enum: [TransferStatus.Executed, TransferStatus.Cancelled] },
                     },
                     required: ['transferId', 'newStatus'],
                 },
             },
             {
                 name: 'payoutIncomingTransfer',
-                description: 'پرداخت یک حواله ورودی به مشتری',
+                description: 'پرداخت یک حواله ورودی به مشتری (که وضعیت آن را "اجرا شده" می‌کند)',
                 parameters: {
                     type: Type.OBJECT,
                     properties: {
@@ -187,18 +187,15 @@ class GeminiService {
             },
              {
                 name: 'logForeignTransaction',
-                description: 'ثبت یک معامله تبادله ارز. این تابع می‌تواند تراکنش‌های پیچیده شامل مشتری و کارمزد را مدیریت کند.',
+                description: 'ثبت یک معامله تبادله ارز بین دارایی‌های داخلی صرافی (صندوق‌ها و بانک‌ها).',
                 parameters: {
                     type: Type.OBJECT,
                     properties: {
                         description: { type: Type.STRING, description: 'شرح تبادله' },
-                        fromAssetId: { type: Type.STRING, description: 'کد دارایی مبدا (مانند cashbox_USD یا bank_ba-1). این مبلغ واقعی است که از دارایی شما کسر می‌شود.' },
+                        fromAssetId: { type: Type.STRING, description: 'کد دارایی مبدا (مانند cashbox_USD یا bank_ba-1). مبلغ از این دارایی کسر می‌شود.' },
                         fromAmount: { type: Type.NUMBER, description: 'مبلغ برداشتی از مبدا' },
-                        toAssetId: { type: Type.STRING, description: 'کد دارایی مقصد (مانند cashbox_AFN یا bank_ba-2). این مبلغ واقعی است که به دارایی شما اضافه می‌شود.' },
+                        toAssetId: { type: Type.STRING, description: 'کد دارایی مقصد (مانند cashbox_AFN). مبلغ به این دارایی اضافه می‌شود.' },
                         toAmount: { type: Type.NUMBER, description: 'مبلغ واریزی به مقصد' },
-                        customerCode: { type: Type.STRING, description: 'کد مشتری (اختیاری)' },
-                        customerAmount: { type: Type.NUMBER, description: 'مبلغی که باید در حساب مشتری ثبت شود (اختیاری)' },
-                        customerTransactionType: { type: Type.STRING, description: 'نوع تراکنش برای مشتری: debit (بدهکار) یا credit (بستانکار) (اختیاری)', enum: ['debit', 'credit'] },
                     },
                     required: ['description', 'fromAssetId', 'fromAmount', 'toAssetId', 'toAmount'],
                 },

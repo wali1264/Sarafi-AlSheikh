@@ -7,17 +7,20 @@ import {
     CreateCashboxRequestPayload, ResolveCashboxRequestPayload, CashboxRequestStatus,
     CashboxBalance, SystemSettings, UpdateSystemSettingsPayload, ActivityLog,
     Customer, CustomerTransaction, AccountTransfer, CreateAccountTransferPayload, ReassignTransferPayload,
-    Amanat, CreateAmanatPayload, ReturnAmanatPayload, AmanatStatus, BankAccount, AddBankAccountPayload,
-    ForeignTransaction, LogForeignTransactionPayload,
+    BankAccount, AddBankAccountPayload,
+    ForeignTransaction, LogForeignTransactionPayload, IncreaseCashboxBalancePayload,
     CreateUserPayload, UpdateUserPayload, DeleteUserPayload, CreateRolePayload, UpdateRolePayload, CreatePartnerPayload,
     UpdatePartnerPayload, DeletePartnerPayload, UpdateBankAccountPayload, DeleteBankAccountPayload,
     CreateCustomerPayload, UpdateCustomerPayload, FindTransfersByQueryPayload, PayoutIncomingTransferPayload,
     DashboardAnalyticsData, ProfitAndLossReportData, ReportType, CashboxSummaryReportData, GenerateReportPayload,
     SettlePartnerBalanceByNamePayload, GetPartnerAccountByNamePayload, Asset, ExpenseCategory, InternalCustomerExchangePayload,
-    InternalLedgerReportData, CommissionTransfer, LogCommissionTransferPayload, ExecuteCommissionTransferPayload
+    InternalLedgerReportData, CommissionTransfer, LogCommissionTransferPayload, ExecuteCommissionTransferPayload,
+// FIX: Import types for Amanat feature
+    Amanat, AmanatStatus, CreateAmanatPayload, ReturnAmanatPayload
 } from '../types';
 import { CURRENCIES } from '../constants';
 import notificationService from './notificationService';
+import { statusTranslations } from '../utils/translations';
 
 // --- In-Memory Database with localStorage Persistence ---
 
@@ -66,14 +69,15 @@ class InMemoryDatabase {
                 this.db.partnerTransactions?.forEach((t: any) => t.timestamp = new Date(t.timestamp));
                 this.db.customerTransactions?.forEach((t: any) => t.timestamp = new Date(t.timestamp));
                 this.db.accountTransfers?.forEach((t: any) => t.timestamp = new Date(t.timestamp));
-                this.db.amanat?.forEach((a: any) => {
-                    a.createdAt = new Date(a.createdAt);
-                    if (a.returnedAt) a.returnedAt = new Date(a.returnedAt);
-                });
                 this.db.foreignTransactions?.forEach((t: any) => t.timestamp = new Date(t.timestamp));
                 this.db.commissionTransfers?.forEach((t: any) => {
                     t.createdAt = new Date(t.createdAt);
                     if (t.completedAt) t.completedAt = new Date(t.completedAt);
+                });
+                // FIX: Revive date objects for Amanat
+                this.db.amanat?.forEach((a: any) => {
+                    a.createdAt = new Date(a.createdAt);
+                    if (a.returnedAt) a.returnedAt = new Date(a.returnedAt);
                 });
                 this.db.activityLogs?.forEach((l: any) => l.timestamp = new Date(l.timestamp));
             }
@@ -155,7 +159,8 @@ class InMemoryDatabase {
             commissionTransfers: { view: true, create: true, process: true },
             accountTransfers: { view: true, create: true }, customers: { view: true, create: true, edit: true },
             partnerAccounts: { view: true, create: true, edit: true, delete: true }, expenses: { view: true, create: true },
-            reports: { view: true }, amanat: { view: true, create: true, process: true }, settings: { view: true, edit: true }
+            reports: { view: true }, settings: { view: true, edit: true },
+            amanat: { view: true, create: true, process: true },
         };
         const operatorPermissions: Permissions = {
             dashboard: { view: true }, cashbox: { view: true, create: true },
@@ -164,7 +169,8 @@ class InMemoryDatabase {
             commissionTransfers: { view: true, create: true, process: true },
             accountTransfers: { view: true, create: true }, customers: { view: true, create: true, edit: true },
             partnerAccounts: { view: true }, expenses: { view: true, create: true },
-            reports: { view: true }, amanat: { view: true, create: true, process: true }, settings: {}
+            reports: { view: true }, settings: {},
+            amanat: { view: true, create: true },
         };
         
         const roles: Role[] = [
@@ -207,8 +213,9 @@ class InMemoryDatabase {
             users, roles, customers, partnerAccounts: partners, cashboxBalances,
             systemSettings: [settings], domesticTransfers: [], expenses: [],
             cashboxRequests: [], partnerTransactions: [], customerTransactions: [],
-            accountTransfers: [], amanat: [], bankAccounts, foreignTransactions: [],
+            accountTransfers: [], bankAccounts, foreignTransactions: [],
             commissionTransfers: [],
+            amanat: [],
             activityLogs: [{id: 'log-0', timestamp: new Date(), user: 'سیستم', action: 'پایگاه داده با اطلاعات پاکسازی شده راه‌اندازی شد.'}]
         };
 
@@ -278,7 +285,8 @@ class SarrafiApiService {
     async createCustomer(payload: CreateCustomerPayload): Promise<Customer | { error: string }> {
         const existing = this.db.get<Customer>('customers').find(c => c.code === payload.code);
         if (existing) return { error: `مشتری با کد ${payload.code} از قبل وجود دارد.` };
-        const newCustomer: Customer = { ...payload, id: this.generateId('cust') };
+// FIX: Ensure the 'balances' property is not optional to match the 'Customer' type.
+        const newCustomer: Customer = { ...payload, id: this.generateId('cust'), balances: payload.balances || {} };
         return this.db.add('customers', newCustomer);
     }
      async updateCustomer(payload: UpdateCustomerPayload): Promise<Customer | { error: string }> {
@@ -290,9 +298,14 @@ class SarrafiApiService {
     
     // --- Domestic Transfers ---
     async getDomesticTransfers(): Promise<DomesticTransfer[]> { return this.db.get<DomesticTransfer>('domesticTransfers'); }
+    async getDomesticTransferById(id: string): Promise<DomesticTransfer | undefined> { return this.db.getById<DomesticTransfer>('domesticTransfers', id); }
     
     async createDomesticTransfer(payload: CreateDomesticTransferPayload): Promise<DomesticTransfer | { error: string }> {
-        // ... complex logic for creating transfer, updating balances, creating cashbox requests etc.
+        // Prevent creation of dual-identity transfers
+        if (payload.isCashPayment && payload.partnerReference) {
+            return { error: 'یک حواله نمی‌تواند همزمان ورودی (دارای کد همکار) و پرداخت نقدی باشد.' };
+        }
+
         const newTransfer: DomesticTransfer = {
             id: this.generateId('DT'),
             createdAt: new Date(),
@@ -304,15 +317,21 @@ class SarrafiApiService {
             destinationProvince: payload.destinationProvince,
             partnerSarraf: payload.partnerSarraf,
             partnerReference: payload.partnerReference,
-            status: TransferStatus.Pending,
+            status: TransferStatus.Unexecuted,
             createdBy: payload.user.name,
-            history: [{ status: TransferStatus.Pending, timestamp: new Date(), user: payload.user.name }]
+            history: [{ status: TransferStatus.Unexecuted, timestamp: new Date(), user: payload.user.name }]
         };
 
-        // Handle payment
-        if (payload.isCashPayment) {
-            // Create cashbox request for total amount + commission
-            const reason = `واریز نقدی برای حواله ${newTransfer.id} به نام ${newTransfer.receiver.name}`;
+        // Handle payment method & transfer type
+        // If partnerReference exists, it's an INCOMING transfer. No financial action on creation.
+        if (payload.partnerReference) {
+            // This is the registration of an incoming transfer.
+            // Financials (cashbox withdrawal & partner balance update) will be handled upon execution.
+        }
+        // If it's an OUTGOING transfer...
+        else if (payload.isCashPayment) {
+            // Create a cashbox deposit request for the cash received from a walk-in customer.
+            const reason = `واریز نقدی برای حواله خروجی ${newTransfer.id} به نام ${newTransfer.receiver.name}`;
             await this.createCashboxRequest({
                 requestType: 'deposit',
                 amount: payload.amount + payload.commission,
@@ -322,16 +341,11 @@ class SarrafiApiService {
                 linkedEntity: {type: 'DomesticTransfer', id: newTransfer.id, description: reason}
             });
         } else {
-            // Deduct from customer account
+            // It's an OUTGOING transfer from a customer's account. Link the customer ID.
+            // The financial transaction (debit from customer) will happen upon execution.
             const customer = await this.getCustomerByCode(payload.customerCode!);
             if (!customer) return { error: 'مشتری با این کد یافت نشد.' };
-            
             newTransfer.customerId = customer.id;
-            const totalDeduction = payload.amount + payload.commission;
-            
-            // Debit customer
-            const desc = `بابت حواله ${newTransfer.id} به نام ${newTransfer.receiver.name}`;
-            this._updateCustomerBalance(customer.id, -totalDeduction, payload.currency, 'debit', desc, newTransfer.id, 'DomesticTransfer');
         }
 
         this.logActivity(payload.user.name, `حواله ${newTransfer.id} را به مبلغ ${payload.amount} ${payload.currency} ایجاد کرد.`);
@@ -343,32 +357,48 @@ class SarrafiApiService {
         if (!transfer) return { error: "حواله یافت نشد." };
 
         const validTransitions: { [key in TransferStatus]?: TransferStatus[] } = {
-            [TransferStatus.Pending]: [TransferStatus.Executed, TransferStatus.Paid, TransferStatus.Cancelled],
-            [TransferStatus.Executed]: [TransferStatus.Paid, TransferStatus.Cancelled],
+            [TransferStatus.Unexecuted]: [TransferStatus.Executed, TransferStatus.Cancelled],
         };
 
         if (validTransitions[transfer.status] && !validTransitions[transfer.status]!.includes(payload.newStatus)) {
-            return { error: `تغییر وضعیت از ${transfer.status} به ${payload.newStatus} مجاز نیست.` };
+            return { error: `تغییر وضعیت از '${statusTranslations[transfer.status]}' به '${statusTranslations[payload.newStatus]}' مجاز نیست.` };
         }
         if (!validTransitions[transfer.status]) {
-             return { error: `حواله در وضعیت نهایی (${transfer.status}) قرار دارد و قابل تغییر نیست.` };
+             return { error: `حواله در وضعیت نهایی (${statusTranslations[transfer.status]}) قرار دارد و قابل تغییر نیست.` };
         }
 
-        // --- Update status and history ---
         const originalStatus = transfer.status;
-        transfer.status = payload.newStatus;
-        transfer.history.push({ status: payload.newStatus, timestamp: new Date(), user: payload.user.name });
         
-        // --- Handle Financial Transactions ONLY for terminal states ---
-        if (payload.newStatus === TransferStatus.Paid) {
-            const partner = await this.getPartnerAccountByName({ partnerName: transfer.partnerSarraf });
-            if ('error' in partner) return { error: `همکار با نام '${transfer.partnerSarraf}' یافت نشد.` };
-            
+        // --- Handle Financial Transactions ONLY upon execution ---
+        if (payload.newStatus === TransferStatus.Executed) {
             const isIncoming = !!transfer.partnerReference;
 
+            // Step 1: Handle customer debit for outgoing transfers
+            if (!isIncoming && transfer.customerId) {
+                const customer = await this.getCustomerById(transfer.customerId);
+                if (!customer) return { error: 'مشتری مرتبط با این حواله یافت نشد.' };
+                
+                const totalDeduction = transfer.amount + transfer.commission;
+                const desc = `بابت اجرای حواله ${transfer.id} (مبلغ: ${transfer.amount}, کارمزد: ${transfer.commission})`;
+                this._updateCustomerBalance(customer.id, -totalDeduction, transfer.currency, 'debit', desc, transfer.id, 'DomesticTransfer');
+            }
+
+            // Step 2: Handle partner and cashbox transactions
+            const partner = await this.getPartnerAccountByName({ partnerName: transfer.partnerSarraf });
+            if ('error' in partner) return { error: `همکار با نام '${transfer.partnerSarraf}' یافت نشد.` };
+
             if (isIncoming) {
-                // This is a transfer sent TO us. We are paying it out.
-                // 1. Create a cashbox withdrawal for the payout.
+                // This is a transfer sent TO us. We are paying it out (Executing it).
+                
+                // SECURITY CHECK: Ensure cashbox has sufficient funds before proceeding.
+                const balances = this.db.get<CashboxBalance>('cashboxBalances');
+                const balance = balances.find(b => b.currency === transfer.currency);
+                const currentBalance = balance ? balance.balance : 0;
+
+                if (currentBalance < transfer.amount) {
+                    return { error: `موجودی صندوق ${transfer.currency} برای پرداخت این حواله کافی نیست. موجودی فعلی: ${new Intl.NumberFormat('en-US').format(currentBalance)}` };
+                }
+
                 const reason = `پرداخت به مشتری برای حواله ورودی ${transfer.id} از طرف ${transfer.partnerSarraf}`;
                 await this.createCashboxRequest({
                     requestType: 'withdrawal',
@@ -377,17 +407,14 @@ class SarrafiApiService {
                     reason, user: payload.user,
                     linkedEntity: { type: 'DomesticTransfer', id: transfer.id, description: reason }
                 });
-                // 2. Debit our partner's account (we paid on their behalf, so they owe us more).
                 this._updatePartnerBalance(partner.id, -transfer.amount, transfer.currency, 'debit', `پرداخت حواله ${transfer.id}`, transfer.id);
 
             } else {
-                // This is a transfer sent FROM us. Our partner paid it out.
-                // 1. No cashbox activity on our end.
-                // 2. Credit our partner's account (they paid on our behalf, so we owe them more).
+                // This is a transfer sent FROM us. Our partner paid it out (Executed it).
                 this._updatePartnerBalance(partner.id, transfer.amount, transfer.currency, 'credit', `اجرای حواله ${transfer.id}`, transfer.id);
             }
-             // Send notification if it was from a customer account
-            if (transfer.customerId) {
+             // Send notification if it was an outgoing transfer from a customer account
+            if (!isIncoming && transfer.customerId) {
                 const customer = await this.getCustomerById(transfer.customerId);
                 if (customer?.whatsappNumber) {
                     notificationService.sendWhatsAppNotification(customer.whatsappNumber, `حواله شما با کد ${transfer.id} به مبلغ ${transfer.amount} ${transfer.currency} به گیرنده پرداخت شد. SarrafAI`);
@@ -395,7 +422,11 @@ class SarrafiApiService {
             }
         }
         
-        this.logActivity(payload.user.name, `وضعیت حواله ${transfer.id} را از ${originalStatus} به ${payload.newStatus} تغییر داد.`);
+        // Update status after all financial logic is successfully completed
+        transfer.status = payload.newStatus;
+        transfer.history.push({ status: payload.newStatus, timestamp: new Date(), user: payload.user.name });
+
+        this.logActivity(payload.user.name, `وضعیت حواله ${transfer.id} را از ${statusTranslations[originalStatus]} به ${statusTranslations[payload.newStatus]} تغییر داد.`);
         return this.db.update<DomesticTransfer>('domesticTransfers', transfer.id, transfer) as DomesticTransfer;
     }
     
@@ -416,7 +447,7 @@ class SarrafiApiService {
     }
 
     async payoutIncomingTransfer(payload: PayoutIncomingTransferPayload): Promise<DomesticTransfer | { error: string }> {
-        return this.updateTransferStatus({ ...payload, newStatus: TransferStatus.Paid });
+        return this.updateTransferStatus({ ...payload, newStatus: TransferStatus.Executed });
     }
 
     // --- Partner Accounts ---
@@ -482,6 +513,35 @@ class SarrafiApiService {
         return updatedRequest || { error: 'Failed to update request' };
     }
 
+    async increaseCashboxBalance(payload: IncreaseCashboxBalancePayload): Promise<CashboxRequest | { error: string }> {
+        if (payload.amount <= 0) {
+            return { error: 'مبلغ باید بیشتر از صفر باشد.' };
+        }
+
+        const reason = `افزایش موجودی دستی توسط مدیر: ${payload.description || 'ثبت موجودی اولیه/جدید'}`;
+        
+        const requestPayload: CreateCashboxRequestPayload = {
+            requestType: 'deposit',
+            amount: payload.amount,
+            currency: payload.currency,
+            reason,
+            user: payload.user,
+            linkedEntity: {
+                type: 'Manual',
+                id: 'BALANCE_ADJUST',
+                description: reason
+            }
+        };
+
+        const result = await this.createCashboxRequest(requestPayload);
+
+        if (!('error' in result)) {
+            this.logActivity(payload.user.name, `موجودی صندوق ${payload.currency} را به مبلغ ${payload.amount} افزایش داد.`);
+        }
+
+        return result;
+    }
+
     private _processCashboxRequest(request: CashboxRequest) {
         const multiplier = request.requestType === 'deposit' ? 1 : -1;
         this._updateCashboxBalance(request.currency, request.amount * multiplier);
@@ -526,18 +586,20 @@ class SarrafiApiService {
         return this.db.add('customerTransactions', transaction);
     }
 
-     private _updatePartnerBalance(partnerId: string, amount: number, currency: Currency, type: 'credit' | 'debit', description: string, linkedTransferId?: string) {
+    private _updatePartnerBalance(partnerId: string, amount: number, currency: Currency, type: 'credit' | 'debit', description: string, linkedTransferId?: string) {
         const partner = this.db.getById<PartnerAccount>('partnerAccounts', partnerId);
         if (!partner) return;
 
-        const amountChange = type === 'credit' ? amount : -amount;
-        const newBalance = (partner.balances[currency] || 0) + amountChange;
+        // Corrected logic: The 'amount' parameter directly represents the change in balance.
+        // Positive amount means our liability increases (credit).
+        // Negative amount means our liability decreases (debit).
+        const newBalance = (partner.balances[currency] || 0) + amount;
         partner.balances[currency] = newBalance;
         this.db.update<PartnerAccount>('partnerAccounts', partnerId, { balances: partner.balances });
         
         const transaction: PartnerTransaction = {
             id: this.generateId('PT'),
-            partnerId: partnerId,
+            partnerId: partner.id,
             timestamp: new Date(),
             type,
             amount: Math.abs(amount),
@@ -760,6 +822,7 @@ class SarrafiApiService {
     async deletePartner(payload: DeletePartnerPayload): Promise<PartnerAccount | { error: string }> {
         const updated = this.db.update<PartnerAccount>('partnerAccounts', payload.id, { status: 'Inactive' });
         if (updated) {
+            // FIX: The 'user' object is available on the payload, not in the global scope.
             this.logActivity(payload.user.name, `همکار "${updated.name}" را غیرفعال کرد.`);
             return updated;
         }
@@ -779,6 +842,7 @@ class SarrafiApiService {
     async deleteBankAccount(payload: DeleteBankAccountPayload): Promise<BankAccount | { error: string }> {
         const updated = this.db.update<BankAccount>('bankAccounts', payload.id, { status: 'Inactive' });
         if(updated) {
+            // FIX: Cannot find name 'user'. The 'user' object is available on the payload.
             this.logActivity(payload.user.name, `حساب بانکی "${updated.accountHolder} - ${updated.bankName}" را غیرفعال کرد.`);
             return updated;
         }
@@ -835,19 +899,15 @@ class SarrafiApiService {
     }
     
     async logForeignTransaction(payload: LogForeignTransactionPayload): Promise<ForeignTransaction | { error: string }> {
-        const { user, description, fromAssetId, fromAmount, toAssetId, toAmount, customerCode, customerAmount, customerTransactionType } = payload;
+        const { user, description, fromAssetId, fromAmount, toAssetId, toAmount } = payload;
         
         const allAssets = this._getAllAssets();
         const fromAsset = allAssets.find(a => a.id === fromAssetId);
         const toAsset = allAssets.find(a => a.id === toAssetId);
 
         if (!fromAsset || !toAsset) return { error: 'دارایی مبدا یا مقصد نامعتبر است.' };
-        if (fromAmount < 0 || toAmount < 0) return { error: 'مبالغ باید مثبت باشند.' };
+        if (fromAmount <= 0 || toAmount <= 0) return { error: 'مبالغ باید مثبت باشند.' };
 
-        // --- Start Transaction ---
-        const originalFromBalance = this._getAssetBalance(fromAssetId);
-        const originalToBalance = this._getAssetBalance(toAssetId);
-        
         // 1. Update internal asset balances
         const fromUpdateResult = this._updateAssetBalance(fromAssetId, -fromAmount);
         if (!fromUpdateResult.success) return { error: fromUpdateResult.error };
@@ -870,46 +930,6 @@ class SarrafiApiService {
             toAmount,
             user: user.name,
         };
-
-        // 2. Handle customer leg
-        if (customerCode && customerAmount && customerTransactionType) {
-            const customer = await this.getCustomerByCode(customerCode);
-            if (!customer) {
-                this._rollbackAssetBalances(fromAssetId, originalFromBalance, toAssetId, originalToBalance);
-                return { error: `مشتری با کد ${customerCode} یافت نشد.` };
-            }
-            const customerTx = this._updateCustomerBalance(customer.id, customerAmount, fromAsset.currency, customerTransactionType, `بابت تبادله ${newTransaction.id}`, newTransaction.id, 'ForeignTransaction');
-            newTransaction.linkedCustomerTransactionId = customerTx.id;
-        }
-        
-        // 3. Handle fee leg (calculated as the discrepancy)
-        if (customerAmount && customerTransactionType) {
-            let fee = 0;
-            let feeCurrency: Currency | undefined = undefined;
-
-            if (customerTransactionType === 'debit' && toAsset.currency === fromAsset.currency) {
-                fee = customerAmount - toAmount;
-                feeCurrency = toAsset.currency;
-            } else if (customerTransactionType === 'credit' && toAsset.currency === fromAsset.currency) {
-                fee = fromAmount - customerAmount;
-                feeCurrency = fromAsset.currency;
-            }
-            
-            if (fee > 0 && feeCurrency) {
-                 const expense = await this.createExpense({
-                    category: ExpenseCategory.Commission,
-                    amount: fee,
-                    currency: feeCurrency,
-                    description: `کارمزد تبادله ${newTransaction.id}`,
-                    user: user,
-                    skipCashboxRequest: true, // This is an accounting expense, not a cash withdrawal
-                    linkedForeignTransactionId: newTransaction.id,
-                });
-                if ('id' in expense) {
-                     newTransaction.linkedExpenseId = expense.id;
-                }
-            }
-        }
 
         this.logActivity(user.name, `تبادله ${fromAmount} ${fromAsset.currency} به ${toAmount} ${toAsset.currency} را ثبت کرد.`);
         return this.db.add('foreignTransactions', newTransaction);
@@ -983,39 +1003,62 @@ class SarrafiApiService {
     }
 
     async logCommissionTransfer(payload: LogCommissionTransferPayload): Promise<CommissionTransfer | { error: string }> {
-        const { user, customerCode, amount, currency, receivedIntoBankAccountId, commission } = payload;
+        const { user, initiatorType, customerCode, partnerId, amount, sourceAccountNumber, receivedIntoBankAccountId, commissionPercentage } = payload;
 
-        const customer = await this.getCustomerByCode(customerCode);
-        if (!customer) return { error: `مشتری با کد ${customerCode} یافت نشد.` };
+        let initiatorId: string;
+        let initiatorName: string;
+
+        if (initiatorType === 'Customer') {
+            if (!customerCode) return { error: 'کد مشتری ارائه نشده است.' };
+            const customer = await this.getCustomerByCode(customerCode);
+            if (!customer) return { error: `مشتری با کد ${customerCode} یافت نشد.` };
+            initiatorId = customer.id;
+            initiatorName = customer.name;
+        } else { // Partner
+            if (!partnerId) return { error: 'شناسه همکار ارائه نشده است.' };
+            const partner = this.db.getById<PartnerAccount>('partnerAccounts', partnerId);
+            if (!partner) return { error: `همکار با شناسه ${partnerId} یافت نشد.` };
+            initiatorId = partner.id;
+            initiatorName = partner.name;
+        }
+        
+        if (amount <= 0 || commissionPercentage < 0) {
+            return { error: 'مبلغ و فیصدی کمیشن باید معتبر باشند.' };
+        }
+        if (!sourceAccountNumber) {
+             return { error: 'شماره حساب مبدأ الزامی است.' };
+        }
+
+        const currency = Currency.IRT_BANK; // Hardcoded currency
 
         const bankAccount = this.db.getById<BankAccount>('bankAccounts', receivedIntoBankAccountId);
         if (!bankAccount) return { error: 'حساب بانکی دریافت کننده وجه یافت نشد.' };
+        if (bankAccount.currency !== currency) return { error: `این عملیات فقط برای حساب‌های تومان بانکی (${currency}) مجاز است.` };
 
-        // 1. Update bank account balance
+
+        // 1. Update bank account balance (Increase)
         bankAccount.balance += amount;
-        // FIX: Explicitly specify the generic type for the update operation to ensure type safety.
         this.db.update<BankAccount>('bankAccounts', bankAccount.id, { balance: bankAccount.balance });
 
-        // 2. Credit customer account (we now owe them this money)
-        const transferId = this.generateId('CTF');
-        const creditDesc = `دریافت وجه کمیشن‌کاری به مبلغ ${amount} ${currency}`;
-        const creditTx = this._updateCustomerBalance(customer.id, amount, currency, 'credit', creditDesc, transferId, 'CommissionTransfer');
+        // 2. Update cashbox balance (Increase) as per user request
+        this._updateCashboxBalance(currency, amount);
 
         // 3. Create the commission transfer record
         const newTransfer: CommissionTransfer = {
-            id: transferId,
+            id: this.generateId('CTF'),
             createdAt: new Date(),
-            customerId: customer.id,
+            initiatorType,
+            initiatorId,
             amount,
             currency,
+            sourceAccountNumber,
             receivedIntoBankAccountId,
-            commission: commission,
-            status: 'Pending',
+            commissionPercentage: commissionPercentage,
+            status: 'PendingExecution',
             createdBy: user.name,
-            linkedCustomerCreditTransactionId: creditTx.id,
         };
 
-        this.logActivity(user.name, `ورود وجه کمیشن‌کاری به مبلغ ${amount} ${currency} از مشتری ${customer.name} را ثبت کرد.`);
+        this.logActivity(user.name, `ورود وجه کمیشن‌کاری به مبلغ ${amount} ${currency} از ${initiatorName} را ثبت کرد.`);
         return this.db.add('commissionTransfers', newTransfer);
     }
 
@@ -1028,39 +1071,56 @@ class SarrafiApiService {
 
         const bankAccount = this.db.getById<BankAccount>('bankAccounts', paidFromBankAccountId);
         if (!bankAccount) return { error: 'حساب بانکی پرداخت کننده وجه یافت نشد.' };
+        if (bankAccount.currency !== transfer.currency) return { error: `واحد پولی حساب بانکی (${bankAccount.currency}) با واحد پولی حواله (${transfer.currency}) مطابقت ندارد.` };
 
-        const finalAmountPaid = transfer.amount - transfer.commission;
+        const commissionAmount = transfer.amount * (transfer.commissionPercentage / 100);
+        const finalAmountPaid = transfer.amount - commissionAmount;
+
         if (bankAccount.balance < finalAmountPaid) {
-            return { error: `موجودی حساب بانکی ${bankAccount.bankName} کافی نیست.` };
+            return { error: `موجودی حساب بانکی ${bankAccount.bankName} (${new Intl.NumberFormat().format(bankAccount.balance)}) کافی نیست. مبلغ مورد نیاز: ${new Intl.NumberFormat().format(finalAmountPaid)}` };
         }
 
-        // 1. Update bank account balance
+        // 1. Update paying bank account balance (Decrease)
         bankAccount.balance -= finalAmountPaid;
-        // FIX: Explicitly specify the generic type for the update operation to ensure type safety.
         this.db.update<BankAccount>('bankAccounts', bankAccount.id, { balance: bankAccount.balance });
 
-        // 2. Debit customer account for the full original amount
-        const debitDesc = `پرداخت وجه کمیشن‌کاری به مبلغ ${finalAmountPaid} ${transfer.currency} به حساب ${destinationAccountNumber}`;
-        const debitTx = this._updateCustomerBalance(transfer.customerId, transfer.amount, transfer.currency, 'debit', debitDesc, transferId, 'CommissionTransfer');
+        // 2. Update cashbox balance (Decrease) by the paid amount
+        this._updateCashboxBalance(transfer.currency, -finalAmountPaid);
         
-        // 3. Update the commission transfer record
-// FIX: Fix for TS error on line 1030. The 'commissionCharged' property does not exist on the CommissionTransfer type.
+        // 3. Log commission as revenue. The net effect on the cashbox (+amount initially, -finalAmountPaid now) is that
+        // the commissionAmount remains, representing our income. We just need to log it for reporting.
+        const commissionReason = `درآمد کمیشن بابت حواله ${transfer.id}`;
+        // Note: Creating an "Expense" for revenue is an anti-pattern, but it's the only existing mechanism 
+        // in this system to log an item that could appear in a Profit & Loss report.
+        await this.createExpense({
+            category: ExpenseCategory.Commission,
+            amount: commissionAmount,
+            currency: transfer.currency,
+            description: commissionReason,
+            user,
+            skipCashboxRequest: true, // This is crucial, as it's not a cash expense.
+        });
+
+        // 4. Update the commission transfer record
         const updates: Partial<CommissionTransfer> = {
             status: 'Completed',
             completedAt: new Date(),
             paidFromBankAccountId,
             destinationAccountNumber,
+            commissionAmount,
             finalAmountPaid,
-            linkedCustomerDebitTransactionId: debitTx.id
         };
 
         const updatedTransfer = this.db.update<CommissionTransfer>('commissionTransfers', transferId, updates);
         
         this.logActivity(user.name, `دستور پرداخت حواله کمیشن‌کاری ${transferId} را به مبلغ نهایی ${finalAmountPaid} ${transfer.currency} اجرا کرد.`);
         
-        const customer = await this.getCustomerById(transfer.customerId);
-        if(customer) {
-            notificationService.sendWhatsAppNotification(customer.whatsappNumber, `مبلغ ${finalAmountPaid} ${transfer.currency} طبق دستور شما به حساب ${destinationAccountNumber} واریز گردید. کمیسیون: ${transfer.commission} ${transfer.currency}. SarrafAI`);
+        const initiator = transfer.initiatorType === 'Customer'
+            ? await this.getCustomerById(transfer.initiatorId)
+            : await this.getPartnerAccountById(transfer.initiatorId);
+            
+        if(initiator && initiator.whatsappNumber) {
+            notificationService.sendWhatsAppNotification(initiator.whatsappNumber, `مبلغ ${new Intl.NumberFormat().format(finalAmountPaid)} ${transfer.currency} طبق دستور شما به حساب ${destinationAccountNumber} واریز گردید. کمیسیون: ${new Intl.NumberFormat().format(commissionAmount)} ${transfer.currency}. SarrafAI`);
         }
         
         return updatedTransfer || { error: 'خطا در به‌روزرسانی حواله.' };
@@ -1085,10 +1145,82 @@ class SarrafiApiService {
         // Placeholder for other reports
         return { error: `گزارش از نوع '${reportType}' هنوز پیاده‌سازی نشده است.` };
     }
+    
+    // FIX: Add methods for Amanat feature
+    async getAmanat(): Promise<Amanat[]> {
+        return this.db.get<Amanat>('amanat');
+    }
 
-    async getAmanat(): Promise<Amanat[]> { return this.db.get('amanat'); }
-    async createAmanat(payload: CreateAmanatPayload): Promise<Amanat | { error: string }> { return { error: "Not implemented" }; }
-    async returnAmanat(payload: ReturnAmanatPayload): Promise<Amanat | { error: string }> { return { error: "Not implemented" }; }
+    async createAmanat(payload: CreateAmanatPayload): Promise<Amanat | { error: string }> {
+        const { user, ...amanatData } = payload;
+        const amanatId = this.generateId('AMN');
+        
+        const reason = `بابت ثبت امانت برای ${amanatData.customerName} (یادداشت: ${amanatData.notes})`;
+        const cashRequest = await this.createCashboxRequest({
+            requestType: 'deposit',
+            amount: amanatData.amount,
+            currency: amanatData.currency,
+            reason,
+            user,
+            linkedEntity: { type: 'Amanat', id: amanatId, description: reason }
+        });
+        
+        if ('error' in cashRequest) {
+            return cashRequest;
+        }
+
+        const newAmanat: Amanat = {
+            id: amanatId,
+            createdAt: new Date(),
+            createdBy: user.name,
+            status: AmanatStatus.Active,
+            linkedCashboxDepositId: cashRequest.id,
+            ...amanatData,
+        };
+        
+        this.logActivity(user.name, `امانتی به مبلغ ${amanatData.amount} ${amanatData.currency} برای ${amanatData.customerName} ثبت کرد.`);
+        return this.db.add('amanat', newAmanat);
+    }
+
+    async returnAmanat(payload: ReturnAmanatPayload): Promise<Amanat | { error: string }> {
+        const { amanatId, user } = payload;
+        const amanat = this.db.getById<Amanat>('amanat', amanatId);
+        
+        if (!amanat) return { error: 'امانت یافت نشد.' };
+        if (amanat.status === AmanatStatus.Returned) return { error: 'این امانت قبلاً بازگشت داده شده است.' };
+        
+        const balances = this.db.get<CashboxBalance>('cashboxBalances');
+        const balance = balances.find(b => b.currency === amanat.currency);
+        const currentBalance = balance ? balance.balance : 0;
+        if (currentBalance < amanat.amount) {
+            return { error: `موجودی صندوق ${amanat.currency} برای بازگشت این امانت کافی نیست.` };
+        }
+        
+        const reason = `بابت بازگشت امانت ${amanat.id} به ${amanat.customerName}`;
+        const cashRequest = await this.createCashboxRequest({
+            requestType: 'withdrawal',
+            amount: amanat.amount,
+            currency: amanat.currency,
+            reason,
+            user,
+            linkedEntity: { type: 'Amanat', id: amanat.id, description: reason }
+        });
+        
+        if ('error' in cashRequest) {
+            return cashRequest;
+        }
+        
+        const updates: Partial<Amanat> = {
+            status: AmanatStatus.Returned,
+            returnedAt: new Date(),
+            returnedBy: user.name,
+            linkedCashboxWithdrawalId: cashRequest.id,
+        };
+        
+        this.logActivity(user.name, `امانت ${amanat.id} را به ${amanat.customerName} بازگشت داد.`);
+        const updatedAmanat = this.db.update<Amanat>('amanat', amanatId, updates);
+        return updatedAmanat || { error: 'خطا در به‌روزرسانی امانت.' };
+    }
 
 }
 

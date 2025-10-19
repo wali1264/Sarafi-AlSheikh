@@ -20,7 +20,6 @@ const allNavLinks: NavLinkConfig[] = [
     { to: '/commission-transfers', label: permissionModuleTranslations.commissionTransfers, module: 'commissionTransfers' },
     { to: '/account-transfers', label: permissionModuleTranslations.accountTransfers, module: 'accountTransfers' },
     { to: '/customers', label: permissionModuleTranslations.customers, module: 'customers' },
-    { to: '/amanat', label: permissionModuleTranslations.amanat, module: 'amanat' },
     { to: '/partner-accounts', label: permissionModuleTranslations.partnerAccounts, module: 'partnerAccounts' },
     { to: '/expenses', label: permissionModuleTranslations.expenses, module: 'expenses' },
     { to: '/reports', label: permissionModuleTranslations.reports, module: 'reports' },

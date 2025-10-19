@@ -4,6 +4,7 @@ import React from 'react';
 import { HashRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ApiProvider } from './contexts/ApiContext';
+// FIX: Import 'PermissionAction' and 'PermissionModule' from './types'
 import { PermissionAction, PermissionModule } from './types';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -17,7 +18,6 @@ import PartnerAccountsPage from './pages/PartnerAccountsPage';
 import PartnerAccountDetailPage from './pages/PartnerAccountDetailPage';
 import AccountTransfersPage from './pages/AccountTransfersPage';
 import ReportsPage from './pages/ReportsPage';
-import AmanatPage from './pages/AmanatPage';
 import SettingsPage from './pages/SettingsPage';
 import PrintableView from './components/PrintableView';
 import CustomersPage from './pages/CustomersPage';
@@ -25,6 +25,7 @@ import CustomerDetailPage from './pages/CustomerDetailPage';
 import StatementPrintView from './components/StatementPrintView';
 import ForeignTransfersPage from './pages/ForeignTransfersPage';
 import CommissionTransfersPage from './pages/CommissionTransfersPage';
+import TransferPrintView from './components/TransferPrintView';
 
 const App: React.FC = () => {
     return (
@@ -100,9 +101,6 @@ const SarrafAIApp: React.FC = () => {
                     <Route element={<PermissionRoute module="accountTransfers" action="view" />}>
                         <Route path="/account-transfers" element={<AccountTransfersPage />} />
                     </Route>
-                     <Route element={<PermissionRoute module="amanat" action="view" />}>
-                        <Route path="/amanat" element={<AmanatPage />} />
-                    </Route>
                      <Route element={<PermissionRoute module="customers" action="view" />}>
                         <Route path="/customers" element={<CustomersPage />} />
                         <Route path="/customers/:customerId" element={<CustomerDetailPage />} />
@@ -119,6 +117,7 @@ const SarrafAIApp: React.FC = () => {
                 
                 {/* Routes without the main layout (e.g., for printing) */}
                 <Route path="/print/cashbox/:requestId" element={<PrintableView />} />
+                <Route path="/print/transfer/:transferId" element={<TransferPrintView />} />
                 <Route path="/print/customer-statement/:customerId" element={<StatementPrintView type="customer" />} />
                 <Route path="/print/partner-statement/:partnerId" element={<StatementPrintView type="partner" />} />
 

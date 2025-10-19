@@ -2,7 +2,6 @@ import React, { useState, FormEvent, useEffect, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
 import { ExecuteCommissionTransferPayload, User, BankAccount, CommissionTransfer } from '../types';
-import { persianToEnglishNumber } from '../utils/translations';
 
 interface ExecuteCommissionTransferModalProps {
     isOpen: boolean;
@@ -14,10 +13,9 @@ interface ExecuteCommissionTransferModalProps {
 
 const ExecuteCommissionTransferModal: React.FC<ExecuteCommissionTransferModalProps> = ({ isOpen, onClose, onSuccess, currentUser, transfer }) => {
     const api = useApi();
-    const [formData, setFormData] = useState({
-        paidFromBankAccountId: '',
-        destinationAccountNumber: '',
-    });
+    const [paidFromBankAccountId, setPaidFromBankAccountId] = useState('');
+    const [destinationAccountNumber, setDestinationAccountNumber] = useState('');
+    
     const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -28,26 +26,22 @@ const ExecuteCommissionTransferModal: React.FC<ExecuteCommissionTransferModalPro
                 const activeAccounts = accounts.filter(a => a.status === 'Active' && a.currency === transfer.currency);
                 setBankAccounts(activeAccounts);
                 if (activeAccounts.length > 0) {
-                    setFormData(prev => ({ ...prev, paidFromBankAccountId: activeAccounts[0].id }));
+                    setPaidFromBankAccountId(activeAccounts[0].id);
                 }
             });
         }
     }, [isOpen, api, transfer.currency]);
     
-    const finalAmountPaid = useMemo(() => transfer.amount - transfer.commission, [transfer]);
+    const commissionAmount = useMemo(() => transfer.amount * (transfer.commissionPercentage / 100), [transfer]);
+    const finalAmountPaid = useMemo(() => transfer.amount - commissionAmount, [transfer, commissionAmount]);
 
     if (!isOpen) return null;
     
     const handleClose = () => {
-        setFormData({ paidFromBankAccountId: bankAccounts[0]?.id || '', destinationAccountNumber: '' });
+        setPaidFromBankAccountId(bankAccounts[0]?.id || '');
+        setDestinationAccountNumber('');
         setError(null);
         onClose();
-    };
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        // FIX: Fix for TS error on line 48. The `name` variable was not defined.
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
     };
 
     const handleSubmit = async (e: FormEvent) => {
@@ -57,7 +51,8 @@ const ExecuteCommissionTransferModal: React.FC<ExecuteCommissionTransferModalPro
 
         const payload: ExecuteCommissionTransferPayload = {
             transferId: transfer.id,
-            ...formData,
+            paidFromBankAccountId,
+            destinationAccountNumber,
             user: currentUser,
         };
 
@@ -89,8 +84,8 @@ const ExecuteCommissionTransferModal: React.FC<ExecuteCommissionTransferModalPro
                                 <p className="text-2xl font-mono text-slate-200">{new Intl.NumberFormat().format(transfer.amount)} {transfer.currency}</p>
                             </div>
                              <div className="bg-slate-800/50 p-3 rounded">
-                                <h4 className="text-lg text-slate-400">کمیسیون</h4>
-                                <p className="text-2xl font-mono text-amber-400">{new Intl.NumberFormat().format(transfer.commission)} {transfer.currency}</p>
+                                <h4 className="text-lg text-slate-400">کمیسیون ({transfer.commissionPercentage}%)</h4>
+                                <p className="text-2xl font-mono text-amber-400">{new Intl.NumberFormat().format(commissionAmount)} {transfer.currency}</p>
                             </div>
                         </div>
                         <div className="bg-green-500/10 border border-green-500/30 p-4 rounded text-center">
@@ -98,12 +93,12 @@ const ExecuteCommissionTransferModal: React.FC<ExecuteCommissionTransferModalPro
                             <p className="text-4xl font-bold font-mono text-green-300">{new Intl.NumberFormat().format(finalAmountPaid)} {transfer.currency}</p>
                         </div>
 
-                        <select name="paidFromBankAccountId" value={formData.paidFromBankAccountId} onChange={handleChange} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100">
+                        <select value={paidFromBankAccountId} onChange={e => setPaidFromBankAccountId(e.target.value)} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100">
                             <option value="" disabled>-- پرداخت از حساب بانکی --</option>
                             {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.bankName} - {b.accountHolder} (موجودی: {new Intl.NumberFormat().format(b.balance)})</option>)}
                         </select>
                         
-                        <input name="destinationAccountNumber" value={formData.destinationAccountNumber} onChange={handleChange} placeholder="شماره حساب مقصد" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100" />
+                        <input value={destinationAccountNumber} onChange={e => setDestinationAccountNumber(e.target.value)} placeholder="شماره حساب / کارت مقصد" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100" />
                     </div>
                     <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end space-x-4 space-x-reverse">
                         <button type="button" onClick={handleClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md">لغو</button>

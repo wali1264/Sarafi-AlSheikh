@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useApi } from '../hooks/useApi';
-import { CommissionTransfer, User, Customer, BankAccount } from '../types';
+import { CommissionTransfer, User, Customer, BankAccount, PartnerAccount } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import LogCommissionTransferModal from '../components/LogCommissionTransferModal';
 import ExecuteCommissionTransferModal from '../components/ExecuteCommissionTransferModal';
@@ -9,10 +9,10 @@ const CommissionTransfersPage: React.FC = () => {
     const api = useApi();
     const { user, hasPermission } = useAuth();
     const [transfers, setTransfers] = useState<CommissionTransfer[]>([]);
-    const [customersMap, setCustomersMap] = useState<Map<string, Customer>>(new Map());
+    const [initiatorsMap, setInitiatorsMap] = useState<Map<string, {name: string}>>(new Map());
     const [bankAccountsMap, setBankAccountsMap] = useState<Map<string, BankAccount>>(new Map());
     const [isLoading, setIsLoading] = useState(true);
-    const [filter, setFilter] = useState<'Pending' | 'Completed'>('Pending');
+    const [filter, setFilter] = useState<'PendingExecution' | 'Completed'>('PendingExecution');
 
     // Modal States
     const [isLogModalOpen, setLogModalOpen] = useState(false);
@@ -21,13 +21,19 @@ const CommissionTransfersPage: React.FC = () => {
 
     const fetchData = useCallback(async () => {
         setIsLoading(true);
-        const [data, customersData, bankAccountsData] = await Promise.all([
+        const [data, customersData, partnersData, bankAccountsData] = await Promise.all([
             api.getCommissionTransfers(),
             api.getCustomers(),
+            api.getPartnerAccounts(),
             api.getBankAccounts(),
         ]);
+        
+        const newInitiatorsMap = new Map<string, {name: string}>();
+        customersData.forEach(c => newInitiatorsMap.set(c.id, { name: c.name }));
+        partnersData.forEach(p => newInitiatorsMap.set(p.id, { name: p.name }));
+        
         setTransfers(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-        setCustomersMap(new Map(customersData.map(c => [c.id, c])));
+        setInitiatorsMap(newInitiatorsMap);
         setBankAccountsMap(new Map(bankAccountsData.map(b => [b.id, b])));
         setIsLoading(false);
     }, [api]);
@@ -76,7 +82,7 @@ const CommissionTransfersPage: React.FC = () => {
             </div>
             
             <div className="border-b-2 border-cyan-400/20 mb-8">
-                <TabButton active={filter === 'Pending'} onClick={() => setFilter('Pending')}>در انتظار پرداخت</TabButton>
+                <TabButton active={filter === 'PendingExecution'} onClick={() => setFilter('PendingExecution')}>در انتظار اجرا</TabButton>
                 <TabButton active={filter === 'Completed'} onClick={() => setFilter('Completed')}>تکمیل شده</TabButton>
             </div>
 
@@ -86,25 +92,36 @@ const CommissionTransfersPage: React.FC = () => {
                         <thead className="text-xl text-slate-400 uppercase">
                             <tr>
                                 <th className="px-6 py-4 font-medium">تاریخ</th>
-                                <th className="px-6 py-4 font-medium">مشتری</th>
+                                <th className="px-6 py-4 font-medium">از طرف</th>
+                                <th className="px-6 py-4 font-medium">حساب مبدأ</th>
                                 <th className="px-6 py-4 font-medium">مبلغ ورودی</th>
-                                <th className="px-6 py-4 font-medium">کمیسیون</th>
+                                <th className="px-6 py-4 font-medium">فیصدی کمیسیون</th>
+                                {filter === 'Completed' && <th className="px-6 py-4 font-medium">کمیسیون محاسبه شده</th>}
                                 {filter === 'Completed' && <th className="px-6 py-4 font-medium">مبلغ نهایی پرداخت</th>}
                                 <th className="px-6 py-4 font-medium"></th>
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredTransfers.map(t => (
+                            {isLoading ? (
+                                <tr><td colSpan={8} className="text-center p-8 text-slate-400">در حال بارگذاری...</td></tr>
+                            ) : filteredTransfers.map(t => (
                                 <tr key={t.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5 transition-colors">
                                     <td className="px-6 py-4 whitespace-nowrap">{new Date(t.createdAt).toLocaleString('fa-IR-u-nu-latn')}</td>
-                                    <td className="px-6 py-4 font-semibold text-slate-100">{customersMap.get(t.customerId)?.name || 'ناشناس'}</td>
+                                    <td className="px-6 py-4 font-semibold text-slate-100">
+                                        <div>{initiatorsMap.get(t.initiatorId)?.name || 'ناشناس'}</div>
+                                        <div className="text-sm text-slate-400">{t.initiatorType === 'Customer' ? 'مشتری' : 'همکار'}</div>
+                                    </td>
+                                    <td className="px-6 py-4 font-mono text-cyan-300">{t.sourceAccountNumber}</td>
                                     <td className="px-6 py-4 font-mono text-left text-green-400">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(t.amount)} {t.currency}</td>
-                                    <td className="px-6 py-4 font-mono text-left text-amber-400">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(t.commission)} {t.currency}</td>
+                                    <td className="px-6 py-4 font-mono text-left text-amber-400">{t.commissionPercentage}%</td>
                                     {filter === 'Completed' && (
+                                         <td className="px-6 py-4 font-mono text-left text-amber-400">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(t.commissionAmount || 0)} {t.currency}</td>
+                                    )}
+                                     {filter === 'Completed' && (
                                          <td className="px-6 py-4 font-mono text-left text-red-400">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(t.finalAmountPaid || 0)} {t.currency}</td>
                                     )}
                                     <td className="px-6 py-4 text-left">
-                                        {t.status === 'Pending' && hasPermission('commissionTransfers', 'process') && (
+                                        {t.status === 'PendingExecution' && hasPermission('commissionTransfers', 'process') && (
                                             <button onClick={() => handleExecuteClick(t)} className="px-4 py-2 bg-amber-600/50 hover:bg-amber-500/50 text-amber-200 rounded text-base font-bold">
                                                 اجرای دستور پرداخت
                                             </button>

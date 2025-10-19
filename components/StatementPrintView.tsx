@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
@@ -80,8 +79,7 @@ const StatementPrintView: React.FC<StatementPrintViewProps> = ({ type }) => {
     if (!entity) return <div className="text-center p-10">اطلاعات مورد نظر یافت نشد.</div>;
 
     const isCustomer = (e: Customer | PartnerAccount): e is Customer => 'code' in e;
-    // FIX: Operator '+' cannot be applied to types 'unknown' and 'number'.
-    // Object.values() can return `unknown[]`. Explicitly cast `balance` to a Number before adding it to the sum.
+    // FIX: Operator '+' cannot be applied to types 'unknown' and 'number'. Cast `balance` to a Number to prevent type errors with `reduce` when Object.values() returns `unknown[]`.
     const finalBalance = Object.values(entity.balances).reduce((sum, balance) => sum + (Number(balance) || 0), 0);
 
     const finalCurrency = isCustomer(entity)
@@ -125,9 +123,8 @@ const StatementPrintView: React.FC<StatementPrintViewProps> = ({ type }) => {
                                 <td className="p-2 text-left font-mono text-red-700">
                                     {tx.type === 'debit' ? new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.amount) : '-'}
                                 </td>
-                                {/* FIX: Operator '>=' cannot be applied to types 'unknown' and 'number'. Explicitly cast tx.balanceAfter to a Number for comparison. */}
+                                {/* FIX: Operator '>=' cannot be applied to 'unknown' and 'number' and format() expects a number. Explicitly cast tx.balanceAfter to a Number. */}
                                 <td className={`p-2 text-left font-mono font-bold ${Number(tx.balanceAfter) >= 0 ? 'text-black' : 'text-red-700'}`}>
-                                    {/* FIX: Argument of type 'unknown' is not assignable to parameter of type 'number'. Explicitly cast tx.balanceAfter to a Number. */}
                                     {new Intl.NumberFormat('fa-IR-u-nu-latn').format(Number(tx.balanceAfter))}
                                 </td>
                             </tr>

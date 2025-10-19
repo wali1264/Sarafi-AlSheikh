@@ -417,9 +417,16 @@ const BankAccountManagement = () => {
 
 const GeneralSettings = () => {
     const api = useApi();
+    const { user } = useAuth();
     const [settings, setSettings] = useState<SystemSettings | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     
+    // State for increasing cashbox balance
+    const [increaseAmount, setIncreaseAmount] = useState('');
+    const [increaseCurrency, setIncreaseCurrency] = useState<Currency>(CURRENCIES[0]);
+    const [increaseDescription, setIncreaseDescription] = useState('');
+    const [isIncreasing, setIsIncreasing] = useState(false);
+
     const fetchData = useCallback(async () => {
         setSettings(await api.getSystemSettings());
     }, [api]);
@@ -447,6 +454,27 @@ const GeneralSettings = () => {
         alert("تنظیمات با موفقیت ذخیره شد.");
         fetchData();
     };
+
+    const handleIncreaseBalance = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!user) return;
+        setIsIncreasing(true);
+        const result = await api.increaseCashboxBalance({
+            amount: parseFloat(persianToEnglishNumber(increaseAmount)) || 0,
+            currency: increaseCurrency,
+            description: increaseDescription,
+            user,
+        });
+        setIsIncreasing(false);
+        if ('error' in result) {
+            alert(`خطا: ${result.error}`);
+        } else {
+            alert('موجودی صندوق با موفقیت افزایش یافت. تراکنش در روزنامچه ثبت شد.');
+            setIncreaseAmount('');
+            setIncreaseDescription('');
+        }
+    };
+
 
      const handleBackup = async () => {
         const backupData = await api.getBackupState();
@@ -496,6 +524,35 @@ const GeneralSettings = () => {
     
     return (
         <div className="space-y-12">
+            <SettingsCard title="افزایش موجودی صندوق">
+                <p className="text-slate-400 mb-6">برای ثبت موجودی اولیه یا واریز وجه نقد به صندوق از این فرم استفاده کنید. این عملیات یک تراکنش "رسید" تایید شده در روزنامچه صندوق ثبت می‌کند.</p>
+                <form onSubmit={handleIncreaseBalance} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                        <div>
+                            <label className="block text-lg font-medium text-cyan-300 mb-2">مبلغ</label>
+                            <input type="text" inputMode="decimal" value={increaseAmount} onChange={(e) => setIncreaseAmount(e.target.value)} required
+                                className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right"/>
+                        </div>
+                        <div>
+                            <label className="block text-lg font-medium text-cyan-300 mb-2">واحد پولی</label>
+                            <select value={increaseCurrency} onChange={(e) => setIncreaseCurrency(e.target.value as Currency)} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400">
+                                {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                         <div className="md:col-span-3">
+                            <label className="block text-lg font-medium text-cyan-300 mb-2">توضیحات (اختیاری)</label>
+                            <input type="text" value={increaseDescription} onChange={(e) => setIncreaseDescription(e.target.value)} placeholder="مثلا: ثبت موجودی اولیه صندوق"
+                                className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right"/>
+                        </div>
+                    </div>
+                     <div className="mt-6 text-left">
+                        <ActionButton type="submit" disabled={isIncreasing}>
+                            {isIncreasing ? 'در حال ثبت...' : 'افزایش موجودی'}
+                        </ActionButton>
+                    </div>
+                </form>
+            </SettingsCard>
+
             <SettingsCard title="پشتیبان‌گیری و بازیابی اطلاعات">
                  <div className="flex flex-col md:flex-row gap-6 items-start">
                     <div className="flex-1">

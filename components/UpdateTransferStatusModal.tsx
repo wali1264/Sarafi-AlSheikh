@@ -13,13 +13,13 @@ interface UpdateTransferStatusModalProps {
 
 const UpdateTransferStatusModal: React.FC<UpdateTransferStatusModalProps> = ({ isOpen, onClose, onSuccess, currentUser, transfer }) => {
     const api = useApi();
-    const [newStatus, setNewStatus] = useState<TransferStatus>(transfer.status);
+    const [newStatus, setNewStatus] = useState<TransferStatus | ''>('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         // Reset status when a new transfer is selected
-        setNewStatus(transfer.status);
+        setNewStatus('');
         setError(null);
     }, [transfer]);
     
@@ -27,15 +27,12 @@ const UpdateTransferStatusModal: React.FC<UpdateTransferStatusModalProps> = ({ i
 
     const availableStatuses = [
         { value: TransferStatus.Executed, label: statusTranslations[TransferStatus.Executed] },
-        { value: TransferStatus.Paid, label: statusTranslations[TransferStatus.Paid] },
     ].filter(status => {
-        // You can't set status to pending, and can only move forward
-        if (transfer.status === TransferStatus.Pending) return true;
-        if (transfer.status === TransferStatus.Executed) return status.value === TransferStatus.Paid;
-        return false;
+        // Can only move from Unexecuted to Executed
+        return transfer.status === TransferStatus.Unexecuted;
     });
 
-    const canBeCancelled = transfer.status === TransferStatus.Pending || transfer.status === TransferStatus.Executed;
+    const canBeCancelled = transfer.status === TransferStatus.Unexecuted;
 
     const handleUpdate = async (statusToUpdate: TransferStatus) => {
         setIsLoading(true);
@@ -59,11 +56,11 @@ const UpdateTransferStatusModal: React.FC<UpdateTransferStatusModalProps> = ({ i
 
     const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
-        if (newStatus === transfer.status) {
+        if (!newStatus) {
             setError("لطفاً یک وضعیت جدید انتخاب کنید.");
             return;
         }
-        handleUpdate(newStatus);
+        handleUpdate(newStatus as TransferStatus);
     };
 
     const handleCancelTransfer = () => {
@@ -101,7 +98,7 @@ const UpdateTransferStatusModal: React.FC<UpdateTransferStatusModalProps> = ({ i
                                 className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right transition-colors duration-300"
                                 disabled={availableStatuses.length === 0}
                             >
-                                <option value={transfer.status} disabled>-- انتخاب کنید --</option>
+                                <option value="" disabled>-- انتخاب کنید --</option>
                                 {availableStatuses.map(s => (
                                     <option key={s.value} value={s.value}>{s.label}</option>
                                 ))}

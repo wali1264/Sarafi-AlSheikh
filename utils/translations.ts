@@ -1,6 +1,7 @@
 
 
-import { TransferStatus, ExpenseCategory, ReportType, CashboxRequestStatus, AmanatStatus, PermissionModule } from '../types';
+
+import { TransferStatus, ExpenseCategory, ReportType, CashboxRequestStatus, PermissionModule, AmanatStatus } from '../types';
 
 export const permissionModuleTranslations: Record<PermissionModule, string> = {
     dashboard: 'داشبورد',
@@ -13,8 +14,8 @@ export const permissionModuleTranslations: Record<PermissionModule, string> = {
     partnerAccounts: 'حساب همکاران',
     expenses: 'مصارف',
     reports: 'گزارشات',
-    amanat: 'امانات',
     settings: 'تنظیمات',
+    amanat: 'امانات',
 };
 
 export const permissionActionTranslations: Record<string, string> = {
@@ -27,9 +28,8 @@ export const permissionActionTranslations: Record<string, string> = {
 };
 
 export const statusTranslations: Record<TransferStatus, string> = {
-    [TransferStatus.Pending]: 'در انتظار',
+    [TransferStatus.Unexecuted]: 'اجرا نشده',
     [TransferStatus.Executed]: 'اجرا شده',
-    [TransferStatus.Paid]: 'پرداخت شده',
     [TransferStatus.Cancelled]: 'لغو شده',
 };
 
@@ -55,11 +55,11 @@ export const cashboxRequestStatusTranslations: Record<CashboxRequestStatus, stri
     [CashboxRequestStatus.AutoApproved]: 'تایید خودکار',
 };
 
+// FIX: Add translations for Amanat feature
 export const amanatStatusTranslations: Record<AmanatStatus, string> = {
     [AmanatStatus.Active]: 'فعال',
-    [AmanatStatus.Returned]: 'برگشت داده شده',
+    [AmanatStatus.Returned]: 'بازگشت داده شده',
 };
-
 
 /**
  * Converts Persian (and Arabic) numerals to English numerals.
