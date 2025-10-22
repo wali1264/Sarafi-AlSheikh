@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '../contexts/ToastContext';
 import PrintPreviewModal from '../components/PrintPreviewModal';
 import PrintableView from '../components/PrintableView';
+import { supabase } from '../services/supabaseClient';
 
 const StatCard: React.FC<{ title: string, value: string, currency: string }> = ({ title, value, currency }) => {
     const valueRef = useRef<HTMLParagraphElement>(null);
@@ -96,6 +97,18 @@ const CashboxPage: React.FC = () => {
         fetchData();
     }, [fetchData]);
 
+    useEffect(() => {
+        const channel = supabase
+            .channel('cashbox-page-updates')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'cashbox_requests' }, () => fetchData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'cashbox_balances' }, () => fetchData())
+            .subscribe();
+        
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [fetchData]);
+
     const handleSuccess = () => {
         setIsModalOpen(false);
         fetchData();
@@ -122,8 +135,10 @@ const CashboxPage: React.FC = () => {
         const container = document.getElementById('printable-area-container');
         if (container) {
             ReactDOM.render(<PrintableView request={request} printNote={printNote} />, container, () => {
-                window.print();
-                ReactDOM.unmountComponentAtNode(container);
+                setTimeout(() => {
+                    window.print();
+                    ReactDOM.unmountComponentAtNode(container);
+                }, 100);
             });
         }
         setIsPrintModalOpen(false);

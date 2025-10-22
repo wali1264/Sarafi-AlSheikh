@@ -1,6 +1,7 @@
-export function formatTimeAgo(date: Date): string {
+export function formatTimeAgo(date: Date | string): string {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
     const now = new Date();
-    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    const seconds = Math.floor((now.getTime() - dateObj.getTime()) / 1000);
 
     let interval = seconds / 31536000;
     if (interval > 1) {

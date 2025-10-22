@@ -11,6 +11,7 @@ import { AFGHANISTAN_PROVINCES, CURRENCIES } from '../constants';
 import { persianToEnglishNumber } from '../utils/translations';
 import ProcessIncomingTransferModal from '../components/ProcessIncomingTransferModal';
 import TransferPrintView from '../components/TransferPrintView';
+import { supabase } from '../services/supabaseClient';
 
 interface TransferPrintPreviewModalProps {
     isOpen: boolean;
@@ -28,8 +29,10 @@ const TransferPrintPreviewModal: React.FC<TransferPrintPreviewModalProps> = ({ i
                 <TransferPrintView transfer={transfer} />,
                 container,
                 () => {
-                    window.print();
-                    ReactDOM.unmountComponentAtNode(container);
+                    setTimeout(() => {
+                        window.print();
+                        ReactDOM.unmountComponentAtNode(container);
+                    }, 100);
                 }
             );
         }
@@ -121,6 +124,17 @@ const DomesticTransfersPage: React.FC = () => {
 
     useEffect(() => {
         fetchData();
+    }, [fetchData]);
+
+    useEffect(() => {
+        const channel = supabase
+            .channel('domestic-transfers-page-updates')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'domestic_transfers' }, () => fetchData())
+            .subscribe();
+        
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [fetchData]);
     
     const handleSuccess = () => {

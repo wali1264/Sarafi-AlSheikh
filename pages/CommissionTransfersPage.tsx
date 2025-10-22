@@ -27,8 +27,10 @@ const CommissionTransferPrintPreviewModal: React.FC<CommissionTransferPrintPrevi
                 <CommissionTransferPrintView transfer={transfer} initiatorName={initiatorName} bankAccountsMap={bankAccountsMap} />,
                 container,
                 () => {
-                    window.print();
-                    ReactDOM.unmountComponentAtNode(container);
+                    setTimeout(() => {
+                        window.print();
+                        ReactDOM.unmountComponentAtNode(container);
+                    }, 100);
                 }
             );
         }

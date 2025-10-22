@@ -8,6 +8,7 @@ import PartnerSettlementModal from '../components/SettleBalanceModal';
 import { CURRENCIES } from '../constants';
 import { cashboxRequestStatusTranslations } from '../utils/translations';
 import StatementPrintView from '../components/StatementPrintView';
+import { supabase } from '../services/supabaseClient';
 
 interface StatementPrintPreviewModalProps {
     isOpen: boolean;
@@ -25,8 +26,10 @@ const StatementPrintPreviewModal: React.FC<StatementPrintPreviewModalProps> = ({
                 <StatementPrintView entityId={partnerId} type="partner" />,
                 container,
                 () => {
-                    window.print();
-                    ReactDOM.unmountComponentAtNode(container);
+                    setTimeout(() => {
+                        window.print();
+                        ReactDOM.unmountComponentAtNode(container);
+                    }, 100);
                 }
             );
         }
@@ -145,6 +148,20 @@ const PartnerAccountDetailPage: React.FC = () => {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    useEffect(() => {
+        if (!partnerId) return;
+
+        const channel = supabase
+            .channel(`partner-detail-updates-${partnerId}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'partner_transactions', filter: `partner_id=eq.${partnerId}` }, () => fetchData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'cashbox_requests' }, () => fetchData())
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [partnerId, fetchData]);
     
     const handleSuccess = () => {
         setSettlementModal({ isOpen: false, type: null });

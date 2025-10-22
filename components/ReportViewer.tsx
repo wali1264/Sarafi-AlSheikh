@@ -26,8 +26,10 @@ const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = ({ isOpe
                 <ReportPrintView reportData={reportData} reportType={reportType} />,
                 container,
                 () => {
-                    window.print();
-                    ReactDOM.unmountComponentAtNode(container);
+                    setTimeout(() => {
+                        window.print();
+                        ReactDOM.unmountComponentAtNode(container);
+                    }, 100);
                 }
             );
         }

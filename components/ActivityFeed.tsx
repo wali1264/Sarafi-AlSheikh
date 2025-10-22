@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { ActivityLog } from '../types';
 import { formatTimeAgo } from '../utils/timeFormatter';
+import { supabase } from '../services/supabaseClient';
 
 
 const ActivityFeed: React.FC = () => {
@@ -15,6 +16,23 @@ const ActivityFeed: React.FC = () => {
         };
         fetchActivities();
     }, [api]);
+
+    useEffect(() => {
+        const channel = supabase
+            .channel('activity-feed-inserts')
+            .on(
+                'postgres_changes', 
+                { event: 'INSERT', schema: 'public', table: 'activity_logs' }, 
+                (payload) => {
+                    setActivities(prevActivities => [payload.new as ActivityLog, ...prevActivities]);
+                }
+            )
+            .subscribe();
+        
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
 
     return (
         <div className="bg-[#12122E]/80 border-2 border-cyan-400/20 overflow-hidden shadow-[0_0_40px_rgba(0,255,255,0.2)]" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)' }}>
@@ -32,7 +50,7 @@ const ActivityFeed: React.FC = () => {
                                     <span className="font-bold text-cyan-300">{activity.user}</span>
                                     <span className="text-slate-300"> {activity.action}</span>
                                 </div>
-                                <span className="text-slate-500 text-base flex-shrink-0 ml-4">{formatTimeAgo(activity.timestamp)}</span>
+                                <span className="text-slate-500 text-base flex-shrink-0 ml-4">{formatTimeAgo(new Date(activity.timestamp))}</span>
                             </li>
                         ))}
                     </ul>

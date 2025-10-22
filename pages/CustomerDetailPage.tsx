@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactDOM from 'react-dom';
@@ -8,6 +7,7 @@ import { CURRENCIES } from '../constants';
 import InternalExchangeModal from '../components/InternalExchangeModal';
 import { useAuth } from '../contexts/AuthContext';
 import StatementPrintView from '../components/StatementPrintView';
+import { supabase } from '../services/supabaseClient';
 
 interface StatementPrintPreviewModalProps {
     isOpen: boolean;
@@ -25,8 +25,10 @@ const StatementPrintPreviewModal: React.FC<StatementPrintPreviewModalProps> = ({
                 <StatementPrintView entityId={customerId} type="customer" />,
                 container,
                 () => {
-                    window.print();
-                    ReactDOM.unmountComponentAtNode(container);
+                    setTimeout(() => {
+                        window.print();
+                        ReactDOM.unmountComponentAtNode(container);
+                    }, 100);
                 }
             );
         }
@@ -108,6 +110,20 @@ const CustomerDetailPage: React.FC = () => {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    useEffect(() => {
+        if (!customerId) return;
+
+        const channel = supabase
+            .channel(`customer-detail-updates-${customerId}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_transactions', filter: `customer_id=eq.${customerId}` }, () => fetchData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'internal_exchanges', filter: `customer_id=eq.${customerId}` }, () => fetchData())
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [customerId, fetchData]);
     
     const handleModalSuccess = () => {
         setInternalExchangeModalOpen(false);
