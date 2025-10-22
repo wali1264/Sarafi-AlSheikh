@@ -1,10 +1,18 @@
 
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useApi } from '../hooks/useApi';
-import { Expense, User } from '../types';
+import { Expense, User, ExpenseCategory, Currency, ExpenseStatus } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import CreateExpenseModal from '../components/CreateExpenseModal';
-import { expenseCategoryTranslations } from '../utils/translations';
+import { expenseCategoryTranslations, persianToEnglishNumber, expenseStatusTranslations } from '../utils/translations';
+import { CURRENCIES } from '../constants';
+
+const FilterIcon: React.FC = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293.707L3.293 7.293A1 1 0 013 6.586V4z" />
+    </svg>
+);
 
 const ExpensesPage: React.FC = () => {
     const api = useApi();
@@ -12,6 +20,19 @@ const ExpensesPage: React.FC = () => {
     const [expenses, setExpenses] = useState<Expense[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    
+    const initialFilters = {
+        description: '',
+        category: 'all',
+        currency: 'all',
+        user: '',
+        startDate: '',
+        endDate: '',
+        minAmount: '',
+        maxAmount: '',
+    };
+    const [filters, setFilters] = useState(initialFilters);
+    const [isAdvancedSearchOpen, setAdvancedSearchOpen] = useState(false);
 
     const fetchData = useCallback(async () => {
         setIsLoading(true);
@@ -28,6 +49,51 @@ const ExpensesPage: React.FC = () => {
         setIsModalOpen(false);
         fetchData();
     };
+    
+    const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        setFilters(prev => ({ ...prev, [name]: persianToEnglishNumber(value) }));
+    };
+
+    const handleResetFilters = () => {
+        setFilters(initialFilters);
+    };
+
+    const filteredExpenses = useMemo(() => {
+        return expenses.filter(exp => {
+            const matchesDescription = !filters.description || exp.description.toLowerCase().includes(filters.description.toLowerCase());
+            const matchesUser = !filters.user || exp.user.toLowerCase().includes(filters.user.toLowerCase());
+            const matchesCategory = filters.category === 'all' || exp.category === filters.category;
+            const matchesCurrency = filters.currency === 'all' || exp.currency === filters.currency;
+            const matchesMinAmount = !filters.minAmount || exp.amount >= parseFloat(filters.minAmount);
+            const matchesMaxAmount = !filters.maxAmount || exp.amount <= parseFloat(filters.maxAmount);
+
+            const createdAt = new Date(exp.createdAt);
+            const matchesStartDate = !filters.startDate || createdAt >= new Date(filters.startDate);
+            let matchesEndDate = true;
+            if (filters.endDate) {
+                const endDate = new Date(filters.endDate);
+                endDate.setHours(23, 59, 59, 999);
+                matchesEndDate = createdAt <= endDate;
+            }
+
+            return matchesDescription && matchesUser && matchesCategory && matchesCurrency && matchesMinAmount && matchesMaxAmount && matchesStartDate && matchesEndDate;
+        });
+    }, [expenses, filters]);
+
+    const getStatusStyle = (status: ExpenseStatus) => {
+        switch (status) {
+            case ExpenseStatus.Approved:
+                return 'bg-green-500/20 text-green-300';
+            case ExpenseStatus.PendingApproval:
+                return 'bg-yellow-500/20 text-yellow-300';
+            case ExpenseStatus.Rejected:
+                return 'bg-red-500/20 text-red-300';
+            default:
+                return 'bg-slate-600/20 text-slate-300';
+        }
+    };
+
 
     return (
         <div style={{direction: 'rtl'}}>
@@ -38,6 +104,50 @@ const ExpensesPage: React.FC = () => {
                         + ثبت مصرف جدید
                     </button>
                 )}
+            </div>
+
+            <div className="bg-[#12122E]/80 border-2 border-cyan-400/20 overflow-hidden shadow-[0_0_40px_rgba(0,255,255,0.2)] mb-10" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)' }}>
+                 <div className="p-4 border-b-2 border-cyan-400/20 flex flex-wrap gap-4 items-center">
+                    <input 
+                        type="text"
+                        name="description"
+                        placeholder="جستجو در شرح..."
+                        value={filters.description}
+                        onChange={handleFilterChange}
+                        className="flex-grow text-lg px-4 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400"
+                    />
+                    <button onClick={() => setAdvancedSearchOpen(prev => !prev)} className="flex items-center text-lg px-4 py-2 bg-slate-700/50 border-2 border-slate-600/50 rounded-md text-cyan-300 hover:bg-slate-700">
+                        <FilterIcon />
+                        {isAdvancedSearchOpen ? 'بستن جستجوی پیشرفته' : 'جستجوی پیشرفته'}
+                    </button>
+                 </div>
+                 <div className={`transition-all duration-500 ease-in-out ${isAdvancedSearchOpen ? 'max-h-[500px]' : 'max-h-0'} overflow-hidden`}>
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <select name="category" value={filters.category} onChange={handleFilterChange} className="text-lg px-4 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100">
+                            <option value="all">همه دسته‌بندی‌ها</option>
+                            {Object.values(ExpenseCategory).map(c => <option key={c} value={c}>{expenseCategoryTranslations[c]}</option>)}
+                        </select>
+                         <select name="currency" value={filters.currency} onChange={handleFilterChange} className="text-lg px-4 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100">
+                            <option value="all">همه ارزها</option>
+                            {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <input type="text" name="user" placeholder="نام ثبت کننده..." value={filters.user} onChange={handleFilterChange} className="text-lg px-4 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100" />
+                        <div />
+                        <input type="text" inputMode="decimal" name="minAmount" placeholder="حداقل مبلغ" value={filters.minAmount} onChange={handleFilterChange} className="text-lg px-4 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100" />
+                        <input type="text" inputMode="decimal" name="maxAmount" placeholder="حداکثر مبلغ" value={filters.maxAmount} onChange={handleFilterChange} className="text-lg px-4 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100" />
+                        <div>
+                            <label className="text-sm text-slate-400">از تاریخ:</label>
+                            <input type="date" name="startDate" value={filters.startDate} onChange={handleFilterChange} className="w-full text-lg px-4 py-1 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100" />
+                        </div>
+                        <div>
+                            <label className="text-sm text-slate-400">تا تاریخ:</label>
+                            <input type="date" name="endDate" value={filters.endDate} onChange={handleFilterChange} className="w-full text-lg px-4 py-1 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100" />
+                        </div>
+                        <div className="col-span-full text-left">
+                            <button onClick={handleResetFilters} className="text-lg px-4 py-2 bg-red-500/20 text-red-300 hover:bg-red-500/30 rounded-md">پاک کردن فیلترها</button>
+                        </div>
+                    </div>
+                 </div>
             </div>
             
             <div className="bg-[#12122E]/80 border-2 border-cyan-400/20 overflow-hidden shadow-[0_0_40px_rgba(0,255,255,0.2)]" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)' }}>
@@ -53,16 +163,22 @@ const ExpensesPage: React.FC = () => {
                                 <th className="px-6 py-4 font-medium">شرح</th>
                                 <th className="px-6 py-4 font-medium">مبلغ</th>
                                 <th className="px-6 py-4 font-medium">ثبت کننده</th>
+                                <th className="px-6 py-4 font-medium">وضعیت</th>
                            </tr>
                         </thead>
                         <tbody>
-                            {expenses.map(exp => (
+                            {filteredExpenses.map(exp => (
                                 <tr key={exp.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5 transition-colors">
                                     <td className="px-6 py-4 whitespace-nowrap">{new Date(exp.createdAt).toLocaleString('fa-IR-u-nu-latn')}</td>
                                     <td className="px-6 py-4 font-semibold text-cyan-300">{expenseCategoryTranslations[exp.category]}</td>
                                     <td className="px-6 py-4 text-slate-100">{exp.description}</td>
                                     <td className="px-6 py-4 font-mono text-left text-red-400">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(exp.amount)} {exp.currency}</td>
                                     <td className="px-6 py-4">{exp.user}</td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-3 py-1 text-base font-semibold rounded-full ${getStatusStyle(exp.status)}`}>
+                                            {expenseStatusTranslations[exp.status]}
+                                        </span>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

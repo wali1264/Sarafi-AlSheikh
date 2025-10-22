@@ -4,6 +4,7 @@ import { useApi } from '../hooks/useApi';
 import { InternalCustomerExchangePayload, Currency, User, Customer } from '../types';
 import { CURRENCIES } from '../constants';
 import { persianToEnglishNumber } from '../utils/translations';
+import { useToast } from '../contexts/ToastContext';
 
 interface InternalExchangeModalProps {
     isOpen: boolean;
@@ -15,6 +16,7 @@ interface InternalExchangeModalProps {
 
 const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, onClose, onSuccess, currentUser, customer }) => {
     const api = useApi();
+    const { addToast } = useToast();
     const [formData, setFormData] = useState({
         fromAmount: '',
         fromCurrency: (Object.keys(customer.balances).find(c => (customer.balances[c as Currency] || 0) > 0) as Currency) || CURRENCIES[0],
@@ -23,7 +25,6 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
     });
     
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         // Ensure 'from' and 'to' currencies are different
@@ -52,7 +53,6 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
             toCurrency: CURRENCIES[1] || CURRENCIES[0],
             rate: '',
         });
-        setError(null);
         setIsLoading(false);
     };
 
@@ -74,7 +74,6 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        setError(null);
 
         const payload: InternalCustomerExchangePayload = {
             customerId: customer.id,
@@ -87,7 +86,7 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
         };
         
         if(payload.fromAmount <= 0 || payload.toAmount <= 0) {
-            setError("مبالغ باید بزرگتر از صفر باشند.");
+            addToast("مبالغ باید بزرگتر از صفر باشند.", 'error');
             setIsLoading(false);
             return;
         }
@@ -96,8 +95,9 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
         setIsLoading(false);
 
         if ('error' in result) {
-            setError(result.error);
+            addToast(result.error, 'error');
         } else {
+            addToast("تبدیل ارز با موفقیت انجام شد.", 'success');
             onSuccess();
             handleClose();
         }
@@ -118,8 +118,7 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
                     </div>
                     
                     <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
-                        {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
-                        <p className="text-base text-yellow-400">این عملیات فقط موجودی‌های داخلی حساب این مشتری را تغییر می‌دهد و بر صندوق صرافی بی‌تأثیر است.</p>
+                        <p className="text-base text-yellow-400">این عملیات فقط موجودی حساب مشتری را تغییر می‌دهد و بر موجودی صندوق یا حساب‌های بانکی صرافی تأثیری ندارد (چون تبادله به صورت فیزیکی خارج از سیستم انجام شده است).</p>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>

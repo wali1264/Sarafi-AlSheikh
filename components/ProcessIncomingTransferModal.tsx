@@ -2,6 +2,7 @@ import React, { useState, FormEvent } from 'react';
 import { useApi } from '../hooks/useApi';
 import { DomesticTransfer, User, TransferStatus, PayoutIncomingTransferPayload } from '../types';
 import { statusTranslations } from '../utils/translations';
+import { useToast } from '../contexts/ToastContext';
 
 interface ProcessIncomingTransferModalProps {
     isOpen: boolean;
@@ -12,6 +13,7 @@ interface ProcessIncomingTransferModalProps {
 
 const ProcessIncomingTransferModal: React.FC<ProcessIncomingTransferModalProps> = ({ isOpen, onClose, onSuccess, currentUser }) => {
     const api = useApi();
+    const { addToast } = useToast();
     const [query, setQuery] = useState('');
     const [searchResults, setSearchResults] = useState<DomesticTransfer[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -62,8 +64,9 @@ const ProcessIncomingTransferModal: React.FC<ProcessIncomingTransferModalProps> 
         const result = await api.payoutIncomingTransfer(payload);
         setIsLoading(false);
         if ('error' in result) {
-            setError(result.error);
+            addToast(result.error, 'error');
         } else {
+            addToast("درخواست پرداخت به صندوق ارسال شد.", 'success');
             onSuccess();
             handleClose();
         }
@@ -115,7 +118,7 @@ const ProcessIncomingTransferModal: React.FC<ProcessIncomingTransferModalProps> 
                                 </thead>
                                 <tbody>
                                     {searchResults.map(t => {
-                                        const isPayable = t.status === TransferStatus.Executed;
+                                        const isPayable = t.status === TransferStatus.Unexecuted;
                                         return (
                                             <tr key={t.id} className="border-b border-cyan-400/10">
                                                 <td className="px-4 py-3">

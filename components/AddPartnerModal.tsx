@@ -1,3 +1,4 @@
+
 import React, { useState, FormEvent } from 'react';
 import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
@@ -19,7 +20,6 @@ const AddPartnerModal: React.FC<AddPartnerModalProps> = ({ isOpen, onClose, onSu
         province: AFGHANISTAN_PROVINCES[0],
         whatsappNumber: ''
     });
-    const [balances, setBalances] = useState<{[key: string]: string}>({});
     
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -31,29 +31,13 @@ const AddPartnerModal: React.FC<AddPartnerModalProps> = ({ isOpen, onClose, onSu
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleBalanceChange = (currency: Currency, value: string) => {
-        setBalances(prev => ({
-            ...prev,
-            [currency]: persianToEnglishNumber(value)
-        }));
-    };
-
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
         setError(null);
         
-        const numericBalances: { [key in Currency]?: number } = {};
-        for (const currency of CURRENCIES) {
-            const value = balances[currency];
-            if (value && value.trim() !== '') {
-                numericBalances[currency] = parseFloat(value);
-            }
-        }
-
         const payload: CreatePartnerPayload = {
             ...formData,
-            balances: numericBalances,
             user: currentUser,
         };
 
@@ -102,28 +86,9 @@ const AddPartnerModal: React.FC<AddPartnerModalProps> = ({ isOpen, onClose, onSu
                                 <input id="whatsappNumber" name="whatsappNumber" value={formData.whatsappNumber} onChange={handleFormChange} placeholder="+93799123456" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-left font-mono" />
                             </div>
                         </div>
-
-                         <div className="p-4 border-2 border-cyan-400/30 bg-cyan-400/10 rounded-md">
-                            <h4 className="text-xl font-bold text-cyan-300 mb-2">موجودی‌های اولیه</h4>
-                             <p className="text-sm text-yellow-400 mb-4">اگر شما بدهکار هستید، مبلغ را منفی وارد کنید. فیلدهای خالی صفر در نظر گرفته می‌شوند.</p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                                {CURRENCIES.map(currency => (
-                                     <div key={currency}>
-                                        <label htmlFor={`balance_${currency}`} className="block text-lg font-medium text-cyan-300 mb-2">{currency}</label>
-                                        <input
-                                            type="text"
-                                            inputMode="decimal"
-                                            id={`balance_${currency}`}
-                                            name={`balance_${currency}`}
-                                            value={balances[currency] || ''}
-                                            onChange={(e) => handleBalanceChange(currency, e.target.value)}
-                                            placeholder="مثلا: -5000 یا 12000"
-                                            className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right"
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                         </div>
+                         <p className="text-yellow-400 text-base pt-4 border-t border-cyan-400/20">
+                            توجه: همکار با موجودی صفر ثبت خواهد شد. برای ثبت موجودی اولیه، لطفاً از بخش «حساب همکاران» و گزینه «دریافت وجه از همکار» استفاده کنید.
+                        </p>
                     </div>
                     <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end space-x-4 space-x-reverse">
                         <button type="button" onClick={onClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md">لغو</button>

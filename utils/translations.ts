@@ -1,7 +1,4 @@
-
-
-
-import { TransferStatus, ExpenseCategory, ReportType, CashboxRequestStatus, PermissionModule, AmanatStatus } from '../types';
+import { TransferStatus, ExpenseCategory, ReportType, CashboxRequestStatus, PermissionModule, AmanatStatus, ForeignTransactionStatus, CommissionTransferStatus, ExpenseStatus } from '../types';
 
 export const permissionModuleTranslations: Record<PermissionModule, string> = {
     dashboard: 'داشبورد',
@@ -29,16 +26,40 @@ export const permissionActionTranslations: Record<string, string> = {
 
 export const statusTranslations: Record<TransferStatus, string> = {
     [TransferStatus.Unexecuted]: 'اجرا نشده',
+    [TransferStatus.PendingCashbox]: 'در انتظار تایید صندوق',
     [TransferStatus.Executed]: 'اجرا شده',
     [TransferStatus.Cancelled]: 'لغو شده',
+    [TransferStatus.RejectedByCashbox]: 'رد توسط صندوق',
 };
+
+export const foreignTransactionStatusTranslations: Record<ForeignTransactionStatus, string> = {
+    [ForeignTransactionStatus.PendingWithdrawalApproval]: 'در انتظار تایید برد',
+    [ForeignTransactionStatus.PendingDeposit]: 'در جریان تبادله',
+    [ForeignTransactionStatus.PendingDepositApproval]: 'در انتظار تایید رسید',
+    [ForeignTransactionStatus.Completed]: 'تکمیل شده',
+    [ForeignTransactionStatus.Rejected]: 'رد شده',
+};
+
+export const commissionTransferStatusTranslations: Record<CommissionTransferStatus, string> = {
+    [CommissionTransferStatus.PendingDepositApproval]: 'در انتظار تایید واریز',
+    [CommissionTransferStatus.PendingExecution]: 'آماده اجرا',
+    [CommissionTransferStatus.PendingWithdrawalApproval]: 'در انتظار تایید پرداخت',
+    [CommissionTransferStatus.Completed]: 'تکمیل شده',
+    [CommissionTransferStatus.Rejected]: 'رد شده',
+};
+
+export const expenseStatusTranslations: Record<ExpenseStatus, string> = {
+    [ExpenseStatus.PendingApproval]: 'در انتظار تایید',
+    [ExpenseStatus.Approved]: 'تایید شده',
+    [ExpenseStatus.Rejected]: 'رد شده',
+};
+
 
 export const expenseCategoryTranslations: Record<ExpenseCategory, string> = {
     [ExpenseCategory.Salary]: 'حقوق',
     [ExpenseCategory.Rent]: 'کرایه',
     [ExpenseCategory.Utilities]: 'خدمات رفاهی',
     [ExpenseCategory.Hospitality]: 'پذیرایی',
-    [ExpenseCategory.Commission]: 'کمیسیون/کارمزد',
     [ExpenseCategory.Other]: 'متفرقه',
 };
 
@@ -50,6 +71,7 @@ export const reportTypeTranslations: Record<ReportType, string> = {
 
 export const cashboxRequestStatusTranslations: Record<CashboxRequestStatus, string> = {
     [CashboxRequestStatus.Pending]: 'در انتظار مدیر',
+    [CashboxRequestStatus.PendingCashboxApproval]: 'در انتظار صندوقدار',
     [CashboxRequestStatus.Approved]: 'تایید شده',
     [CashboxRequestStatus.Rejected]: 'رد شده',
     [CashboxRequestStatus.AutoApproved]: 'تایید خودکار',

@@ -2,6 +2,7 @@ import React, { useState, FormEvent, useEffect } from 'react';
 import { useApi } from '../hooks/useApi';
 import { DomesticTransfer, TransferStatus, UpdateTransferStatusPayload, User } from '../types';
 import { statusTranslations } from '../utils/translations';
+import { useToast } from '../contexts/ToastContext';
 
 interface UpdateTransferStatusModalProps {
     isOpen: boolean;
@@ -13,14 +14,13 @@ interface UpdateTransferStatusModalProps {
 
 const UpdateTransferStatusModal: React.FC<UpdateTransferStatusModalProps> = ({ isOpen, onClose, onSuccess, currentUser, transfer }) => {
     const api = useApi();
+    const { addToast } = useToast();
     const [newStatus, setNewStatus] = useState<TransferStatus | ''>('');
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
+    
     useEffect(() => {
         // Reset status when a new transfer is selected
         setNewStatus('');
-        setError(null);
     }, [transfer]);
     
     if (!isOpen) return null;
@@ -36,7 +36,6 @@ const UpdateTransferStatusModal: React.FC<UpdateTransferStatusModalProps> = ({ i
 
     const handleUpdate = async (statusToUpdate: TransferStatus) => {
         setIsLoading(true);
-        setError(null);
 
         const payload: UpdateTransferStatusPayload = {
             transferId: transfer.id,
@@ -48,8 +47,9 @@ const UpdateTransferStatusModal: React.FC<UpdateTransferStatusModalProps> = ({ i
         setIsLoading(false);
 
         if ('error' in result) {
-            setError(result.error);
+            addToast(result.error, 'error');
         } else {
+            addToast("وضعیت حواله با موفقیت به‌روزرسانی شد.", 'success');
             onSuccess();
         }
     };
@@ -57,7 +57,7 @@ const UpdateTransferStatusModal: React.FC<UpdateTransferStatusModalProps> = ({ i
     const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
         if (!newStatus) {
-            setError("لطفاً یک وضعیت جدید انتخاب کنید.");
+            addToast("لطفاً یک وضعیت جدید انتخاب کنید.", 'error');
             return;
         }
         handleUpdate(newStatus as TransferStatus);
@@ -65,7 +65,19 @@ const UpdateTransferStatusModal: React.FC<UpdateTransferStatusModalProps> = ({ i
 
     const handleCancelTransfer = () => {
         if (!canBeCancelled) return;
-        if (window.confirm("آیا از لغو این حواله اطمینان دارید؟ این عمل قابل بازگشت نیست.")) {
+
+        const isCashPaidOutgoing = !transfer.customerId && !transfer.partnerReference;
+        const totalAmount = transfer.amount + transfer.commission;
+
+        let confirmMessage = "آیا از لغو این حواله اطمینان دارید؟ این عمل قابل بازگشت نیست.";
+
+        if (isCashPaidOutgoing) {
+            confirmMessage = `آیا از لغو این حواله اطمینان دارید؟\n\nدر صورت تایید، مبلغ ${new Intl.NumberFormat('fa-IR').format(totalAmount)} ${transfer.currency} به صورت خودکار از صندوق کسر خواهد شد تا به مشتری بازگردانده شود.`;
+        } else if (transfer.customerId) {
+             confirmMessage = `آیا از لغو این حواله اطمینان دارید؟\n\nدر صورت تایید، مبلغ ${new Intl.NumberFormat('fa-IR').format(totalAmount)} ${transfer.currency} به صورت خودکار به حساب مشتری بازگردانده خواهد شد.`;
+        }
+        
+        if (window.confirm(confirmMessage)) {
              handleUpdate(TransferStatus.Cancelled);
         }
     };
@@ -81,7 +93,6 @@ const UpdateTransferStatusModal: React.FC<UpdateTransferStatusModalProps> = ({ i
                         <p className="text-lg text-slate-400 font-mono mt-1">{transfer.id}</p>
                     </div>
                     <div className="p-8 space-y-6">
-                        {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
                         
                         <div className="text-xl">
                             <span className="font-medium text-slate-400">وضعیت فعلی: </span>

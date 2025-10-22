@@ -1,11 +1,69 @@
-
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
-import { PartnerAccount, PartnerTransaction, User, Currency } from '../types';
+import { PartnerAccount, PartnerTransaction, User, Currency, CashboxRequest, CashboxRequestStatus } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import SettleBalanceModal from '../components/SettleBalanceModal';
+import PartnerSettlementModal from '../components/SettleBalanceModal';
 import { CURRENCIES } from '../constants';
+import { cashboxRequestStatusTranslations } from '../utils/translations';
+import StatementPrintView from '../components/StatementPrintView';
+
+interface StatementPrintPreviewModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    partnerId: string;
+}
+
+const StatementPrintPreviewModal: React.FC<StatementPrintPreviewModalProps> = ({ isOpen, onClose, partnerId }) => {
+    if (!isOpen) return null;
+
+    const handlePrint = () => {
+        const container = document.getElementById('printable-area-container');
+        if (container) {
+            ReactDOM.render(
+                <StatementPrintView entityId={partnerId} type="partner" />,
+                container,
+                () => {
+                    window.print();
+                    ReactDOM.unmountComponentAtNode(container);
+                }
+            );
+        }
+        onClose();
+    };
+
+    return ReactDOM.createPortal(
+        <div className="fixed inset-0 bg-[#0D0C22]/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity animate-fadeIn" style={{ direction: 'rtl' }}>
+            <div className="bg-[#12122E]/90 w-full max-w-5xl h-[90vh] flex flex-col border-2 border-cyan-400/30 shadow-[0_0_40px_rgba(0,255,255,0.2)]"
+                 style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 30px), calc(100% - 30px) 100%, 0 100%)' }}>
+                <div className="px-8 py-5 border-b-2 border-cyan-400/20">
+                    <h2 className="text-4xl font-bold text-cyan-300 tracking-wider">پیش‌نمایش چاپ صورتحساب</h2>
+                </div>
+                <div className="p-8 flex-grow overflow-y-auto bg-gray-600/20">
+                    <div className="bg-white rounded shadow-lg mx-auto">
+                         <StatementPrintView entityId={partnerId} type="partner" />
+                    </div>
+                </div>
+                <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end space-x-4 space-x-reverse">
+                    <button type="button" onClick={onClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md">بستن</button>
+                    <button
+                        onClick={handlePrint}
+                        className="px-8 py-3 text-xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105"
+                        style={{
+                            clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)',
+                            boxShadow: '0 0 25px rgba(0, 255, 255, 0.5)'
+                        }}
+                    >
+                        چاپ نهایی
+                    </button>
+                </div>
+            </div>
+        </div>,
+        document.getElementById('modal-root')!
+    );
+};
+
 
 const PartnerAccountDetailPage: React.FC = () => {
     const { partnerId } = useParams<{ partnerId: string }>();
@@ -14,28 +72,82 @@ const PartnerAccountDetailPage: React.FC = () => {
     const { user, hasPermission } = useAuth();
 
     const [partner, setPartner] = useState<PartnerAccount | null>(null);
-    const [transactions, setTransactions] = useState<PartnerTransaction[]>([]);
-    const [isSettleModalOpen, setSettleModalOpen] = useState(false);
+    const [processedTransactions, setProcessedTransactions] = useState<(PartnerTransaction & { balanceAfter: number; status?: CashboxRequestStatus | 'Completed' })[]>([]);
+    const [settlementModal, setSettlementModal] = useState<{isOpen: boolean, type: 'receive' | 'pay' | null}>({isOpen: false, type: null});
+    const [isPrintModalOpen, setPrintModalOpen] = useState(false);
 
     const fetchData = useCallback(async () => {
         if (!partnerId) return;
-        const partnerData = await api.getPartnerAccountById(partnerId);
+        
+        const [partnerData, txData, allCashboxRequests] = await Promise.all([
+            api.getPartnerAccountById(partnerId),
+            api.getTransactionsForPartner(partnerId),
+            api.getCashboxRequests(),
+        ]);
+
         if (partnerData) {
             setPartner(partnerData);
-            const txData = await api.getTransactionsForPartner(partnerId);
-            setTransactions(txData.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+            
+            // 1. Filter cashbox requests related to this partner's settlements
+            const settlementRequests = allCashboxRequests.filter(
+                req => req.linkedEntity?.type === 'PartnerSettlement' && req.linkedEntity.id === partnerId
+            );
+
+            // 2. Map virtual transactions from cashbox requests
+            const virtualTransactions = settlementRequests.map(req => {
+                const details = req.linkedEntity!.details as any;
+                return {
+                    id: req.id,
+                    timestamp: req.createdAt,
+                    description: req.reason,
+                    type: details.type, // 'credit' or 'debit' for the PARTNER
+                    amount: req.amount,
+                    currency: req.currency,
+                    status: req.status,
+                    partnerId: partnerId,
+                } as any;
+            });
+            
+            // 3. Map real transactions
+            const realTransactions = txData.map(tx => ({
+                ...tx,
+                status: 'Completed' as const,
+            }));
+
+            // 4. Combine and sort
+            const allItems = [...virtualTransactions, ...realTransactions]
+                .sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+            // 5. Process for display with correct running balance
+            const runningBalances: { [key in Currency]?: number } = {};
+            const processed = allItems.map(item => {
+                const balance = runningBalances[item.currency] || 0;
+                let newBalance = balance;
+                
+                const isApproved = item.status === 'Completed' || item.status === CashboxRequestStatus.Approved || item.status === CashboxRequestStatus.AutoApproved;
+
+                if (isApproved) {
+                    newBalance = balance + (item.type === 'credit' ? item.amount : -item.amount);
+                    runningBalances[item.currency] = newBalance;
+                }
+                return { ...item, balanceAfter: newBalance };
+            });
+
+            setProcessedTransactions(processed.reverse());
+
         } else {
             // If partner not found, redirect to the list page
             navigate('/partner-accounts');
         }
     }, [api, partnerId, navigate]);
 
+
     useEffect(() => {
         fetchData();
     }, [fetchData]);
     
     const handleSuccess = () => {
-        setSettleModalOpen(false);
+        setSettlementModal({ isOpen: false, type: null });
         fetchData();
     }
 
@@ -47,6 +159,16 @@ const PartnerAccountDetailPage: React.FC = () => {
         if (balance < 0) return 'text-red-400'; // We owe them (Bedehkar)
         if (balance > 0) return 'text-green-400'; // They owe us (Talabkar)
         return 'text-slate-300';
+    };
+
+    const getStatusBadgeStyle = (status: CashboxRequestStatus | 'Completed') => {
+        if (status === 'Completed' || status === CashboxRequestStatus.Approved || status === CashboxRequestStatus.AutoApproved) {
+            return 'bg-green-500/20 text-green-300';
+        }
+        if (status === CashboxRequestStatus.Rejected) {
+            return 'bg-red-500/20 text-red-300';
+        }
+        return 'bg-yellow-500/20 text-yellow-300'; // Pending states
     };
 
     return (
@@ -62,7 +184,7 @@ const PartnerAccountDetailPage: React.FC = () => {
                     <h3 className="text-2xl text-slate-400">موجودی حسابات</h3>
                     {CURRENCIES.map(currency => {
                         const balance = partner.balances[currency] || 0;
-                        if (balance === 0 && !transactions.some(tx => tx.currency === currency)) return null; 
+                        if (balance === 0 && !processedTransactions.some(tx => tx.currency === currency)) return null; 
                         return (
                             <div key={currency} className={`text-3xl font-mono font-bold ${getBalanceStyle(balance)}`}>
                                 {new Intl.NumberFormat('en-US').format(balance)} {currency}
@@ -73,16 +195,32 @@ const PartnerAccountDetailPage: React.FC = () => {
             </div>
 
             <div className="bg-[#12122E]/80 border-2 border-cyan-400/20 overflow-hidden shadow-[0_0_40px_rgba(0,255,255,0.2)]" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)' }}>
-                 <div className="p-6 border-b-2 border-cyan-400/20 flex justify-between items-center">
+                 <div className="p-6 border-b-2 border-cyan-400/20 flex justify-between items-center flex-wrap gap-4">
                     <h2 className="text-3xl font-semibold text-slate-100 tracking-wider">دفتر حساب همکار</h2>
-                    {hasPermission('partnerAccounts', 'create') && (
-                        <button 
-                            onClick={() => setSettleModalOpen(true)}
+                    <div className="flex gap-x-4 flex-wrap">
+                        {hasPermission('partnerAccounts', 'create') && (
+                            <>
+                                <button 
+                                    onClick={() => setSettlementModal({ isOpen: true, type: 'receive' })}
+                                    className="px-5 py-2 bg-green-600/50 text-green-200 hover:bg-green-500/50 text-lg transition-colors border border-green-500/50 rounded"
+                                >
+                                    دریافت وجه از همکار
+                                </button>
+                                <button 
+                                    onClick={() => setSettlementModal({ isOpen: true, type: 'pay' })}
+                                    className="px-5 py-2 bg-red-600/50 text-red-200 hover:bg-red-500/50 text-lg transition-colors border border-red-500/50 rounded"
+                                >
+                                    پرداخت وجه به همکار
+                                </button>
+                            </>
+                        )}
+                         <button 
+                            onClick={() => setPrintModalOpen(true)}
                             className="px-5 py-2 bg-slate-600/50 text-slate-100 hover:bg-cyan-400/20 hover:text-cyan-300 text-lg transition-colors border border-slate-500/50 hover:border-cyan-400/60 rounded"
-                        >
-                            ثبت تسویه حساب
+                         >
+                            چاپ صورتحساب
                         </button>
-                    )}
+                    </div>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-lg text-right text-slate-300">
@@ -92,11 +230,21 @@ const PartnerAccountDetailPage: React.FC = () => {
                                 <th scope="col" className="px-6 py-4 font-medium">توضیحات</th>
                                 <th scope="col" className="px-6 py-4 font-medium">طلبکار (Credit)</th>
                                 <th scope="col" className="px-6 py-4 font-medium">بدهکار (Debit)</th>
+                                <th scope="col" className="px-6 py-4 font-medium">وضعیت</th>
+                                <th scope="col" className="px-6 py-4 font-medium text-left">مانده</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {transactions.map(tx => (
-                                <tr key={tx.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5 transition-colors">
+                            {processedTransactions.map(tx => {
+                                const isCompleted = tx.status === 'Completed' || tx.status === CashboxRequestStatus.Approved || tx.status === CashboxRequestStatus.AutoApproved;
+                                const getRowStyle = () => {
+                                    if (isCompleted) return 'hover:bg-cyan-400/5';
+                                    if (tx.status === CashboxRequestStatus.Rejected) return 'bg-red-900/30 opacity-60';
+                                    return 'bg-yellow-900/20 opacity-80';
+                                };
+
+                                return (
+                                <tr key={tx.id} className={`border-b border-cyan-400/10 transition-colors ${getRowStyle()}`}>
                                     <td className="px-6 py-4">{new Date(tx.timestamp).toLocaleString('fa-IR-u-nu-latn')}</td>
                                     <td className="px-6 py-4 text-slate-100">{tx.description}</td>
                                     <td className="px-6 py-4 font-mono text-left text-green-400">
@@ -105,20 +253,36 @@ const PartnerAccountDetailPage: React.FC = () => {
                                      <td className="px-6 py-4 font-mono text-left text-red-400">
                                         {tx.type === 'debit' ? `${new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.amount)} ${tx.currency}` : '-'}
                                     </td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-3 py-1 text-base font-semibold rounded-full whitespace-nowrap ${getStatusBadgeStyle(tx.status!)}`}>
+                                            {tx.status === 'Completed' ? 'تکمیل شده' : cashboxRequestStatusTranslations[tx.status!]}
+                                        </span>
+                                    </td>
+                                    <td className={`px-6 py-4 font-mono text-left whitespace-nowrap ${isCompleted ? getBalanceStyle(tx.balanceAfter) : 'text-slate-500'}`}>
+                                        {new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.balanceAfter)} {tx.currency}
+                                    </td>
                                 </tr>
-                            ))}
+                            )})}
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            {isSettleModalOpen && user && (
-                <SettleBalanceModal 
-                    isOpen={isSettleModalOpen}
-                    onClose={() => setSettleModalOpen(false)}
+            {settlementModal.isOpen && user && settlementModal.type && (
+                <PartnerSettlementModal 
+                    isOpen={settlementModal.isOpen}
+                    onClose={() => setSettlementModal({isOpen: false, type: null})}
                     onSuccess={handleSuccess}
                     currentUser={user}
                     partner={partner}
+                    type={settlementModal.type}
+                />
+            )}
+            {isPrintModalOpen && partnerId && (
+                <StatementPrintPreviewModal
+                    isOpen={isPrintModalOpen}
+                    onClose={() => setPrintModalOpen(false)}
+                    partnerId={partnerId}
                 />
             )}
         </div>

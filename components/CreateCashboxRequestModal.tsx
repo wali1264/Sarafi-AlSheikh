@@ -1,8 +1,10 @@
-import React, { useState, FormEvent } from 'react';
+import React, { useState, FormEvent, useCallback, useEffect } from 'react';
 import { useApi } from '../hooks/useApi';
-import { CreateCashboxRequestPayload, Currency, User } from '../types';
+import { CreateCashboxRequestPayload, Currency, User, Customer, BankAccount } from '../types';
 import { CURRENCIES } from '../constants';
 import { persianToEnglishNumber } from '../utils/translations';
+import { debounce } from '../utils/debounce';
+import { useToast } from '../contexts/ToastContext';
 
 interface CreateCashboxRequestModalProps {
     isOpen: boolean;
@@ -13,21 +15,60 @@ interface CreateCashboxRequestModalProps {
 
 const CreateCashboxRequestModal: React.FC<CreateCashboxRequestModalProps> = ({ isOpen, onClose, onSuccess, currentUser }) => {
     const api = useApi();
+    const { addToast } = useToast();
     const [formData, setFormData] = useState({
         requestType: 'withdrawal' as 'withdrawal' | 'deposit',
         amount: '',
         currency: Currency.USD,
         reason: '',
         customerCode: '',
+        bankAccountId: '',
+        sourceAccountNumber: '',
+        destinationAccountNumber: '',
     });
+    const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [customerInfo, setCustomerInfo] = useState<Customer | null>(null);
+    const [isCheckingCustomer, setIsCheckingCustomer] = useState(false);
+    
+    const isBankTransaction = formData.currency === Currency.IRT_BANK;
+    
+    useEffect(() => {
+        if (isOpen) {
+            const fetchBankAccounts = async () => {
+                const accounts = await api.getBankAccounts();
+                const activeIrtAccounts = accounts.filter(a => a.status === 'Active' && a.currency === Currency.IRT_BANK);
+                setBankAccounts(activeIrtAccounts);
+                if (activeIrtAccounts.length > 0) {
+                    setFormData(prev => ({ ...prev, bankAccountId: activeIrtAccounts[0].id }));
+                }
+            };
+            fetchBankAccounts();
+        }
+    }, [isOpen, api]);
+
+
+    const checkCustomerCode = useCallback(debounce(async (code: string) => {
+        if (!code) {
+            setCustomerInfo(null);
+            return;
+        }
+        setIsCheckingCustomer(true);
+        const result = await api.getCustomerByCode(code);
+        setCustomerInfo(result || null);
+        setIsCheckingCustomer(false);
+    }, 500), [api]);
+
+    useEffect(() => {
+        checkCustomerCode(formData.customerCode);
+    }, [formData.customerCode, checkCustomerCode]);
+
 
     if (!isOpen) return null;
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
-        if (name === 'amount' || name === 'customerCode') {
+        if (['amount', 'customerCode', 'sourceAccountNumber', 'destinationAccountNumber'].includes(name)) {
             setFormData(prev => ({ ...prev, [name]: persianToEnglishNumber(value) }));
         } else {
             setFormData(prev => ({ ...prev, [name]: value }));
@@ -37,7 +78,17 @@ const CreateCashboxRequestModal: React.FC<CreateCashboxRequestModalProps> = ({ i
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        setError(null);
+        
+        if(formData.customerCode && !customerInfo) {
+            addToast("کد مشتری وارد شده معتبر نیست.", 'error');
+            setIsLoading(false);
+            return;
+        }
+        if (isBankTransaction && !formData.bankAccountId) {
+            addToast("لطفاً یک حساب بانکی برای انجام تراکنش انتخاب کنید.", 'error');
+            setIsLoading(false);
+            return;
+        }
 
         const payload: CreateCashboxRequestPayload = {
             requestType: formData.requestType,
@@ -46,14 +97,18 @@ const CreateCashboxRequestModal: React.FC<CreateCashboxRequestModalProps> = ({ i
             reason: formData.reason,
             customerCode: formData.customerCode || undefined,
             user: currentUser,
+            bankAccountId: isBankTransaction ? formData.bankAccountId : undefined,
+            sourceAccountNumber: isBankTransaction && formData.requestType === 'deposit' ? formData.sourceAccountNumber : undefined,
+            destinationAccountNumber: isBankTransaction && formData.requestType === 'withdrawal' ? formData.destinationAccountNumber : undefined,
         };
 
         const result = await api.createCashboxRequest(payload);
         setIsLoading(false);
 
         if ('error' in result) {
-            setError(result.error);
+            addToast(result.error, 'error');
         } else {
+            addToast("درخواست با موفقیت ثبت شد.", 'success');
             onSuccess();
         }
     };
@@ -62,15 +117,15 @@ const CreateCashboxRequestModal: React.FC<CreateCashboxRequestModalProps> = ({ i
         <div className="fixed inset-0 bg-[#0D0C22]/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity animate-fadeIn" style={{ direction: 'rtl' }}>
             <div className="bg-[#12122E]/90 w-full max-w-2xl border-2 border-cyan-400/30 shadow-[0_0_40px_rgba(0,255,255,0.2)]" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 30px), calc(100% - 30px) 100%, 0 100%)' }}>
                 <form onSubmit={handleSubmit}>
-                    <div className="px-8 py-5 border-b-2 border-cyan-400/20"><h2 className="text-4xl font-bold text-cyan-300 tracking-wider">ثبت ورودی جدید در روزنامچه</h2></div>
-                    <div className="p-8 space-y-6">
-                        {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
+                    <div className="px-8 py-5 border-b-2 border-cyan-400/20"><h2 className="text-4xl font-bold text-cyan-300 tracking-wider">ثبت رسید/برد جدید</h2></div>
+                    <div className="p-8 space-y-6 max-h-[80vh] overflow-y-auto">
+                        
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div>
                                 <label htmlFor="requestType" className="block text-lg font-medium text-cyan-300 mb-2">نوع تراکنش</label>
                                 <select name="requestType" value={formData.requestType} onChange={handleChange} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right">
-                                    <option value="withdrawal">برد (برداشت نقدی)</option>
-                                    <option value="deposit">رسید (واریز نقدی)</option>
+                                    <option value="withdrawal">{isBankTransaction ? 'برد (پرداخت بانکی)' : 'برد (برداشت نقدی)'}</option>
+                                    <option value="deposit">{isBankTransaction ? 'رسید (دریافت بانکی)' : 'رسید (واریز نقدی)'}</option>
                                 </select>
                             </div>
                             <div className="md:col-span-2">
@@ -84,9 +139,36 @@ const CreateCashboxRequestModal: React.FC<CreateCashboxRequestModalProps> = ({ i
                                 {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
+                        
+                        {isBankTransaction && (
+                            <div className="p-4 border-2 border-cyan-400/30 bg-cyan-400/10 rounded-md space-y-4 animate-fadeIn">
+                                <h4 className="text-xl font-bold text-cyan-300">جزئیات تراکنش بانکی</h4>
+                                {formData.requestType === 'deposit' ? (
+                                    <>
+                                        <input name="sourceAccountNumber" value={formData.sourceAccountNumber} onChange={handleChange} placeholder="شماره حساب/کارت مبدأ (فرستنده)" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md" />
+                                        <select name="bankAccountId" value={formData.bankAccountId} onChange={handleChange} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md">
+                                            <option value="" disabled>-- واریز به حساب بانکی ما --</option>
+                                            {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.bankName} - {b.accountHolder}</option>)}
+                                        </select>
+                                    </>
+                                ) : ( // withdrawal
+                                    <>
+                                        <select name="bankAccountId" value={formData.bankAccountId} onChange={handleChange} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md">
+                                            <option value="" disabled>-- برداشت از حساب بانکی ما --</option>
+                                            {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.bankName} - {b.accountHolder} (موجودی: {new Intl.NumberFormat().format(b.balance)})</option>)}
+                                        </select>
+                                        <input name="destinationAccountNumber" value={formData.destinationAccountNumber} onChange={handleChange} placeholder="شماره حساب/کارت مقصد (گیرنده)" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md" />
+                                    </>
+                                )}
+                            </div>
+                        )}
+
                         <div>
                             <label htmlFor="customerCode" className="block text-lg font-medium text-cyan-300 mb-2">کد مشتری (اختیاری)</label>
                             <input type="text" name="customerCode" value={formData.customerCode} onChange={handleChange} placeholder="مثلا: 001 یا 201" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right font-mono" />
+                            {isCheckingCustomer && <p className="text-sm text-slate-400 mt-1">در حال بررسی...</p>}
+                            {customerInfo && <p className="text-sm text-green-400 mt-1">✓ مشتری یافت شد: {customerInfo.name}</p>}
+                            {customerInfo === null && formData.customerCode && !isCheckingCustomer && <p className="text-sm text-red-400 mt-1">مشتری با این کد یافت نشد.</p>}
                              <p className="text-sm text-yellow-400 mt-2">توجه: وارد کردن کد مشتری باعث ثبت این تراکنش در دفتر حساب او خواهد شد.</p>
                         </div>
                         <div>

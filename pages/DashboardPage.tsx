@@ -7,7 +7,7 @@ import DashboardChartContainer from '../components/DashboardChartContainer';
 
 interface DashboardStats {
     totalTransfersToday: number;
-    totalVolumeToday: { amount: number, currency: Currency };
+    totalVolumeTodayString: string;
     pendingRequests: number;
     totalPartners: number;
 }
@@ -27,14 +27,23 @@ const DashboardPage: React.FC = () => {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
-            const transfersToday = transfers.filter(t => t.createdAt >= today);
+            const transfersToday = transfers.filter(t => new Date(t.createdAt) >= today);
             
+            const volumeByCurrency = transfersToday.reduce((acc, t) => {
+                if (!acc[t.currency]) {
+                    acc[t.currency] = 0;
+                }
+                acc[t.currency] += t.amount;
+                return acc;
+            }, {} as { [key in Currency]?: number });
+
+            const volumeString = Object.entries(volumeByCurrency)
+                .map(([currency, amount]) => `${new Intl.NumberFormat('en-US').format(amount as number)} ${currency}`)
+                .join(' | ');
+
             setStats({
                 totalTransfersToday: transfersToday.length,
-                totalVolumeToday: {
-                    amount: transfersToday.reduce((sum, t) => sum + (t.currency === Currency.USD ? t.amount : 0), 0),
-                    currency: Currency.USD
-                },
+                totalVolumeTodayString: volumeString || '0',
                 pendingRequests: cashboxRequests.filter(r => r.status === 'Pending').length,
                 totalPartners: partners.length,
             });
@@ -58,8 +67,8 @@ const DashboardPage: React.FC = () => {
                         accent="cyan" 
                     />
                     <StatCard 
-                        title="حجم معاملات امروز (دالر)" 
-                        value={stats ? new Intl.NumberFormat('en-US').format(stats.totalVolumeToday.amount) : '...'}
+                        title="حجم معاملات امروز" 
+                        value={stats?.totalVolumeTodayString ?? '...'}
                         accent="magenta" 
                     />
                     <StatCard 

@@ -1,9 +1,11 @@
-import React, { useState, FormEvent, useEffect } from 'react';
+import React, { useState, FormEvent, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
-import { LogCommissionTransferPayload, Currency, User, BankAccount, PartnerAccount } from '../types';
+import { LogCommissionTransferPayload, Currency, User, BankAccount, PartnerAccount, Customer } from '../types';
 import { AFGHANISTAN_PROVINCES } from '../constants';
 import { persianToEnglishNumber } from '../utils/translations';
+import { debounce } from '../utils/debounce';
+import { useToast } from '../contexts/ToastContext';
 
 interface LogCommissionTransferModalProps {
     isOpen: boolean;
@@ -14,6 +16,7 @@ interface LogCommissionTransferModalProps {
 
 const LogCommissionTransferModal: React.FC<LogCommissionTransferModalProps> = ({ isOpen, onClose, onSuccess, currentUser }) => {
     const api = useApi();
+    const { addToast } = useToast();
     const [initiatorType, setInitiatorType] = useState<'Customer' | 'Partner'>('Customer');
     const [customerCode, setCustomerCode] = useState('');
     const [province, setProvince] = useState('');
@@ -26,7 +29,26 @@ const LogCommissionTransferModal: React.FC<LogCommissionTransferModalProps> = ({
     const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
     const [partners, setPartners] = useState<PartnerAccount[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    
+    const [customerInfo, setCustomerInfo] = useState<Customer | null>(null);
+    const [isCheckingCustomer, setIsCheckingCustomer] = useState(false);
+
+    const checkCustomerCode = useCallback(debounce(async (code: string) => {
+        if (!code) {
+            setCustomerInfo(null);
+            return;
+        }
+        setIsCheckingCustomer(true);
+        const result = await api.getCustomerByCode(code);
+        setCustomerInfo(result || null);
+        setIsCheckingCustomer(false);
+    }, 500), [api]);
+
+    const handleCustomerCodeChange = (code: string) => {
+        const englishCode = persianToEnglishNumber(code);
+        setCustomerCode(englishCode);
+        checkCustomerCode(englishCode);
+    };
 
     const filteredPartners = partners.filter(p => p.province === province);
     const filteredBankAccounts = bankAccounts.filter(b => b.currency === Currency.IRT_BANK);
@@ -68,7 +90,8 @@ const LogCommissionTransferModal: React.FC<LogCommissionTransferModalProps> = ({
         setSourceAccountNumber('');
         setReceivedIntoBankAccountId('');
         setCommissionPercentage('');
-        setError(null);
+        setCustomerInfo(null);
+        setIsCheckingCustomer(false);
     };
 
     const handleClose = () => {
@@ -80,7 +103,12 @@ const LogCommissionTransferModal: React.FC<LogCommissionTransferModalProps> = ({
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        setError(null);
+        
+        if (initiatorType === 'Customer' && !customerInfo) {
+            addToast("کد مشتری وارد شده معتبر نیست.", 'error');
+            setIsLoading(false);
+            return;
+        }
 
         const payload: LogCommissionTransferPayload = {
             initiatorType,
@@ -97,8 +125,9 @@ const LogCommissionTransferModal: React.FC<LogCommissionTransferModalProps> = ({
         setIsLoading(false);
 
         if ('error' in result) {
-            setError(result.error);
+            addToast(result.error, 'error');
         } else {
+            addToast("درخواست ورود وجه به صندوق ارسال شد.", 'success');
             onSuccess();
             handleClose();
         }
@@ -110,7 +139,6 @@ const LogCommissionTransferModal: React.FC<LogCommissionTransferModalProps> = ({
                 <form onSubmit={handleSubmit}>
                     <div className="px-8 py-5 border-b-2 border-cyan-400/20"><h2 className="text-4xl font-bold text-cyan-300 tracking-wider">ثبت ورود وجه کمیشن‌کاری</h2></div>
                     <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
-                        {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
                         
                         <div className="flex gap-x-6 bg-slate-900/50 border-2 border-slate-600/50 p-2 rounded-md">
                            <label className={`flex-1 text-center text-xl p-2 rounded-md cursor-pointer transition-colors ${initiatorType === 'Customer' ? 'bg-cyan-400 text-slate-900 font-bold' : 'text-slate-300 hover:bg-slate-700/50'}`}>
@@ -124,7 +152,12 @@ const LogCommissionTransferModal: React.FC<LogCommissionTransferModalProps> = ({
                         </div>
                         
                         {initiatorType === 'Customer' ? (
-                             <input value={customerCode} onChange={e => setCustomerCode(persianToEnglishNumber(e.target.value))} placeholder="کد مشتری" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100" />
+                            <div>
+                                <input value={customerCode} onChange={e => handleCustomerCodeChange(e.target.value)} placeholder="کد مشتری" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100" />
+                                {isCheckingCustomer && <p className="text-sm text-slate-400 mt-1">در حال بررسی...</p>}
+                                {customerInfo && <p className="text-sm text-green-400 mt-1">✓ مشتری یافت شد: {customerInfo.name}</p>}
+                                {customerInfo === null && customerCode && !isCheckingCustomer && <p className="text-sm text-red-400 mt-1">مشتری با این کد یافت نشد.</p>}
+                            </div>
                         ) : (
                             <div className="grid grid-cols-2 gap-4">
                                 <select value={province} onChange={e => setProvince(e.target.value)} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100">

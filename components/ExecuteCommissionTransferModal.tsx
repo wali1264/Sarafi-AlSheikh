@@ -2,6 +2,7 @@ import React, { useState, FormEvent, useEffect, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
 import { ExecuteCommissionTransferPayload, User, BankAccount, CommissionTransfer } from '../types';
+import { useToast } from '../contexts/ToastContext';
 
 interface ExecuteCommissionTransferModalProps {
     isOpen: boolean;
@@ -13,12 +14,12 @@ interface ExecuteCommissionTransferModalProps {
 
 const ExecuteCommissionTransferModal: React.FC<ExecuteCommissionTransferModalProps> = ({ isOpen, onClose, onSuccess, currentUser, transfer }) => {
     const api = useApi();
+    const { addToast } = useToast();
     const [paidFromBankAccountId, setPaidFromBankAccountId] = useState('');
     const [destinationAccountNumber, setDestinationAccountNumber] = useState('');
     
     const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (isOpen) {
@@ -40,14 +41,12 @@ const ExecuteCommissionTransferModal: React.FC<ExecuteCommissionTransferModalPro
     const handleClose = () => {
         setPaidFromBankAccountId(bankAccounts[0]?.id || '');
         setDestinationAccountNumber('');
-        setError(null);
         onClose();
     };
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        setError(null);
 
         const payload: ExecuteCommissionTransferPayload = {
             transferId: transfer.id,
@@ -60,8 +59,9 @@ const ExecuteCommissionTransferModal: React.FC<ExecuteCommissionTransferModalPro
         setIsLoading(false);
 
         if ('error' in result) {
-            setError(result.error);
+            addToast(result.error, 'error');
         } else {
+            addToast("دستور پرداخت به صندوق ارسال شد.", 'success');
             onSuccess();
             handleClose();
         }
@@ -76,7 +76,6 @@ const ExecuteCommissionTransferModal: React.FC<ExecuteCommissionTransferModalPro
                         <p className="text-lg text-slate-400 mt-1">شناسه: {transfer.id}</p>
                     </div>
                     <div className="p-8 space-y-6">
-                        {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-center">
                             <div className="bg-slate-800/50 p-3 rounded">

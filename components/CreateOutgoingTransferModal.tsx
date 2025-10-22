@@ -4,6 +4,7 @@ import { CreateDomesticTransferPayload, Currency, User, PartnerAccount, Customer
 import { CURRENCIES, AFGHANISTAN_PROVINCES } from '../constants';
 import { persianToEnglishNumber } from '../utils/translations';
 import { debounce } from '../utils/debounce';
+import { useToast } from '../contexts/ToastContext';
 
 interface CreateOutgoingTransferModalProps {
     isOpen: boolean;
@@ -12,8 +13,8 @@ interface CreateOutgoingTransferModalProps {
     currentUser: User;
 }
 
-const InputField: React.FC<{ label: string; name: string; value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; placeholder: string; type?: string; inputMode?: "decimal" | "text"; required?: boolean }> = 
-({ label, name, value, onChange, placeholder, type = 'text', inputMode = 'text', required = true }) => (
+const InputField: React.FC<{ label: string; name: string; value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; placeholder: string; type?: string; inputMode?: "decimal" | "text"; required?: boolean; disabled?: boolean; }> = 
+({ label, name, value, onChange, placeholder, type = 'text', inputMode = 'text', required = true, disabled = false }) => (
     <div className="relative">
         <label htmlFor={name} className="block text-lg font-medium text-cyan-300 mb-2 text-right tracking-wider">{label}</label>
         <input
@@ -25,13 +26,15 @@ const InputField: React.FC<{ label: string; name: string; value: string; onChang
             placeholder={placeholder}
             required={required}
             inputMode={inputMode}
-            className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right transition-colors duration-300"
+            disabled={disabled}
+            className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right transition-colors duration-300 disabled:bg-slate-800 disabled:cursor-not-allowed"
         />
     </div>
 );
 
 const CreateOutgoingTransferModal: React.FC<CreateOutgoingTransferModalProps> = ({ isOpen, onClose, onSuccess, currentUser }) => {
     const api = useApi();
+    const { addToast } = useToast();
     const [formData, setFormData] = useState({
         senderName: '',
         senderTazkereh: '',
@@ -48,7 +51,6 @@ const CreateOutgoingTransferModal: React.FC<CreateOutgoingTransferModalProps> = 
     const [allPartners, setAllPartners] = useState<PartnerAccount[]>([]);
     const [filteredPartners, setFilteredPartners] = useState<PartnerAccount[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const [customerInfo, setCustomerInfo] = useState<Customer | null>(null);
     const [isCheckingCustomer, setIsCheckingCustomer] = useState(false);
     const [balanceWarning, setBalanceWarning] = useState<string | null>(null);
@@ -71,6 +73,17 @@ const CreateOutgoingTransferModal: React.FC<CreateOutgoingTransferModalProps> = 
             setCustomerInfo(null);
         }
     }, [formData.customerCode, formData.isCashPayment, checkCustomerCode]);
+
+    useEffect(() => {
+        if (!formData.isCashPayment && customerInfo) {
+            setFormData(prev => ({
+                ...prev,
+                senderName: customerInfo.name,
+                senderTazkereh: '-', // Placeholder as it's not relevant for customer accounts
+            }));
+        }
+    }, [customerInfo, formData.isCashPayment]);
+
 
     useEffect(() => {
         if (formData.isCashPayment || !customerInfo) {
@@ -114,7 +127,6 @@ const CreateOutgoingTransferModal: React.FC<CreateOutgoingTransferModalProps> = 
                 partnerSarraf: '', isCashPayment: true, customerCode: '',
             });
             setFilteredPartners([]);
-            setError(null);
             setBalanceWarning(null);
             setCustomerInfo(null);
         }
@@ -157,7 +169,6 @@ const CreateOutgoingTransferModal: React.FC<CreateOutgoingTransferModalProps> = 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        setError(null);
 
         const payload: CreateDomesticTransferPayload = {
             ...formData,
@@ -173,11 +184,17 @@ const CreateOutgoingTransferModal: React.FC<CreateOutgoingTransferModalProps> = 
 
         setIsLoading(false);
         if ('error' in result) {
-            setError(result.error);
+            addToast(result.error, 'error');
         } else {
+            const successMessage = formData.isCashPayment
+                ? "درخواست حواله به صندوق ارسال شد."
+                : "حواله خروجی با موفقیت ثبت شد.";
+            addToast(successMessage, 'success');
             onSuccess();
         }
     };
+
+    const isSenderInfoDisabled = !formData.isCashPayment && !!customerInfo;
 
     return (
         <div className="fixed inset-0 bg-[#0D0C22]/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity animate-fadeIn" style={{ direction: 'rtl' }}>
@@ -188,7 +205,6 @@ const CreateOutgoingTransferModal: React.FC<CreateOutgoingTransferModalProps> = 
                         <h2 className="text-4xl font-bold text-cyan-300 tracking-wider">ثبت حواله خروجی (برای مشتری)</h2>
                     </div>
                     <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
-                        {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
                         
                         <div>
                             <label className="block text-lg font-medium text-cyan-300 mb-3 text-right tracking-wider">نوع پرداخت</label>
@@ -215,8 +231,8 @@ const CreateOutgoingTransferModal: React.FC<CreateOutgoingTransferModalProps> = 
                         )}
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                           <InputField name="senderName" label="نام فرستنده" value={formData.senderName} onChange={handleChange} placeholder="مثلا: احمد احمدی" />
-                           <InputField name="senderTazkereh" label="شماره تذکره فرستنده" value={formData.senderTazkereh} onChange={handleChange} placeholder="123456789" />
+                           <InputField name="senderName" label="نام فرستنده" value={formData.senderName} onChange={handleChange} placeholder="مثلا: احمد احمدی" disabled={isSenderInfoDisabled} />
+                           <InputField name="senderTazkereh" label="شماره تذکره فرستنده" value={formData.senderTazkereh} onChange={handleChange} placeholder="123456789" disabled={isSenderInfoDisabled}/>
                         </div>
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                            <InputField name="receiverName" label="نام گیرنده" value={formData.receiverName} onChange={handleChange} placeholder="مثلا: محمود محمودی" />

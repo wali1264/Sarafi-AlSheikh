@@ -3,6 +3,7 @@ import { useApi } from '../hooks/useApi';
 import { User, Customer, AccountTransfer, ReassignTransferPayload } from '../types';
 import { persianToEnglishNumber } from '../utils/translations';
 import { debounce } from '../utils/debounce';
+import { useToast } from '../contexts/ToastContext';
 
 interface AssignTransferModalProps {
     isOpen: boolean;
@@ -14,11 +15,11 @@ interface AssignTransferModalProps {
 
 const AssignTransferModal: React.FC<AssignTransferModalProps> = ({ isOpen, onClose, onSuccess, currentUser, transfer }) => {
     const api = useApi();
+    const { addToast } = useToast();
     const [finalCustomerCode, setFinalCustomerCode] = useState('');
     const [finalCustomer, setFinalCustomer] = useState<Customer | null | undefined>(undefined);
     const [isCheckingCode, setIsCheckingCode] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     const checkCustomerCode = useCallback(debounce(async (code: string) => {
         if (!code) {
@@ -41,7 +42,6 @@ const AssignTransferModal: React.FC<AssignTransferModalProps> = ({ isOpen, onClo
     const resetForm = () => {
         setFinalCustomerCode('');
         setFinalCustomer(undefined);
-        setError(null);
     }
 
     const handleClose = () => {
@@ -51,10 +51,9 @@ const AssignTransferModal: React.FC<AssignTransferModalProps> = ({ isOpen, onClo
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        setError(null);
 
         if (!finalCustomer) {
-            setError("لطفاً یک کد مشتری معتبر وارد کنید.");
+            addToast("لطفاً یک کد مشتری معتبر وارد کنید.", 'error');
             return;
         }
 
@@ -70,8 +69,9 @@ const AssignTransferModal: React.FC<AssignTransferModalProps> = ({ isOpen, onClo
         setIsLoading(false);
 
         if ('error' in result) {
-            setError(result.error);
+            addToast(result.error, 'error');
         } else {
+            addToast("حواله با موفقیت تخصیص داده شد.", 'success');
             onSuccess();
             handleClose();
         }
@@ -88,7 +88,6 @@ const AssignTransferModal: React.FC<AssignTransferModalProps> = ({ isOpen, onClo
                         </p>
                     </div>
                     <div className="p-8 space-y-6">
-                        {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
                         
                         <div>
                             <label htmlFor="finalCustomerCode" className="block text-lg font-medium text-cyan-300 mb-2">کد مشتری نهایی</label>

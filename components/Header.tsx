@@ -11,6 +11,13 @@ const LogoutIcon = () => (
 const Header: React.FC = () => {
     const { user, logout } = useAuth();
 
+    // FIX: Add a type guard. Since this component is only for internal users, this helps TypeScript
+    // narrow the type of `user` and allows safe access to properties like `name` and `role`.
+    if (!user || user.userType !== 'internal') {
+        // This case should not be reached due to routing, but it's a good safeguard.
+        return null;
+    }
+
     return (
         <header className="flex items-center justify-between h-24 px-8 border-b-2 border-cyan-400/20">
             <div>
@@ -19,8 +26,8 @@ const Header: React.FC = () => {
             </div>
             <div className="flex items-center space-x-6 space-x-reverse">
                 <div className="text-right">
-                    <p className="text-2xl text-slate-100 font-semibold">{user?.name}</p>
-                    <p className="text-lg font-medium bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 to-fuchsia-500">{user?.role?.name || ''}</p>
+                    <p className="text-2xl text-slate-100 font-semibold">{user.name}</p>
+                    <p className="text-lg font-medium bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 to-fuchsia-500">{user.role.name || ''}</p>
                 </div>
                 <button 
                     onClick={logout}

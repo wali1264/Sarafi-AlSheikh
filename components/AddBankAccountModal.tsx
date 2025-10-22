@@ -2,7 +2,6 @@ import React, { useState, FormEvent } from 'react';
 import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
 import { AddBankAccountPayload, Currency, User } from '../types';
-import { persianToEnglishNumber } from '../utils/translations';
 
 interface AddBankAccountModalProps {
     isOpen: boolean;
@@ -18,7 +17,6 @@ const AddBankAccountModal: React.FC<AddBankAccountModalProps> = ({ isOpen, onClo
         bankName: '',
         accountNumber: '',
         cardToCardNumber: '',
-        initialBalance: '',
     });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -26,12 +24,8 @@ const AddBankAccountModal: React.FC<AddBankAccountModalProps> = ({ isOpen, onClo
     if (!isOpen) return null;
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-         const { name, value } = e.target;
-        if (name === 'initialBalance') {
-            setFormData(prev => ({ ...prev, [name]: persianToEnglishNumber(value) }));
-        } else {
-            setFormData(prev => ({ ...prev, [name]: value }));
-        }
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
     };
 
     const handleSubmit = async (e: FormEvent) => {
@@ -42,7 +36,6 @@ const AddBankAccountModal: React.FC<AddBankAccountModalProps> = ({ isOpen, onClo
         const payload: AddBankAccountPayload = {
             ...formData,
             cardToCardNumber: formData.cardToCardNumber || undefined,
-            initialBalance: parseFloat(formData.initialBalance) || 0,
             currency: Currency.IRT_BANK, // Use IRT_BANK as the default currency for bank accounts
             user: currentUser,
         };
@@ -69,7 +62,9 @@ const AddBankAccountModal: React.FC<AddBankAccountModalProps> = ({ isOpen, onClo
                         <input name="bankName" value={formData.bankName} onChange={handleChange} placeholder="نام بانک" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
                         <input name="accountNumber" value={formData.accountNumber} onChange={handleChange} placeholder="شماره حساب" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
                         <input name="cardToCardNumber" value={formData.cardToCardNumber} onChange={handleChange} placeholder="شماره کارت (اختیاری)" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
-                        <input name="initialBalance" value={formData.initialBalance} onChange={handleChange} placeholder="موجودی اولیه (تومان)" required type="text" inputMode="decimal" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
+                        <p className="text-yellow-400 text-base pt-4 border-t border-cyan-400/20">
+                            توجه: حساب بانکی با موجودی صفر ثبت خواهد شد. برای ثبت موجودی اولیه، لطفاً از بخش «تنظیمات عمومی» و گزینه «افزایش موجودی صندوق» برای حساب بانکی مورد نظر استفاده کنید.
+                        </p>
                     </div>
                     <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end space-x-4 space-x-reverse">
                         <button type="button" onClick={onClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md">لغو</button>

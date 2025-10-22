@@ -1,6 +1,7 @@
 import React, { useState, FormEvent, useEffect } from 'react';
 import { useApi } from '../hooks/useApi';
 import { UpdateCustomerPayload, Customer, User } from '../types';
+import { useToast } from '../contexts/ToastContext';
 
 interface EditCustomerModalProps {
     isOpen: boolean;
@@ -12,13 +13,13 @@ interface EditCustomerModalProps {
 
 const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, onSuccess, customer, currentUser }) => {
     const api = useApi();
+    const { addToast } = useToast();
     const [formData, setFormData] = useState({
         name: '',
         code: '',
         whatsappNumber: '',
     });
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (customer) {
@@ -40,15 +41,15 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        setError(null);
 
         const payload: UpdateCustomerPayload = { id: customer.id, ...formData, user: currentUser };
         const result = await api.updateCustomer(payload);
 
         setIsLoading(false);
         if ('error' in result) {
-            setError(result.error);
+            addToast(result.error, 'error');
         } else {
+            addToast("اطلاعات مشتری با موفقیت ویرایش شد.", 'success');
             onSuccess();
         }
     };
@@ -60,7 +61,6 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
                 <form onSubmit={handleSubmit}>
                     <div className="px-8 py-5 border-b-2 border-cyan-400/20"><h2 className="text-4xl font-bold text-cyan-300 tracking-wider">ویرایش اطلاعات مشتری</h2></div>
                     <div className="p-8 space-y-6">
-                        {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
                         
                         <div>
                             <label htmlFor="name" className="block text-lg font-medium text-cyan-300 mb-2">اسم مشتری</label>

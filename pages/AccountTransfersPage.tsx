@@ -1,10 +1,19 @@
 
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useApi } from '../hooks/useApi';
-import { AccountTransfer, User, Customer } from '../types';
+import { AccountTransfer, User, Customer, Currency } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import CreateAccountTransferModal from '../components/CreateAccountTransferModal';
 import AssignTransferModal from '../components/AssignTransferModal';
+import { persianToEnglishNumber } from '../utils/translations';
+import { CURRENCIES } from '../constants';
+
+const FilterIcon: React.FC = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+    </svg>
+);
 
 const AccountTransfersPage: React.FC = () => {
     const api = useApi();
@@ -12,6 +21,19 @@ const AccountTransfersPage: React.FC = () => {
     const [transfers, setTransfers] = useState<AccountTransfer[]>([]);
     const [customers, setCustomers] = useState<Map<string, Customer>>(new Map());
     const [isLoading, setIsLoading] = useState(true);
+
+    const initialFilters = {
+        description: '',
+        fromCustomer: '',
+        toCustomer: '',
+        currency: 'all',
+        startDate: '',
+        endDate: '',
+        minAmount: '',
+        maxAmount: '',
+    };
+    const [filters, setFilters] = useState(initialFilters);
+    const [isAdvancedSearchOpen, setAdvancedSearchOpen] = useState(false);
 
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
     const [isAssignModalOpen, setAssignModalOpen] = useState(false);
@@ -44,11 +66,46 @@ const AccountTransfersPage: React.FC = () => {
         setAssignModalOpen(true);
     };
 
+    const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        setFilters(prev => ({ ...prev, [name]: persianToEnglishNumber(value) }));
+    };
+
+    const handleResetFilters = () => {
+        setFilters(initialFilters);
+    };
+
+    const filteredTransfers = useMemo(() => {
+        return transfers.filter(t => {
+            const fromCustomer = customers.get(t.fromCustomerId);
+            const toCustomer = customers.get(t.toCustomerId);
+
+            const matchesDescription = !filters.description || t.description.toLowerCase().includes(filters.description.toLowerCase());
+            const matchesFrom = !filters.fromCustomer || (fromCustomer && (fromCustomer.name.toLowerCase().includes(filters.fromCustomer.toLowerCase()) || fromCustomer.code.includes(filters.fromCustomer)));
+            const matchesTo = !filters.toCustomer || (toCustomer && (toCustomer.name.toLowerCase().includes(filters.toCustomer.toLowerCase()) || toCustomer.code.includes(filters.toCustomer)));
+            const matchesCurrency = filters.currency === 'all' || t.currency === filters.currency;
+            const matchesMinAmount = !filters.minAmount || t.amount >= parseFloat(filters.minAmount);
+            const matchesMaxAmount = !filters.maxAmount || t.amount <= parseFloat(filters.maxAmount);
+
+            const txDate = new Date(t.timestamp);
+            const matchesStartDate = !filters.startDate || txDate >= new Date(filters.startDate);
+            let matchesEndDate = true;
+            if (filters.endDate) {
+                const endDate = new Date(filters.endDate);
+                endDate.setHours(23, 59, 59, 999);
+                matchesEndDate = txDate <= endDate;
+            }
+            
+            return matchesDescription && matchesFrom && matchesTo && matchesCurrency && matchesMinAmount && matchesMaxAmount && matchesStartDate && matchesEndDate;
+        });
+    }, [transfers, filters, customers]);
+
     const { completedTransfers, pendingTransfers } = useMemo(() => {
-        const completed = transfers.filter(t => t.status === 'Completed');
-        const pending = transfers.filter(t => t.status === 'PendingAssignment');
+        const completed = filteredTransfers.filter(t => t.status === 'Completed');
+        const pending = filteredTransfers.filter(t => t.status === 'PendingAssignment');
         return { completedTransfers: completed, pendingTransfers: pending };
-    }, [transfers]);
+    }, [filteredTransfers]);
+
 
     const TransferTable: React.FC<{
         title: string;
@@ -103,6 +160,31 @@ const AccountTransfersPage: React.FC = () => {
                 )}
             </div>
             
+            <div className="bg-[#12122E]/80 border-2 border-cyan-400/20 overflow-hidden shadow-[0_0_40px_rgba(0,255,255,0.2)] mb-10" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)' }}>
+                 <div className="p-4 border-b-2 border-cyan-400/20 flex flex-wrap gap-4 items-center">
+                    <input type="text" name="description" placeholder="جستجو در شرح..." value={filters.description} onChange={handleFilterChange} className="flex-grow text-lg px-4 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100"/>
+                    <button onClick={() => setAdvancedSearchOpen(prev => !prev)} className="flex items-center text-lg px-4 py-2 bg-slate-700/50 border-2 border-slate-600/50 rounded-md text-cyan-300 hover:bg-slate-700">
+                        <FilterIcon /> {isAdvancedSearchOpen ? 'بستن' : 'پیشرفته'}
+                    </button>
+                 </div>
+                 <div className={`transition-all duration-500 ease-in-out ${isAdvancedSearchOpen ? 'max-h-[500px]' : 'max-h-0'} overflow-hidden`}>
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <input type="text" name="fromCustomer" placeholder="نام/کد فرستنده..." value={filters.fromCustomer} onChange={handleFilterChange} className="text-lg px-4 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100" />
+                        <input type="text" name="toCustomer" placeholder="نام/کد گیرنده..." value={filters.toCustomer} onChange={handleFilterChange} className="text-lg px-4 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100" />
+                        <select name="currency" value={filters.currency} onChange={handleFilterChange} className="text-lg px-4 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100">
+                            <option value="all">همه ارزها</option>
+                            {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <div/>
+                        <input type="text" inputMode="decimal" name="minAmount" placeholder="حداقل مبلغ" value={filters.minAmount} onChange={handleFilterChange} className="text-lg px-4 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100" />
+                        <input type="text" inputMode="decimal" name="maxAmount" placeholder="حداکثر مبلغ" value={filters.maxAmount} onChange={handleFilterChange} className="text-lg px-4 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100" />
+                        <div><label className="text-sm text-slate-400">از تاریخ:</label><input type="date" name="startDate" value={filters.startDate} onChange={handleFilterChange} className="w-full text-lg px-4 py-1 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100" /></div>
+                        <div><label className="text-sm text-slate-400">تا تاریخ:</label><input type="date" name="endDate" value={filters.endDate} onChange={handleFilterChange} className="w-full text-lg px-4 py-1 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100" /></div>
+                        <div className="col-span-full text-left"><button onClick={handleResetFilters} className="text-lg px-4 py-2 bg-red-500/20 text-red-300 hover:bg-red-500/30 rounded-md">پاک کردن</button></div>
+                    </div>
+                 </div>
+            </div>
+
             {pendingTransfers.length > 0 && (
                 <TransferTable title="حواله‌های در انتظار تخصیص" data={pendingTransfers} isPending />
             )}

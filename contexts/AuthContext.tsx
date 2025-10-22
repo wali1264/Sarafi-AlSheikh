@@ -1,9 +1,14 @@
 import React, { createContext, useState, useContext, ReactNode, useCallback } from 'react';
-import { User, Permissions, PermissionModule, PermissionAction } from '../types';
+import { User, Role, ExternalLogin, Customer, PartnerAccount, Permissions, PermissionModule, PermissionAction } from '../types';
+
+export type AuthenticatedUser = (User & { userType: 'internal'; role: Role }) | 
+                               (ExternalLogin & { userType: 'customer'; entity: Customer }) | 
+                               (ExternalLogin & { userType: 'partner'; entity: PartnerAccount });
+
 
 interface AuthContextType {
-    user: User | null;
-    login: (user: User) => void;
+    user: AuthenticatedUser | null;
+    login: (user: AuthenticatedUser) => void;
     logout: () => void;
     hasPermission: (module: PermissionModule, action: PermissionAction) => boolean;
 }
@@ -11,9 +16,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [user, setUser] = useState<User | null>(null);
+    const [user, setUser] = useState<AuthenticatedUser | null>(null);
 
-    const login = (userData: User) => {
+    const login = (userData: AuthenticatedUser) => {
         setUser(userData);
     };
 
@@ -22,7 +27,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const hasPermission = useCallback((module: PermissionModule, action: PermissionAction): boolean => {
-        if (!user || !user.role || !user.role.permissions) {
+        if (!user || user.userType !== 'internal') {
+            return false;
+        }
+        if (!user.role || !user.role.permissions) {
             return false;
         }
         const modulePermissions = user.role.permissions[module];

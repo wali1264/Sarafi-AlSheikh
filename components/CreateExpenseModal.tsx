@@ -3,6 +3,7 @@ import { useApi } from '../hooks/useApi';
 import { CreateExpensePayload, Currency, User, ExpenseCategory } from '../types';
 import { CURRENCIES } from '../constants';
 import { expenseCategoryTranslations, persianToEnglishNumber } from '../utils/translations';
+import { useToast } from '../contexts/ToastContext';
 
 interface CreateExpenseModalProps {
     isOpen: boolean;
@@ -13,6 +14,7 @@ interface CreateExpenseModalProps {
 
 const CreateExpenseModal: React.FC<CreateExpenseModalProps> = ({ isOpen, onClose, onSuccess, currentUser }) => {
     const api = useApi();
+    const { addToast } = useToast();
     const [formData, setFormData] = useState({
         category: ExpenseCategory.Other,
         amount: '',
@@ -20,7 +22,6 @@ const CreateExpenseModal: React.FC<CreateExpenseModalProps> = ({ isOpen, onClose
         description: '',
     });
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     if (!isOpen) return null;
 
@@ -36,7 +37,6 @@ const CreateExpenseModal: React.FC<CreateExpenseModalProps> = ({ isOpen, onClose
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        setError(null);
 
         const payload: CreateExpensePayload = {
             ...formData,
@@ -50,9 +50,9 @@ const CreateExpenseModal: React.FC<CreateExpenseModalProps> = ({ isOpen, onClose
 
         setIsLoading(false);
         if ('error' in result) {
-            setError(result.error);
+            addToast(result.error, 'error');
         } else {
-            // Reset form on success
+            addToast("درخواست مصرف به صندوق ارسال شد.", 'success');
             setFormData({
                 category: ExpenseCategory.Other,
                 amount: '',
@@ -72,7 +72,6 @@ const CreateExpenseModal: React.FC<CreateExpenseModalProps> = ({ isOpen, onClose
                         <h2 className="text-4xl font-bold text-cyan-300 tracking-wider">ثبت مصرف جدید</h2>
                     </div>
                     <div className="p-8 space-y-6">
-                        {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>

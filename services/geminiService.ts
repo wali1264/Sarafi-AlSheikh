@@ -186,18 +186,16 @@ class GeminiService {
                 },
             },
              {
-                name: 'logForeignTransaction',
-                description: 'ثبت یک معامله تبادله ارز بین دارایی‌های داخلی صرافی (صندوق‌ها و بانک‌ها).',
+                name: 'initiateForeignExchange',
+                description: 'شروع یک معامله تبادله ارز با ثبت درخواست برداشت از یک دارایی (صندوق یا بانک).',
                 parameters: {
                     type: Type.OBJECT,
                     properties: {
                         description: { type: Type.STRING, description: 'شرح تبادله' },
                         fromAssetId: { type: Type.STRING, description: 'کد دارایی مبدا (مانند cashbox_USD یا bank_ba-1). مبلغ از این دارایی کسر می‌شود.' },
                         fromAmount: { type: Type.NUMBER, description: 'مبلغ برداشتی از مبدا' },
-                        toAssetId: { type: Type.STRING, description: 'کد دارایی مقصد (مانند cashbox_AFN). مبلغ به این دارایی اضافه می‌شود.' },
-                        toAmount: { type: Type.NUMBER, description: 'مبلغ واریزی به مقصد' },
                     },
-                    required: ['description', 'fromAssetId', 'fromAmount', 'toAssetId', 'toAmount'],
+                    required: ['description', 'fromAssetId', 'fromAmount'],
                 },
             },
             {
@@ -211,17 +209,19 @@ class GeminiService {
                     required: ['partnerName'],
                 },
             },
+            // FIX: Added function declaration for 'settlePartnerBalance' to enable the voice assistant feature.
             {
                 name: 'settlePartnerBalance',
-                description: 'ثبت تسویه حساب با یک صراف همکار',
+                description: 'تسویه حساب با یک همکار صراف، شامل پرداخت به او یا دریافت وجه از او.',
                 parameters: {
                     type: Type.OBJECT,
                     properties: {
-                        partnerName: { type: Type.STRING, description: 'نام صراف همکار' },
-                        amount: { type: Type.NUMBER, description: 'مبلغ تسویه شده' },
-                        currency: { type: Type.STRING, description: 'واحد پولی تسویه', enum: Object.values(Currency) },
+                        partnerName: { type: Type.STRING, description: 'نام کامل صراف همکار' },
+                        amount: { type: Type.NUMBER, description: 'مبلغی که پرداخت یا دریافت می‌شود' },
+                        currency: { type: Type.STRING, description: 'واحد پولی مبلغ', enum: Object.values(Currency) },
+                        type: { type: Type.STRING, description: 'نوع عملیات: "pay" برای پرداخت به همکار، "receive" برای دریافت از همکار', enum: ['pay', 'receive'] },
                     },
-                    required: ['partnerName', 'amount', 'currency'],
+                    required: ['partnerName', 'amount', 'currency', 'type'],
                 },
             },
             {

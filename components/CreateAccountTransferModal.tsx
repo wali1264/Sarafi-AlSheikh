@@ -4,6 +4,7 @@ import { CreateAccountTransferPayload, Currency, User, Customer } from '../types
 import { CURRENCIES } from '../constants';
 import { persianToEnglishNumber } from '../utils/translations';
 import { debounce } from '../utils/debounce';
+import { useToast } from '../contexts/ToastContext';
 
 const SUSPENSE_ACCOUNT_CODE = '_SUSPENSE_';
 
@@ -44,6 +45,7 @@ const CustomerField: React.FC<{
 
 const CreateAccountTransferModal: React.FC<CreateAccountTransferModalProps> = ({ isOpen, onClose, onSuccess, currentUser }) => {
     const api = useApi();
+    const { addToast } = useToast();
     const [fromCode, setFromCode] = useState('');
     const [toCode, setToCode] = useState('');
     const [isPendingAssignment, setIsPendingAssignment] = useState(false);
@@ -56,7 +58,6 @@ const CreateAccountTransferModal: React.FC<CreateAccountTransferModalProps> = ({
     const [description, setDescription] = useState('');
 
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     const checkCustomerCode = useCallback(debounce(async (code: string, setter: React.Dispatch<React.SetStateAction<Customer | null | undefined>>, loadingSetter: React.Dispatch<React.SetStateAction<boolean>>) => {
         if (!code) {
@@ -99,7 +100,6 @@ const CreateAccountTransferModal: React.FC<CreateAccountTransferModalProps> = ({
         setAmount('');
         setCurrency(Currency.USD);
         setDescription('');
-        setError(null);
     }
 
     const handleClose = () => {
@@ -109,10 +109,9 @@ const CreateAccountTransferModal: React.FC<CreateAccountTransferModalProps> = ({
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        setError(null);
 
         if (!fromCustomer || !toCustomer) {
-            setError("لطفا از صحت کدهای مشتری مبدا و مقصد اطمینان حاصل کنید.");
+            addToast("لطفا از صحت کدهای مشتری مبدا و مقصد اطمینان حاصل کنید.", 'error');
             return;
         }
 
@@ -132,8 +131,9 @@ const CreateAccountTransferModal: React.FC<CreateAccountTransferModalProps> = ({
         setIsLoading(false);
 
         if ('error' in result) {
-            setError(result.error);
+            addToast(result.error, 'error');
         } else {
+            addToast("انتقال با موفقیت ثبت شد.", 'success');
             onSuccess();
             handleClose();
         }
@@ -145,7 +145,6 @@ const CreateAccountTransferModal: React.FC<CreateAccountTransferModalProps> = ({
                 <form onSubmit={handleSubmit}>
                     <div className="px-8 py-5 border-b-2 border-cyan-400/20"><h2 className="text-4xl font-bold text-cyan-300 tracking-wider">انتقال وجه بین دو حساب</h2></div>
                     <div className="p-8 space-y-6">
-                        {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <CustomerField label="برد از حساب (کد):" code={fromCode} customer={fromCustomer} onCodeChange={handleFromCodeChange} isLoading={fromLoading} />

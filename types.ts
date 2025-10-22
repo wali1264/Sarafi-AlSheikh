@@ -1,5 +1,3 @@
-// types.ts
-
 export enum Currency {
     AFN = 'AFN',
     USD = 'USD',
@@ -37,6 +35,32 @@ export interface User {
     roleId: string;
     role?: Role;
 }
+
+export interface ExternalLogin {
+    username: string;
+    password?: string; // Optional on return
+    loginType: 'customer' | 'partner';
+    linkedEntityId: string;
+    id: string; // To uniquely identify and delete logins
+}
+
+export type AuthenticatedUser = (User & { userType: 'internal'; role: Role }) | 
+                               (ExternalLogin & { userType: 'customer'; entity: Customer }) | 
+                               (ExternalLogin & { userType: 'partner'; entity: PartnerAccount });
+
+
+export interface CreateExternalLoginPayload {
+    username: string;
+    password?: string;
+    loginType: 'customer' | 'partner';
+    linkedEntityId: string;
+    user: User;
+}
+export interface DeleteExternalLoginPayload {
+    id: string;
+    user: User;
+}
+
 
 export interface CreateUserPayload {
     name: string;
@@ -83,7 +107,7 @@ export interface CreateCustomerPayload {
     name: string;
     code: string;
     whatsappNumber: string;
-    balances?: { [key in Currency]?: number };
+    user: User;
 }
 export interface UpdateCustomerPayload extends Partial<Omit<Customer, 'id' | 'balances'>> {
     id: string;
@@ -108,16 +132,18 @@ export interface PartnerTransaction {
     currency: Currency;
     description: string;
     linkedTransferId?: string;
+    bankAccountId?: string;
+    sourceAccountNumber?: string;
+    destinationAccountNumber?: string;
 }
 
 export interface CreatePartnerPayload {
     name: string;
     province: string;
     whatsappNumber: string;
-    balances: { [key in Currency]?: number };
     user: User;
 }
-export interface UpdatePartnerPayload extends Partial<Omit<CreatePartnerPayload, 'user' | 'balances'>> {
+export interface UpdatePartnerPayload extends Partial<Omit<CreatePartnerPayload, 'user'>> {
     id: string;
     user: User;
 }
@@ -125,18 +151,26 @@ export interface DeletePartnerPayload {
     id: string;
     user: User;
 }
-export interface SettlePartnerBalancePayload {
+
+export interface ReceiveFromPartnerPayload {
     partnerId: string;
     amount: number;
     currency: Currency;
     user: User;
+    bankAccountId?: string;
+    sourceAccountNumber?: string;
+    destinationAccountNumber?: string;
 }
-export interface SettlePartnerBalanceByNamePayload {
-    partnerName: string;
+export interface PayToPartnerPayload {
+    partnerId: string;
     amount: number;
     currency: Currency;
     user: User;
+    bankAccountId?: string;
+    sourceAccountNumber?: string;
+    destinationAccountNumber?: string;
 }
+
 export interface GetPartnerAccountByNamePayload {
     partnerName: string;
 }
@@ -144,8 +178,10 @@ export interface GetPartnerAccountByNamePayload {
 
 export enum TransferStatus {
     Unexecuted = 'Unexecuted',
+    PendingCashbox = 'PendingCashbox',
     Executed = 'Executed',
     Cancelled = 'Cancelled',
+    RejectedByCashbox = 'RejectedByCashbox',
 }
 
 export interface DomesticTransfer {
@@ -195,6 +231,7 @@ export interface PayoutIncomingTransferPayload {
 
 export enum CashboxRequestStatus {
     Pending = 'Pending',
+    PendingCashboxApproval = 'PendingCashboxApproval',
     Approved = 'Approved',
     Rejected = 'Rejected',
     AutoApproved = 'AutoApproved',
@@ -223,7 +260,12 @@ export interface CashboxRequest {
         type: string;
         id: string;
         description: string;
+        // FIX: Added optional 'details' property to support linked entities like PartnerSettlement that carry extra data.
+        details?: any;
     };
+    bankAccountId?: string;
+    sourceAccountNumber?: string;
+    destinationAccountNumber?: string;
 }
 
 export interface CreateCashboxRequestPayload {
@@ -237,7 +279,12 @@ export interface CreateCashboxRequestPayload {
         type: string;
         id: string;
         description: string;
+        details?: any;
     };
+    bankAccountId?: string;
+    sourceAccountNumber?: string;
+    destinationAccountNumber?: string;
+    bypassCashier?: boolean;
 }
 export interface ResolveCashboxRequestPayload {
     requestId: string;
@@ -249,6 +296,8 @@ export interface IncreaseCashboxBalancePayload {
     currency: Currency;
     description: string;
     user: User;
+    bankAccountId?: string;
+    sourceAccountNumber?: string;
 }
 
 export enum ExpenseCategory {
@@ -256,9 +305,15 @@ export enum ExpenseCategory {
     Rent = 'Rent',
     Utilities = 'Utilities',
     Hospitality = 'Hospitality',
-    Commission = 'Commission',
     Other = 'Other',
 }
+
+export enum ExpenseStatus {
+    PendingApproval = 'PendingApproval',
+    Approved = 'Approved',
+    Rejected = 'Rejected',
+}
+
 export interface Expense {
     id: string;
     createdAt: Date;
@@ -267,6 +322,7 @@ export interface Expense {
     amount: number;
     currency: Currency;
     description: string;
+    status: ExpenseStatus;
     linkedCashboxRequestId?: string;
     linkedForeignTransactionId?: string;
 }
@@ -297,11 +353,10 @@ export interface AddBankAccountPayload {
     bankName: string;
     accountNumber: string;
     cardToCardNumber?: string;
-    initialBalance: number;
     currency: Currency;
     user: User;
 }
-export interface UpdateBankAccountPayload extends Partial<Omit<AddBankAccountPayload, 'initialBalance'|'currency'|'user'>> {
+export interface UpdateBankAccountPayload extends Partial<Omit<AddBankAccountPayload, 'currency'|'user'>> {
     id: string;
     user: User;
 }
@@ -315,27 +370,52 @@ export interface Asset {
     name: string;
     currency: Currency;
 }
+
+export enum ForeignTransactionStatus {
+    PendingWithdrawalApproval = 'PendingWithdrawalApproval',
+    PendingDeposit = 'PendingDeposit',
+    PendingDepositApproval = 'PendingDepositApproval',
+    Completed = 'Completed',
+    Rejected = 'Rejected',
+}
+
 export interface ForeignTransaction {
     id: string;
     timestamp: Date;
     description: string;
-    fromAsset: string;
+    user: string;
+    status: ForeignTransactionStatus;
+
+    // Phase 1: Withdrawal
+    fromAssetId: string;
+    fromAssetName: string;
     fromCurrency: Currency;
     fromAmount: number;
-    toAsset: string;
-    toCurrency: Currency;
-    toAmount: number;
-    user: string;
+    withdrawalRequestId: string;
+
+    // Phase 2: Deposit (optional until completion)
+    toAssetId?: string;
+    toAssetName?: string;
+    toCurrency?: Currency;
+    toAmount?: number;
+    depositRequestId?: string;
 }
 
-export interface LogForeignTransactionPayload {
+
+export interface InitiateForeignExchangePayload {
     user: User;
     description: string;
     fromAssetId: string;
     fromAmount: number;
+}
+
+export interface CompleteForeignExchangePayload {
+    user: User;
+    transactionId: string;
     toAssetId: string;
     toAmount: number;
 }
+
 export interface InternalCustomerExchangePayload {
     customerId: string;
     fromCurrency: Currency;
@@ -344,6 +424,26 @@ export interface InternalCustomerExchangePayload {
     toAmount: number;
     rate: number;
     user: User;
+}
+
+export interface InternalExchange {
+    id: string;
+    timestamp: Date;
+    customerId: string;
+    fromCurrency: Currency;
+    fromAmount: number;
+    toCurrency: Currency;
+    toAmount: number;
+    rate: number;
+    user: string;
+}
+
+export enum CommissionTransferStatus {
+    PendingDepositApproval = 'PendingDepositApproval',
+    PendingExecution = 'PendingExecution',
+    PendingWithdrawalApproval = 'PendingWithdrawalApproval',
+    Completed = 'Completed',
+    Rejected = 'Rejected',
 }
 
 export interface CommissionTransfer {
@@ -356,7 +456,7 @@ export interface CommissionTransfer {
     sourceAccountNumber: string; // The customer's bank account number
     receivedIntoBankAccountId: string;
     commissionPercentage: number;
-    status: 'PendingExecution' | 'Completed';
+    status: CommissionTransferStatus;
     createdBy: string;
     
     // Fields populated on execution
@@ -365,6 +465,10 @@ export interface CommissionTransfer {
     destinationAccountNumber?: string;
     commissionAmount?: number; // Calculated commission value
     finalAmountPaid?: number; // amount - commissionAmount
+    
+    // Link to cashbox requests
+    depositRequestId?: string;
+    withdrawalRequestId?: string;
 }
 
 export interface LogCommissionTransferPayload {
@@ -436,11 +540,17 @@ export enum ReportType {
     CashboxSummary = 'CashboxSummary',
     InternalLedger = 'InternalLedger',
 }
+
 export interface DashboardAnalyticsData {
-    expensesByCategory: { label: string; value: number }[];
     partnerActivity: { label: string; value: number }[];
-    profitLossTrend: { month: string; revenue: number; expenses: number }[];
+    weeklyActivity: {
+        labels: string[];
+        domesticCounts: number[];
+        foreignCounts: number[];
+    };
+    cashboxSummary: { currency: string; balance: number }[];
 }
+
 
 export interface ProfitAndLossReportData {
     totalRevenue: number;
@@ -478,7 +588,6 @@ export interface GenerateReportPayload {
     currency: Currency;
 }
 
-// FIX: Add types for Amanat feature
 export enum AmanatStatus {
     Active = 'Active',
     Returned = 'Returned',
@@ -497,6 +606,7 @@ export interface Amanat {
     returnedAt?: Date;
     returnedBy?: string;
     linkedCashboxWithdrawalId?: string;
+    bankAccountId?: string; // To track which bank account received the amanat
 }
 
 export interface CreateAmanatPayload {
@@ -505,6 +615,7 @@ export interface CreateAmanatPayload {
     currency: Currency;
     notes: string;
     user: User;
+    bankAccountId?: string; // To specify deposit account for IRT_BANK
 }
 
 export interface ReturnAmanatPayload {

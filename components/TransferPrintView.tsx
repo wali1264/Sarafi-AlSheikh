@@ -1,42 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { useApi } from '../hooks/useApi';
+import React from 'react';
 import { DomesticTransfer } from '../types';
 import { statusTranslations } from '../utils/translations';
 
-const TransferPrintView: React.FC = () => {
-    const { transferId } = useParams<{ transferId: string }>();
-    const api = useApi();
-    const [transfer, setTransfer] = useState<DomesticTransfer | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+interface TransferPrintViewProps {
+    transfer: DomesticTransfer | null;
+}
 
-    useEffect(() => {
-        if (!transferId) return;
-
-        const fetchTransfer = async () => {
-            setIsLoading(true);
-            const data = await api.getDomesticTransferById(transferId);
-            setTransfer(data || null);
-            setIsLoading(false);
-        };
-
-        fetchTransfer();
-    }, [transferId, api]);
-
-    useEffect(() => {
-        if (!isLoading && transfer) {
-            setTimeout(() => {
-                window.print();
-            }, 500);
-        }
-    }, [isLoading, transfer]);
-
-    if (isLoading) {
-        return <div className="text-center p-10">در حال بارگذاری سند...</div>;
-    }
-
+const TransferPrintView: React.FC<TransferPrintViewProps> = ({ transfer }) => {
+    
     if (!transfer) {
-        return <div className="text-center p-10">سند با کد درخواستی یافت نشد.</div>;
+        return <div className="text-center p-10 text-gray-700">سند یافت نشد.</div>;
     }
 
     const isIncoming = !!transfer.partnerReference;

@@ -17,8 +17,8 @@ const ChartCard: React.FC<{ title: string, children: React.ReactNode }> = ({ tit
 );
 
 const DashboardChartContainer: React.FC<DashboardChartContainerProps> = ({ analyticsData }) => {
-    const profitLossChartRef = useRef<HTMLCanvasElement>(null);
-    const expensesChartRef = useRef<HTMLCanvasElement>(null);
+    const weeklyActivityChartRef = useRef<HTMLCanvasElement>(null);
+    const cashboxChartRef = useRef<HTMLCanvasElement>(null);
     const partnersChartRef = useRef<HTMLCanvasElement>(null);
 
     useEffect(() => {
@@ -30,50 +30,59 @@ const DashboardChartContainer: React.FC<DashboardChartContainerProps> = ({ analy
         Chart.defaults.font.size = 16;
         Chart.defaults.plugins.legend.position = 'bottom';
         
-        // 1. Profit/Loss Chart
-        if (profitLossChartRef.current && analyticsData.profitLossTrend) {
-            const ctx = profitLossChartRef.current.getContext('2d');
+        // 1. Weekly Activity Trend Chart
+        if (weeklyActivityChartRef.current && analyticsData.weeklyActivity) {
+            const ctx = weeklyActivityChartRef.current.getContext('2d');
             const chart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: analyticsData.profitLossTrend.map(d => d.month),
+                    labels: analyticsData.weeklyActivity.labels,
                     datasets: [
                         {
-                            label: 'درآمد (دالر)',
-                            data: analyticsData.profitLossTrend.map(d => d.revenue),
+                            label: 'حواله های داخلی',
+                            data: analyticsData.weeklyActivity.domesticCounts,
                             borderColor: 'rgba(34, 211, 238, 1)',
                             backgroundColor: 'rgba(34, 211, 238, 0.2)',
                             fill: true,
-                            tension: 0.4,
+                            tension: 0.3,
                         },
                         {
-                            label: 'مصارف (دالر)',
-                            data: analyticsData.profitLossTrend.map(d => d.expenses),
-                            borderColor: 'rgba(244, 63, 94, 1)',
-                            backgroundColor: 'rgba(244, 63, 94, 0.2)',
+                            label: 'تبادلات ارزی',
+                            data: analyticsData.weeklyActivity.foreignCounts,
+                            borderColor: 'rgba(168, 85, 247, 1)',
+                            backgroundColor: 'rgba(168, 85, 247, 0.2)',
                             fill: true,
-                            tension: 0.4,
+                            tension: 0.3,
                         },
                     ],
                 },
-                options: { responsive: true, maintainAspectRatio: false },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                },
             });
             chartInstances.push(chart);
         }
 
-        // 2. Expenses Chart
-        if (expensesChartRef.current && analyticsData.expensesByCategory) {
-            const ctx = expensesChartRef.current.getContext('2d');
+        // 2. Cashbox Balances Chart
+        if (cashboxChartRef.current && analyticsData.cashboxSummary) {
+            const ctx = cashboxChartRef.current.getContext('2d');
             const chart = new Chart(ctx, {
-                type: 'pie',
+                type: 'bar',
                 data: {
-                    labels: analyticsData.expensesByCategory.map(d => d.label),
+                    labels: analyticsData.cashboxSummary.map(d => d.currency),
                     datasets: [{
-                        data: analyticsData.expensesByCategory.map(d => d.value),
-                        backgroundColor: ['#22d3ee', '#a855f7', '#eab308', '#22c55e', '#64748b'],
+                        label: 'موجودی فعلی',
+                        data: analyticsData.cashboxSummary.map(d => d.balance),
+                        backgroundColor: ['#22d3ee', '#a855f7', '#eab308', '#22c55e', '#ef4444', '#8b5cf6'],
                     }],
                 },
-                 options: { responsive: true, maintainAspectRatio: false },
+                 options: { 
+                     responsive: true, 
+                     maintainAspectRatio: false,
+                     plugins: { legend: { display: false } }
+                },
             });
             chartInstances.push(chart);
         }
@@ -98,10 +107,9 @@ const DashboardChartContainer: React.FC<DashboardChartContainerProps> = ({ analy
                     maintainAspectRatio: false,
                     indexAxis: 'y',
                     plugins: {
-                        legend: {
-                            display: false,
-                        }
-                    }
+                        legend: { display: false }
+                    },
+                    scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }
                 },
             });
             chartInstances.push(chart);
@@ -116,12 +124,12 @@ const DashboardChartContainer: React.FC<DashboardChartContainerProps> = ({ analy
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="lg:col-span-2">
-                 <ChartCard title="روند سود و زیان (دالر)">
-                    <canvas ref={profitLossChartRef}></canvas>
+                 <ChartCard title="روند فعالیت هفتگی (تعداد معاملات)">
+                    <canvas ref={weeklyActivityChartRef}></canvas>
                 </ChartCard>
             </div>
-            <ChartCard title="تفکیک مصارف">
-                <canvas ref={expensesChartRef}></canvas>
+            <ChartCard title="موجودی صندوق‌ها به تفکیک ارز">
+                <canvas ref={cashboxChartRef}></canvas>
             </ChartCard>
              <ChartCard title="فعالیت همکاران (تعداد حواله)">
                  <canvas ref={partnersChartRef}></canvas>

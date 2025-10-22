@@ -1,8 +1,11 @@
+
+
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
-import { User, PartnerAccount, Role, Currency, SystemSettings, Permissions, PermissionModule, permissionModules, BankAccount } from '../types';
-import { permissionModuleTranslations, permissionActionTranslations } from '../utils/translations';
+import { User, PartnerAccount, Role, Currency, SystemSettings, Permissions, PermissionModule, permissionModules, BankAccount, Customer, ExternalLogin, CreateExternalLoginPayload, CashboxRequest, CashboxRequestStatus } from '../types';
+import { permissionModuleTranslations, permissionActionTranslations, cashboxRequestStatusTranslations } from '../utils/translations';
 import { CURRENCIES } from '../constants';
 import { persianToEnglishNumber } from '../utils/translations';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +13,8 @@ import AddPartnerModal from '../components/AddPartnerModal';
 import AddBankAccountModal from '../components/AddBankAccountModal';
 import EditPartnerModal from '../components/EditPartnerModal';
 import EditBankAccountModal from '../components/EditBankAccountModal';
+import { debounce } from '../utils/debounce';
+
 
 // --- Reusable Components ---
 
@@ -56,15 +61,16 @@ const TabButton: React.FC<{ active: boolean, onClick: () => void, children: Reac
 
 // --- Main Page Component ---
 const SettingsPage: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'partners' | 'bankAccounts' | 'general'>('users');
+    const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'partners' | 'bankAccounts' | 'externalUsers' | 'general'>('users');
 
     return (
          <div style={{direction: 'rtl'}} className="space-y-12">
             <h1 className="text-5xl font-bold text-slate-100 mb-4 tracking-wider">تنظیمات و مدیریت</h1>
 
-            <div className="border-b-2 border-cyan-400/20 mb-8">
+            <div className="border-b-2 border-cyan-400/20 mb-8 flex flex-wrap">
                 <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')}>مدیریت کاربران</TabButton>
                 <TabButton active={activeTab === 'roles'} onClick={() => setActiveTab('roles')}>مدیریت نقش‌ها</TabButton>
+                <TabButton active={activeTab === 'externalUsers'} onClick={() => setActiveTab('externalUsers')}>دسترسی کاربران خارجی</TabButton>
                 <TabButton active={activeTab === 'partners'} onClick={() => setActiveTab('partners')}>مدیریت همکاران</TabButton>
                 <TabButton active={activeTab === 'bankAccounts'} onClick={() => setActiveTab('bankAccounts')}>حسابات بانکی</TabButton>
                 <TabButton active={activeTab === 'general'} onClick={() => setActiveTab('general')}>تنظیمات عمومی</TabButton>
@@ -72,6 +78,7 @@ const SettingsPage: React.FC = () => {
             
             {activeTab === 'users' && <UserManagement />}
             {activeTab === 'roles' && <RoleManagement />}
+            {activeTab === 'externalUsers' && <ExternalUserManagement />}
             {activeTab === 'partners' && <PartnerManagement />}
             {activeTab === 'bankAccounts' && <BankAccountManagement />}
             {activeTab === 'general' && <GeneralSettings />}
@@ -108,12 +115,8 @@ const UserManagement = () => {
     
     const handleDeleteUser = async (userId: string) => {
         if (window.confirm('آیا از حذف این کاربر اطمینان دارید؟ این عمل قابل بازگشت نیست.')) {
-            const result = await api.deleteUser({ id: userId });
-            if ('error' in result) {
-                alert(`خطا: ${result.error}`);
-            } else {
-                fetchData();
-            }
+            await api.deleteUser({ id: userId });
+            fetchData();
         }
     };
     
@@ -174,12 +177,8 @@ const RoleManagement = () => {
 
     const handleDeleteRole = async (roleId: string) => {
          if (window.confirm('آیا از حذف این نقش اطمینان دارید؟ کاربرانی که این نقش را دارند دسترسی خود را از دست خواهند داد.')) {
-            const result = await api.deleteRole({ id: roleId });
-            if ('error' in result) {
-                alert(`خطا: ${result.error}`);
-            } else {
-                fetchData();
-            }
+            await api.deleteRole({ id: roleId });
+            fetchData();
         }
     };
 
@@ -213,6 +212,179 @@ const RoleManagement = () => {
         </SettingsCard>
     );
 };
+
+const ExternalUserManagement = () => {
+    const api = useApi();
+    const { user } = useAuth();
+    const [logins, setLogins] = useState<(ExternalLogin & { entityName: string })[]>([]);
+    const [partners, setPartners] = useState<PartnerAccount[]>([]);
+    
+    // Customer form state
+    const [customerCode, setCustomerCode] = useState('');
+    const [foundCustomer, setFoundCustomer] = useState<Customer | null>(null);
+    const [isCheckingCustomer, setIsCheckingCustomer] = useState(false);
+    
+    // Common state
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    
+    // Partner form state
+    const [selectedPartnerId, setSelectedPartnerId] = useState('');
+
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const fetchData = useCallback(async () => {
+        setIsLoading(true);
+        const [loginsData, partnersData] = await Promise.all([
+            api.getExternalLogins(),
+            api.getPartnerAccounts()
+        ]);
+        setLogins(loginsData);
+        setPartners(partnersData.filter(p => p.status === 'Active'));
+        setIsLoading(false);
+    }, [api]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+    
+    const checkCustomerCode = useCallback(debounce(async (code: string) => {
+        if (!code) {
+            setFoundCustomer(null);
+            return;
+        }
+        setIsCheckingCustomer(true);
+        const result = await api.getCustomerByCode(code);
+        setFoundCustomer(result || null);
+        setIsCheckingCustomer(false);
+    }, 500), [api]);
+
+    const handleCustomerCodeChange = (code: string) => {
+        setCustomerCode(code);
+        checkCustomerCode(code);
+    };
+
+    const resetForms = () => {
+        setCustomerCode('');
+        setFoundCustomer(null);
+        setSelectedPartnerId('');
+        setUsername('');
+        setPassword('');
+        setError(null);
+    };
+    
+    const handleSubmit = async (e: React.FormEvent, type: 'customer' | 'partner') => {
+        e.preventDefault();
+        // FIX: Add a type guard to ensure the user is an internal user before creating the payload.
+        if (!user || user.userType !== 'internal') return;
+        setError(null);
+        setIsLoading(true);
+
+        let payload: CreateExternalLoginPayload;
+        if (type === 'customer') {
+            if (!foundCustomer) {
+                setError('لطفا یک کد مشتری معتبر وارد کنید.');
+                setIsLoading(false);
+                return;
+            }
+            payload = {
+                username, password, loginType: 'customer', linkedEntityId: foundCustomer.id, user
+            };
+        } else { // partner
+            if (!selectedPartnerId) {
+                setError('لطفا یک همکار را انتخاب کنید.');
+                setIsLoading(false);
+                return;
+            }
+            payload = {
+                username, password, loginType: 'partner', linkedEntityId: selectedPartnerId, user
+            };
+        }
+
+        const result = await api.createExternalLogin(payload);
+        setIsLoading(false);
+        if ('error' in result) {
+            setError(result.error);
+        } else {
+            resetForms();
+            fetchData();
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        // FIX: Add a type guard to ensure the user is an internal user before using it in an API payload.
+        if (!user || user.userType !== 'internal') return;
+        if (window.confirm('آیا از حذف این دسترسی اطمینان دارید؟')) {
+            await api.deleteExternalLogin({ id, user });
+            fetchData();
+        }
+    };
+
+    return (
+        <div className="space-y-12">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                <SettingsCard title="ایجاد دسترسی برای مشتری">
+                    <form onSubmit={(e) => handleSubmit(e, 'customer')} className="space-y-4">
+                        <div>
+                            <label className="block text-lg font-medium text-cyan-300 mb-2">کد مشتری</label>
+                            <input type="text" value={customerCode} onChange={e => handleCustomerCodeChange(persianToEnglishNumber(e.target.value))} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md"/>
+                            {isCheckingCustomer && <p className="text-sm text-slate-400 mt-1">در حال بررسی...</p>}
+                            {foundCustomer && <p className="text-sm text-green-400 mt-1">✓ مشتری یافت شد: {foundCustomer.name}</p>}
+                            {foundCustomer === null && customerCode && !isCheckingCustomer && <p className="text-sm text-red-400 mt-1">مشتری یافت نشد.</p>}
+                        </div>
+                        <input type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="نام کاربری (انگلیسی)" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-left" style={{direction: 'ltr'}}/>
+                        <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="رمز عبور" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-left" style={{direction: 'ltr'}}/>
+                        {error && <p className="text-red-400">{error}</p>}
+                        <div className="text-left pt-2"><ActionButton type="submit" disabled={isLoading || !foundCustomer}>ایجاد دسترسی</ActionButton></div>
+                    </form>
+                </SettingsCard>
+                <SettingsCard title="ایجاد دسترسی برای همکار">
+                     <form onSubmit={(e) => handleSubmit(e, 'partner')} className="space-y-4">
+                        <div>
+                            <label className="block text-lg font-medium text-cyan-300 mb-2">انتخاب همکار</label>
+                            <select value={selectedPartnerId} onChange={e => setSelectedPartnerId(e.target.value)} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md">
+                                <option value="" disabled>-- یک همکار را انتخاب کنید --</option>
+                                {partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select>
+                        </div>
+                        <input type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="نام کاربری (انگلیسی)" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-left" style={{direction: 'ltr'}}/>
+                        <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="رمز عبور" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-left" style={{direction: 'ltr'}}/>
+                         {error && <p className="text-red-400">{error}</p>}
+                        <div className="text-left pt-2"><ActionButton type="submit" disabled={isLoading || !selectedPartnerId}>ایجاد دسترسی</ActionButton></div>
+                    </form>
+                </SettingsCard>
+            </div>
+            <SettingsCard title="لیست دسترسی‌های ایجاد شده">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-lg text-right text-slate-300">
+                        <thead className="text-xl text-slate-400 uppercase">
+                            <tr>
+                                <th className="px-6 py-4 font-medium">نام کاربری</th>
+                                <th className="px-6 py-4 font-medium">نوع کاربر</th>
+                                <th className="px-6 py-4 font-medium">مرتبط با</th>
+                                <th className="px-6 py-4 font-medium"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {logins.map(login => (
+                                <tr key={login.id} className="border-b border-cyan-400/10">
+                                    <td className="px-6 py-4 font-mono text-cyan-300">{login.username}</td>
+                                    <td className="px-6 py-4">{login.loginType === 'customer' ? 'مشتری' : 'همکار'}</td>
+                                    <td className="px-6 py-4 font-semibold">{login.entityName}</td>
+                                    <td className="px-6 py-4 text-left">
+                                        <button onClick={() => handleDelete(login.id)} className="text-red-400 hover:text-red-300">حذف</button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </SettingsCard>
+        </div>
+    );
+};
+
 
 const BalanceSummary: React.FC<{ balances: PartnerAccount['balances'] }> = ({ balances }) => {
     const nonZeroBalances = CURRENCIES
@@ -264,14 +436,11 @@ const PartnerManagement = () => {
     };
 
     const handleDeleteClick = async (partner: PartnerAccount) => {
-        if (!user) return;
+        // FIX: Add a type guard to ensure the user is an internal user before creating the payload.
+        if (!user || user.userType !== 'internal') return;
         if (window.confirm(`آیا از غیرفعال کردن همکار "${partner.name}" اطمینان دارید؟ این همکار دیگر در لیست‌های انتخابی نمایش داده نخواهد شد.`)) {
-            const result = await api.deletePartner({ id: partner.id, user });
-            if ('error' in result) {
-                alert(`Error: ${result.error}`);
-            } else {
-                fetchData();
-            }
+            await api.deletePartner({ id: partner.id, user });
+            fetchData();
         }
     };
 
@@ -354,14 +523,11 @@ const BankAccountManagement = () => {
     };
 
     const handleDeleteClick = async (account: BankAccount) => {
-        if (!user) return;
+        // FIX: Add a type guard to ensure the user is an internal user before creating the payload.
+        if (!user || user.userType !== 'internal') return;
         if (window.confirm(`آیا از غیرفعال کردن حساب بانکی "${account.accountHolder}" اطمینان دارید؟`)) {
-            const result = await api.deleteBankAccount({ id: account.id, user });
-            if ('error' in result) {
-                alert(`Error: ${result.error}`);
-            } else {
-                fetchData();
-            }
+            await api.deleteBankAccount({ id: account.id, user });
+            fetchData();
         }
     };
 
@@ -414,21 +580,54 @@ const BankAccountManagement = () => {
     )
 };
 
+const getStatusStyle = (status: CashboxRequestStatus) => {
+    switch (status) {
+        case CashboxRequestStatus.Approved:
+        case CashboxRequestStatus.AutoApproved:
+            return 'bg-green-500/20 text-green-300';
+        case CashboxRequestStatus.Pending:
+            return 'bg-yellow-500/20 text-yellow-300';
+        case CashboxRequestStatus.PendingCashboxApproval:
+            return 'bg-amber-500/20 text-amber-300';
+        case CashboxRequestStatus.Rejected:
+            return 'bg-red-500/20 text-red-300';
+        default:
+            return 'bg-slate-600/20 text-slate-300';
+    }
+};
 
 const GeneralSettings = () => {
     const api = useApi();
     const { user } = useAuth();
     const [settings, setSettings] = useState<SystemSettings | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
     
-    // State for increasing cashbox balance
     const [increaseAmount, setIncreaseAmount] = useState('');
     const [increaseCurrency, setIncreaseCurrency] = useState<Currency>(CURRENCIES[0]);
     const [increaseDescription, setIncreaseDescription] = useState('');
     const [isIncreasing, setIsIncreasing] = useState(false);
+    const [increaseBankAccountId, setIncreaseBankAccountId] = useState('');
+    const [increaseSourceAccount, setIncreaseSourceAccount] = useState('');
+    const [requestHistory, setRequestHistory] = useState<CashboxRequest[]>([]);
+
 
     const fetchData = useCallback(async () => {
-        setSettings(await api.getSystemSettings());
+        const [settingsData, accountsData, allRequests] = await Promise.all([
+            api.getSystemSettings(),
+            api.getBankAccounts(),
+            api.getCashboxRequests(),
+        ]);
+        setSettings(settingsData);
+        const activeIrtAccounts = accountsData.filter(a => a.status === 'Active' && a.currency === Currency.IRT_BANK);
+        setBankAccounts(activeIrtAccounts);
+        if (activeIrtAccounts.length > 0) {
+            setIncreaseBankAccountId(activeIrtAccounts[0].id);
+        }
+        const manualRequests = allRequests
+            .filter(r => r.linkedEntity?.type === 'Manual' && r.linkedEntity.id === 'BALANCE_ADJUST')
+            .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setRequestHistory(manualRequests);
     }, [api]);
 
     useEffect(() => {
@@ -457,21 +656,32 @@ const GeneralSettings = () => {
 
     const handleIncreaseBalance = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!user) return;
+        // FIX: Add a type guard to ensure the user is an internal user before creating the payload.
+        if (!user || user.userType !== 'internal') return;
+
+        if (increaseCurrency === Currency.IRT_BANK && !increaseBankAccountId) {
+            alert("لطفاً یک حساب بانکی مقصد را انتخاب کنید.");
+            return;
+        }
+
         setIsIncreasing(true);
         const result = await api.increaseCashboxBalance({
             amount: parseFloat(persianToEnglishNumber(increaseAmount)) || 0,
             currency: increaseCurrency,
             description: increaseDescription,
             user,
+            bankAccountId: increaseCurrency === Currency.IRT_BANK ? increaseBankAccountId : undefined,
+            sourceAccountNumber: increaseCurrency === Currency.IRT_BANK ? increaseSourceAccount : undefined,
         });
         setIsIncreasing(false);
         if ('error' in result) {
             alert(`خطا: ${result.error}`);
         } else {
-            alert('موجودی صندوق با موفقیت افزایش یافت. تراکنش در روزنامچه ثبت شد.');
+            alert('درخواست افزایش موجودی به صندوق ارسال شد.');
             setIncreaseAmount('');
             setIncreaseDescription('');
+            setIncreaseSourceAccount('');
+            fetchData();
         }
     };
 
@@ -525,9 +735,9 @@ const GeneralSettings = () => {
     return (
         <div className="space-y-12">
             <SettingsCard title="افزایش موجودی صندوق">
-                <p className="text-slate-400 mb-6">برای ثبت موجودی اولیه یا واریز وجه نقد به صندوق از این فرم استفاده کنید. این عملیات یک تراکنش "رسید" تایید شده در روزنامچه صندوق ثبت می‌کند.</p>
+                <p className="text-slate-400 mb-6">برای ثبت موجودی اولیه یا واریز وجه به صندوق از این فرم استفاده کنید. این عملیات یک درخواست "رسید" در روزنامچه صندوق ثبت می‌کند که نیازمند تایید است.</p>
                 <form onSubmit={handleIncreaseBalance} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
                         <div>
                             <label className="block text-lg font-medium text-cyan-300 mb-2">مبلغ</label>
                             <input type="text" inputMode="decimal" value={increaseAmount} onChange={(e) => setIncreaseAmount(e.target.value)} required
@@ -539,18 +749,73 @@ const GeneralSettings = () => {
                                 {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
-                         <div className="md:col-span-3">
+                         <div className="md:col-span-2">
                             <label className="block text-lg font-medium text-cyan-300 mb-2">توضیحات (اختیاری)</label>
                             <input type="text" value={increaseDescription} onChange={(e) => setIncreaseDescription(e.target.value)} placeholder="مثلا: ثبت موجودی اولیه صندوق"
                                 className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right"/>
                         </div>
                     </div>
+                    
+                    {increaseCurrency === 'IRT_BANK' && (
+                        <div className="mt-4 p-4 border-2 border-cyan-400/30 bg-cyan-400/10 rounded-md space-y-4 animate-fadeIn">
+                            <h4 className="text-xl font-bold text-cyan-300">جزئیات تراکنش بانکی</h4>
+                            
+                            <div>
+                                <label className="block text-lg font-medium text-cyan-300 mb-2">شماره حساب/کارت مبدأ (اختیاری)</label>
+                                <input type="text" value={increaseSourceAccount} onChange={(e) => setIncreaseSourceAccount(persianToEnglishNumber(e.target.value))} placeholder="شماره حساب فرستنده"
+                                    className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-left"/>
+                            </div>
+
+                            <div>
+                                <label className="block text-lg font-medium text-cyan-300 mb-2">واریز به حساب بانکی ما</label>
+                                <select value={increaseBankAccountId} onChange={(e) => setIncreaseBankAccountId(e.target.value)} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100">
+                                    <option value="" disabled>-- حساب مقصد را انتخاب کنید --</option>
+                                    {bankAccounts.map(b => (
+                                        <option key={b.id} value={b.id}>{b.bankName} - {b.accountHolder}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    )}
+
                      <div className="mt-6 text-left">
                         <ActionButton type="submit" disabled={isIncreasing}>
-                            {isIncreasing ? 'در حال ثبت...' : 'افزایش موجودی'}
+                            {isIncreasing ? 'در حال ارسال...' : 'ارسال درخواست افزایش'}
                         </ActionButton>
                     </div>
                 </form>
+            </SettingsCard>
+
+            <SettingsCard title="تاریخچه درخواست‌های افزایش موجودی">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-lg text-right text-slate-300">
+                        <thead className="text-xl text-slate-400 uppercase">
+                            <tr>
+                                <th className="px-6 py-4 font-medium">تاریخ</th>
+                                <th className="px-6 py-4 font-medium">مبلغ</th>
+                                <th className="px-6 py-4 font-medium">توضیحات</th>
+                                <th className="px-6 py-4 font-medium">درخواست کننده</th>
+                                <th className="px-6 py-4 font-medium">وضعیت</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {requestHistory.map(req => (
+                                <tr key={req.id} className="border-b border-cyan-400/10">
+                                    <td className="px-6 py-4 whitespace-nowrap">{new Date(req.createdAt).toLocaleString('fa-IR-u-nu-latn')}</td>
+                                    <td className="px-6 py-4 font-mono text-left">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(req.amount)} {req.currency}</td>
+                                    <td className="px-6 py-4">{req.reason}</td>
+                                    <td className="px-6 py-4">{req.requestedBy}</td>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-3 py-1 text-base font-semibold rounded-full ${getStatusStyle(req.status)}`}>
+                                            {cashboxRequestStatusTranslations[req.status]}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    {requestHistory.length === 0 && <p className="text-center p-4 text-slate-400">هیچ درخواستی برای افزایش موجودی ثبت نشده است.</p>}
+                </div>
             </SettingsCard>
 
             <SettingsCard title="پشتیبان‌گیری و بازیابی اطلاعات">
@@ -673,7 +938,20 @@ const RoleModal: React.FC<RoleModalProps> = ({ role, onClose, onSuccess }) => {
                 <form onSubmit={handleSubmit} className="flex flex-col flex-grow overflow-hidden">
                     <div className="px-8 py-5 border-b-2 border-cyan-400/20 flex-shrink-0"><h2 className="text-3xl font-bold text-cyan-300">{role ? 'ویرایش نقش' : 'ایجاد نقش جدید'}</h2></div>
                     <div className="p-8 space-y-6 flex-grow overflow-y-auto">
-                        <input type="text" placeholder="نام نقش" value={name} onChange={e => setName(e.target.value)} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400"/>
+                        <div>
+                            <input 
+                                type="text" 
+                                placeholder="نام نقش (مثلا: صندوقدار)" 
+                                value={name} 
+                                onChange={e => setName(e.target.value)} 
+                                required 
+                                disabled={role?.name === 'مدیر کل'}
+                                className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 disabled:bg-slate-800 disabled:cursor-not-allowed"
+                            />
+                            {role?.name === 'مدیر کل' && (
+                                <p className="text-sm text-yellow-400 mt-2">نام نقش "مدیر کل" برای حفظ یکپارچگی سیستم قابل تغییر نیست.</p>
+                            )}
+                        </div>
                         <div className="space-y-4">
                             {permissionModules.map(module => (
                                 <div key={module} className="p-4 border border-cyan-400/20 rounded-lg">
@@ -683,7 +961,7 @@ const RoleModal: React.FC<RoleModalProps> = ({ role, onClose, onSuccess }) => {
                                             <label key={action} className="flex items-center gap-2 text-lg">
                                                 <input type="checkbox" checked={permissions[module]?.[action as keyof typeof permissions[PermissionModule]] || false} onChange={e => handlePermissionChange(module, action as keyof typeof permissions[PermissionModule], e.target.checked)}
                                                     className="w-5 h-5 rounded bg-slate-700 border-slate-500 text-cyan-400 focus:ring-cyan-500"/>
-                                                <span>{permissionActionTranslations[action]}</span>
+                                                <span className="text-slate-200">{permissionActionTranslations[action]}</span>
                                             </label>
                                         ))}
                                     </div>

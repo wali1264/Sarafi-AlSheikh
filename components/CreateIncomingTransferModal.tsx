@@ -3,6 +3,7 @@ import { useApi } from '../hooks/useApi';
 import { CreateDomesticTransferPayload, Currency, User, PartnerAccount } from '../types';
 import { CURRENCIES, AFGHANISTAN_PROVINCES } from '../constants';
 import { persianToEnglishNumber } from '../utils/translations';
+import { useToast } from '../contexts/ToastContext';
 
 interface CreateIncomingTransferModalProps {
     isOpen: boolean;
@@ -31,6 +32,7 @@ const InputField: React.FC<{ label: string; name: string; value: string; onChang
 
 const CreateIncomingTransferModal: React.FC<CreateIncomingTransferModalProps> = ({ isOpen, onClose, onSuccess, currentUser }) => {
     const api = useApi();
+    const { addToast } = useToast();
     const [formData, setFormData] = useState({
         receiverName: '',
         receiverTazkereh: '',
@@ -43,7 +45,6 @@ const CreateIncomingTransferModal: React.FC<CreateIncomingTransferModalProps> = 
     const [allPartners, setAllPartners] = useState<PartnerAccount[]>([]);
     const [filteredPartners, setFilteredPartners] = useState<PartnerAccount[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     
     useEffect(() => {
         if (isOpen) {
@@ -59,7 +60,6 @@ const CreateIncomingTransferModal: React.FC<CreateIncomingTransferModalProps> = 
                 destinationProvince: '', partnerSarraf: '', partnerReference: '',
             });
             setFilteredPartners([]);
-            setError(null);
         }
     }, [isOpen, api]);
 
@@ -91,7 +91,6 @@ const CreateIncomingTransferModal: React.FC<CreateIncomingTransferModalProps> = 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        setError(null);
 
         const payload: CreateDomesticTransferPayload = {
             senderName: formData.partnerSarraf, // For incoming, sender is the partner
@@ -112,8 +111,9 @@ const CreateIncomingTransferModal: React.FC<CreateIncomingTransferModalProps> = 
 
         setIsLoading(false);
         if ('error' in result) {
-            setError(result.error);
+            addToast(result.error, 'error');
         } else {
+            addToast("حواله ورودی با موفقیت ثبت شد.", 'success');
             onSuccess();
         }
     };
@@ -127,7 +127,6 @@ const CreateIncomingTransferModal: React.FC<CreateIncomingTransferModalProps> = 
                         <h2 className="text-4xl font-bold text-amber-300 tracking-wider">ثبت حواله ورودی (از طرف همکار)</h2>
                     </div>
                     <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
-                        {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
                         
                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>

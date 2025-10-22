@@ -1,105 +1,96 @@
-import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { useApi } from '../hooks/useApi';
+import React from 'react';
 import { CashboxRequest } from '../types';
 import { cashboxRequestStatusTranslations } from '../utils/translations';
 
-const PrintableView: React.FC = () => {
-    const { requestId } = useParams<{ requestId: string }>();
-    const api = useApi();
-    const [request, setRequest] = useState<CashboxRequest | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+interface PrintableViewProps {
+    request: CashboxRequest;
+    printNote?: string;
+}
 
-    useEffect(() => {
-        if (!requestId) return;
-
-        const fetchRequest = async () => {
-            setIsLoading(true);
-            const data = await api.getCashboxRequestById(requestId);
-            setRequest(data || null);
-            setIsLoading(false);
-        };
-
-        fetchRequest();
-    }, [requestId, api]);
-
-    useEffect(() => {
-        if (!isLoading && request) {
-            // Delay print to allow content to render
-            setTimeout(() => {
-                window.print();
-            }, 500);
-        }
-    }, [isLoading, request]);
-
-    if (isLoading) {
-        return <div className="text-center p-10">در حال بارگذاری سند...</div>;
-    }
-
-    if (!request) {
-        return <div className="text-center p-10">سند با کد درخواستی یافت نشد.</div>;
-    }
-
+const PrintableView: React.FC<PrintableViewProps> = ({ request, printNote }) => {
     const isWithdrawal = request.requestType === 'withdrawal';
 
     return (
-        <div id="printable-area" className="bg-white text-black p-8 max-w-2xl mx-auto font-sans" style={{ direction: 'rtl' }}>
-            <header className="flex justify-between items-center pb-4 border-b-2 border-black">
+        <div id="printable-area" className="bg-white text-black p-10 font-sans relative" style={{ direction: 'rtl', width: '210mm', minHeight: '297mm', margin: 'auto' }}>
+            <header className="flex justify-between items-start pb-6 border-b-4 border-gray-800">
                 <div>
-                    <h1 className="text-3xl font-bold">SarrafAI</h1>
-                    <p className="text-lg">سند عملیات صندوق</p>
+                    <h1 className="text-5xl font-extrabold text-gray-900">صرافی الشیخ</h1>
+                    <p className="text-2xl text-gray-600 mt-2">سند رسمی عملیات صندوق</p>
                 </div>
-                <div className="text-left">
-                    <p><strong>کد درخواست:</strong> {request.id}</p>
-                    <p><strong>تاریخ:</strong> {new Date(request.createdAt).toLocaleString('fa-IR')}</p>
+                <div className="text-left text-lg">
+                    <p><span className="font-bold">کد درخواست:</span> <span className="font-mono">{request.id}</span></p>
+                    <p><span className="font-bold">تاریخ و ساعت:</span> {new Date(request.createdAt).toLocaleString('fa-IR')}</p>
                 </div>
             </header>
 
-            <main className="my-8">
-                <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-lg">
-                    <div className="font-bold">نوع عملیات:</div>
-                    <div className={`font-bold ${isWithdrawal ? 'text-red-700' : 'text-green-700'}`}>
-                        {isWithdrawal ? 'برداشت از صندوق' : 'واریز به صندوق'}
-                    </div>
-                    
-                    <div className="font-bold">مبلغ:</div>
-                    <div className="font-mono font-bold text-2xl">
-                        {new Intl.NumberFormat('fa-IR-u-nu-latn').format(request.amount)} {request.currency}
+            <main className="my-10 text-xl">
+                <div className="space-y-6">
+                    <div className="flex items-center justify-between p-4 bg-gray-100 rounded-lg">
+                        <span className="font-bold text-gray-700">نوع عملیات:</span>
+                        <span className={`font-extrabold text-3xl ${isWithdrawal ? 'text-red-600' : 'text-green-600'}`}>
+                            {isWithdrawal ? 'برداشت از صندوق (برد)' : 'واریز به صندوق (رسید)'}
+                        </span>
                     </div>
 
-                    <div className="font-bold">درخواست کننده:</div>
-                    <div>{request.requestedBy}</div>
-
-                    <div className="font-bold">وضعیت:</div>
-                    <div>{cashboxRequestStatusTranslations[request.status]}</div>
+                    <div className="flex items-center justify-between p-4">
+                        <span className="font-bold text-gray-700">مبلغ:</span>
+                        <span className="font-mono font-extrabold text-4xl text-gray-900">
+                            {new Intl.NumberFormat('fa-IR-u-nu-latn').format(request.amount)}
+                            <span className="text-2xl font-semibold ml-2">{request.currency}</span>
+                        </span>
+                    </div>
                     
-                    <div className="font-bold col-span-2 mt-2">دلیل / توضیحات:</div>
-                    <div className="col-span-2 border p-2 bg-gray-50 rounded min-h-[60px]">{request.reason}</div>
+                    <div className="flex items-center justify-between p-4 bg-gray-100 rounded-lg">
+                        <span className="font-bold text-gray-700">وضعیت نهایی:</span>
+                        <span className="font-bold">{cashboxRequestStatusTranslations[request.status]}</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-4">
+                        <span className="font-bold text-gray-700">درخواست کننده:</span>
+                        <span>{request.requestedBy}</span>
+                    </div>
+                    
+                    {request.resolvedBy && (
+                         <div className="flex items-center justify-between p-4 bg-gray-100 rounded-lg">
+                            <span className="font-bold text-gray-700">تایید کننده:</span>
+                            <span>{request.resolvedBy}</span>
+                        </div>
+                    )}
 
+                    <div className="p-4 border-t-2 border-gray-200 mt-4">
+                        <h3 className="font-bold text-gray-700 mb-2">شرح / توضیحات اصلی:</h3>
+                        <p className="bg-gray-50 p-3 rounded-md min-h-[50px]">{request.reason}</p>
+                    </div>
+                    
                     {request.linkedEntity && (
-                         <>
-                            <div className="font-bold col-span-2 mt-2">مربوط به:</div>
-                            <div className="col-span-2 border p-2 bg-gray-50 rounded">
-                                {request.linkedEntity.description} (کد: {request.linkedEntity.id})
-                            </div>
-                         </>
+                         <div className="p-4">
+                            <h3 className="font-bold text-gray-700 mb-2">تراکنش مرتبط:</h3>
+                            <p className="bg-gray-50 p-3 rounded-md">{request.linkedEntity.description} (کد: {request.linkedEntity.id})</p>
+                        </div>
+                    )}
+                    
+                    {printNote && (
+                        <div className="p-4 border-t-2 border-gray-200 mt-4">
+                            <h3 className="font-bold text-gray-700 mb-2">یادداشت ضمیمه چاپ:</h3>
+                            <p className="bg-yellow-100 border border-yellow-300 p-3 rounded-md whitespace-pre-wrap">{printNote}</p>
+                        </div>
                     )}
                 </div>
             </main>
 
-            <footer className="pt-12">
-                <div className="grid grid-cols-3 gap-8 text-center">
+            <footer className="absolute bottom-10 left-10 right-10 pt-10 border-t-2 border-gray-400">
+                <div className="grid grid-cols-3 gap-8 text-center text-base">
                     <div>
-                        <p>_________________________</p>
-                        <p className="font-bold mt-2">امضای درخواست کننده</p>
+                        <div className="h-20 mb-2"></div>
+                        <p className="border-t-2 border-gray-500 pt-2 font-bold">امضای درخواست کننده</p>
                     </div>
                      <div>
-                        <p>_________________________</p>
-                        <p className="font-bold mt-2">امضای صندوق دار</p>
+                        <div className="h-20 mb-2"></div>
+                        <p className="border-t-2 border-gray-500 pt-2 font-bold">امضای صندوق دار</p>
                     </div>
                      <div>
-                        <p>_________________________</p>
-                        <p className="font-bold mt-2">امضای مدیر</p>
+                        <div className="h-20 mb-2"></div>
+                        <p className="border-t-2 border-gray-500 pt-2 font-bold">مهر صرافی</p>
                     </div>
                 </div>
             </footer>

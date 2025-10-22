@@ -3,20 +3,31 @@
 import { 
     User, Role, Permissions, DomesticTransfer, CreateDomesticTransferPayload, 
     UpdateTransferStatusPayload, TransferStatus, PartnerAccount, PartnerTransaction, 
-    SettlePartnerBalancePayload, Currency, Expense, CreateExpensePayload, CashboxRequest,
+    Currency, Expense, CreateExpensePayload, CashboxRequest,
     CreateCashboxRequestPayload, ResolveCashboxRequestPayload, CashboxRequestStatus,
     CashboxBalance, SystemSettings, UpdateSystemSettingsPayload, ActivityLog,
     Customer, CustomerTransaction, AccountTransfer, CreateAccountTransferPayload, ReassignTransferPayload,
     BankAccount, AddBankAccountPayload,
-    ForeignTransaction, LogForeignTransactionPayload, IncreaseCashboxBalancePayload,
+// FIX: Removed LogForeignTransactionPayload and added types for the new two-step foreign exchange flow.
+    ForeignTransaction, IncreaseCashboxBalancePayload,
+    InitiateForeignExchangePayload, CompleteForeignExchangePayload, ForeignTransactionStatus,
     CreateUserPayload, UpdateUserPayload, DeleteUserPayload, CreateRolePayload, UpdateRolePayload, CreatePartnerPayload,
     UpdatePartnerPayload, DeletePartnerPayload, UpdateBankAccountPayload, DeleteBankAccountPayload,
     CreateCustomerPayload, UpdateCustomerPayload, FindTransfersByQueryPayload, PayoutIncomingTransferPayload,
     DashboardAnalyticsData, ProfitAndLossReportData, ReportType, CashboxSummaryReportData, GenerateReportPayload,
-    SettlePartnerBalanceByNamePayload, GetPartnerAccountByNamePayload, Asset, ExpenseCategory, InternalCustomerExchangePayload,
+    GetPartnerAccountByNamePayload, Asset, ExpenseCategory, InternalCustomerExchangePayload,
     InternalLedgerReportData, CommissionTransfer, LogCommissionTransferPayload, ExecuteCommissionTransferPayload,
+    CommissionTransferStatus,
 // FIX: Import types for Amanat feature
-    Amanat, AmanatStatus, CreateAmanatPayload, ReturnAmanatPayload
+    Amanat, AmanatStatus, CreateAmanatPayload, ReturnAmanatPayload,
+    ReceiveFromPartnerPayload,
+    PayToPartnerPayload,
+    AuthenticatedUser,
+    ExternalLogin,
+    CreateExternalLoginPayload,
+    DeleteExternalLoginPayload,
+    ExpenseStatus,
+    InternalExchange,
 } from '../types';
 import { CURRENCIES } from '../constants';
 import notificationService from './notificationService';
@@ -40,9 +51,18 @@ class InMemoryDatabase {
         return InMemoryDatabase.instance;
     }
 
+    private dateReviver(key: string, value: any): any {
+        // A regex to check for ISO 8601 date strings
+        const isoDateRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
+        if (typeof value === 'string' && isoDateRegex.test(value)) {
+            return new Date(value);
+        }
+        return value;
+    }
+
     private init() {
         if (this.isInitialized) return;
-        const DB_VERSION = '2.1.0'; // Updated version to include EUR currency
+        const DB_VERSION = '2.5.0'; // Updated version to remove default employee role.
         try {
             const storedVersion = localStorage.getItem('sarrafi_db_version');
             const storedDb = localStorage.getItem('sarrafi_db');
@@ -53,33 +73,8 @@ class InMemoryDatabase {
                 this.seed();
                 localStorage.setItem('sarrafi_db_version', DB_VERSION);
             } else {
-                // Version matches, load from storage as usual
-                this.db = JSON.parse(storedDb);
-                // Revive date objects from ISO strings after JSON.parse
-                this.db.domesticTransfers?.forEach((t: any) => {
-                    t.createdAt = new Date(t.createdAt);
-                    t.history?.forEach((h: any) => h.timestamp = new Date(h.timestamp));
-                });
-                this.db.expenses?.forEach((e: any) => e.createdAt = new Date(e.createdAt));
-                this.db.cashboxRequests?.forEach((r: any) => {
-                    r.createdAt = new Date(r.createdAt);
-                    if (r.resolvedAt) r.resolvedAt = new Date(r.resolvedAt);
-                    if (r.reviewedAt) r.reviewedAt = new Date(r.reviewedAt);
-                });
-                this.db.partnerTransactions?.forEach((t: any) => t.timestamp = new Date(t.timestamp));
-                this.db.customerTransactions?.forEach((t: any) => t.timestamp = new Date(t.timestamp));
-                this.db.accountTransfers?.forEach((t: any) => t.timestamp = new Date(t.timestamp));
-                this.db.foreignTransactions?.forEach((t: any) => t.timestamp = new Date(t.timestamp));
-                this.db.commissionTransfers?.forEach((t: any) => {
-                    t.createdAt = new Date(t.createdAt);
-                    if (t.completedAt) t.completedAt = new Date(t.completedAt);
-                });
-                // FIX: Revive date objects for Amanat
-                this.db.amanat?.forEach((a: any) => {
-                    a.createdAt = new Date(a.createdAt);
-                    if (a.returnedAt) a.returnedAt = new Date(a.returnedAt);
-                });
-                this.db.activityLogs?.forEach((l: any) => l.timestamp = new Date(l.timestamp));
+                // Version matches, load from storage and revive all date strings.
+                this.db = JSON.parse(storedDb, this.dateReviver);
             }
         } catch (error) {
             console.error("Failed to initialize database, seeding new data.", error);
@@ -98,11 +93,27 @@ class InMemoryDatabase {
     }
     
     public get<T>(table: string): T[] {
-        return this.db[table] || [];
+        const data = this.db[table] || [];
+        // Return a deep copy to prevent direct state mutation and to ensure
+        // React's change detection triggers UI updates correctly.
+        // The reviver function will convert ISO date strings back to Date objects.
+        const jsonString = JSON.stringify(data);
+        return JSON.parse(jsonString, this.dateReviver);
     }
 
     public getById<T extends {id: string}>(table: string, id: string): T | undefined {
-        return this.get<T>(table).find(item => item.id === id);
+        const tableData = this.db[table] as T[] | undefined;
+        if (!tableData) {
+            return undefined;
+        }
+        const item = tableData.find(i => i.id === id);
+        // Return a deep copy of the found item to ensure reference inequality.
+        // The reviver function will convert ISO date strings back to Date objects.
+        if (item) {
+            const jsonString = JSON.stringify(item);
+            return JSON.parse(jsonString, this.dateReviver);
+        }
+        return undefined;
     }
     
     public add<T extends {id: string}>(table: string, item: T): T {
@@ -115,7 +126,7 @@ class InMemoryDatabase {
     }
 
     public update<T extends {id: string}>(table: string, id: string, updates: Partial<T>): T | undefined {
-        const items = this.get<T>(table);
+        const items = this.db[table] || [];
         const itemIndex = items.findIndex(i => i.id === id);
         if (itemIndex > -1) {
             items[itemIndex] = { ...items[itemIndex], ...updates };
@@ -162,28 +173,15 @@ class InMemoryDatabase {
             reports: { view: true }, settings: { view: true, edit: true },
             amanat: { view: true, create: true, process: true },
         };
-        const operatorPermissions: Permissions = {
-            dashboard: { view: true }, cashbox: { view: true, create: true },
-            domesticTransfers: { view: true, create: true, edit: true, process: true },
-            foreignTransfers: { view: true, create: true },
-            commissionTransfers: { view: true, create: true, process: true },
-            accountTransfers: { view: true, create: true }, customers: { view: true, create: true, edit: true },
-            partnerAccounts: { view: true }, expenses: { view: true, create: true },
-            reports: { view: true }, settings: {},
-            amanat: { view: true, create: true },
-        };
         
         const roles: Role[] = [
             { id: 'role-1', name: 'مدیر کل', permissions: adminPermissions },
-            { id: 'role-2', name: 'کارمند', permissions: operatorPermissions }
         ];
 
         const users: User[] = [
             { id: 'user-1', name: 'مدیر سیستم', username: 'admin', password: 'admin', roleId: 'role-1' },
-            { id: 'user-2', name: 'کارمند', username: 'user', password: '123', roleId: 'role-2' }
         ];
         
-        // Test data removed as per user request, only essential accounts remain.
         const customers: Customer[] = [
             { id: 'cust-suspense', name: 'حساب معلق سیستم', code: '_SUSPENSE_', whatsappNumber: '+93000000000', balances: {} }
         ];
@@ -196,6 +194,7 @@ class InMemoryDatabase {
             { currency: Currency.PKR, balance: 0 },
             { currency: Currency.EUR, balance: 0 },
             { currency: Currency.IRT_CASH, balance: 0 },
+            { currency: Currency.IRT_BANK, balance: 0 },
         ];
         
         const bankAccounts: BankAccount[] = [
@@ -214,8 +213,9 @@ class InMemoryDatabase {
             systemSettings: [settings], domesticTransfers: [], expenses: [],
             cashboxRequests: [], partnerTransactions: [], customerTransactions: [],
             accountTransfers: [], bankAccounts, foreignTransactions: [],
-            commissionTransfers: [],
+            commissionTransfers: [], externalLogins: [],
             amanat: [],
+            internalExchanges: [],
             activityLogs: [{id: 'log-0', timestamp: new Date(), user: 'سیستم', action: 'پایگاه داده با اطلاعات پاکسازی شده راه‌اندازی شد.'}]
         };
 
@@ -238,14 +238,79 @@ class SarrafiApiService {
     }
     
     // --- Auth ---
-    async login(username: string, password?: string): Promise<User | { error: string }> {
-        const user = this.db.get<User>('users').find(u => u.username === username && u.password === password);
-        if (user) {
-            const role = this.db.getById<Role>('roles', user.roleId);
-            return { ...user, role };
+    async login(username: string, password?: string): Promise<AuthenticatedUser | { error: string }> {
+        // 1. Try to log in as an internal user
+        const internalUser = this.db.get<User>('users').find(u => u.username === username && u.password === password);
+        if (internalUser) {
+            const role = this.db.getById<Role>('roles', internalUser.roleId);
+            if (!role) {
+                return { error: 'نقش کاربر یافت نشد. با مدیر سیستم تماس بگیرید.' };
+            }
+            return { ...internalUser, role, userType: 'internal' };
         }
+
+        // 2. If not found, try to log in as an external user
+        const externalLogin = this.db.get<ExternalLogin>('externalLogins').find(u => u.username === username && u.password === password);
+        if (externalLogin) {
+            if (externalLogin.loginType === 'customer') {
+                const customer = this.db.getById<Customer>('customers', externalLogin.linkedEntityId);
+                if (!customer) return { error: 'حساب مشتری مرتبط با این لاگین یافت نشد.' };
+                return { ...externalLogin, userType: 'customer', entity: customer };
+            } else if (externalLogin.loginType === 'partner') {
+                const partner = this.db.getById<PartnerAccount>('partnerAccounts', externalLogin.linkedEntityId);
+                if (!partner) return { error: 'حساب همکار مرتبط با این لاگین یافت نشد.' };
+                return { ...externalLogin, userType: 'partner', entity: partner };
+            }
+        }
+
+        // 3. If still not found, return error
         return { error: 'نام کاربری یا رمز عبور اشتباه است.' };
     }
+
+    // --- External Logins ---
+    async getExternalLogins(): Promise<(ExternalLogin & { entityName: string })[]> {
+        const logins = this.db.get<ExternalLogin>('externalLogins');
+        const customers = this.db.get<Customer>('customers');
+        const partners = this.db.get<PartnerAccount>('partnerAccounts');
+
+        return logins.map(login => {
+            let entityName = 'یافت نشد';
+            if (login.loginType === 'customer') {
+                entityName = customers.find(c => c.id === login.linkedEntityId)?.name || 'مشتری حذف شده';
+            } else {
+                entityName = partners.find(p => p.id === login.linkedEntityId)?.name || 'همکار حذف شده';
+            }
+            return { ...login, entityName };
+        });
+    }
+
+    async createExternalLogin(payload: CreateExternalLoginPayload): Promise<ExternalLogin | { error: string }> {
+        const { user, ...loginData } = payload;
+
+        // Check for username duplication across both user types
+        const isUsernameTaken = this.db.get<User>('users').some(u => u.username === loginData.username) ||
+                                this.db.get<ExternalLogin>('externalLogins').some(el => el.username === loginData.username);
+        
+        if (isUsernameTaken) {
+            return { error: `نام کاربری "${loginData.username}" قبلا استفاده شده است.` };
+        }
+
+        const newLogin: ExternalLogin = {
+            ...loginData,
+            id: this.generateId('ext'),
+        };
+        this.logActivity(user.name, `دسترسی کاربری برای ${loginData.loginType} با نام کاربری ${loginData.username} ایجاد کرد.`);
+        return this.db.add('externalLogins', newLogin);
+    }
+    
+    async deleteExternalLogin(payload: DeleteExternalLoginPayload): Promise<{ success: boolean }> {
+        const login = this.db.getById<ExternalLogin>('externalLogins', payload.id);
+        if (login) {
+            this.logActivity(payload.user.name, `دسترسی کاربر خارجی ${login.username} را حذف کرد.`);
+        }
+        return { success: this.db.delete('externalLogins', payload.id) };
+    }
+
 
     // --- Users & Roles ---
     async getUsers(): Promise<User[]> { return this.db.get<User>('users'); }
@@ -276,24 +341,33 @@ class SarrafiApiService {
 
     // --- Customers ---
     async getCustomers(): Promise<Customer[]> { return this.db.get<Customer>('customers'); }
-    // FIX: Explicitly provide the generic type to `getById` to ensure the full Customer object is returned.
     async getCustomerById(id: string): Promise<Customer | undefined> { return this.db.getById<Customer>('customers', id); }
     async getCustomerByCode(code: string): Promise<Customer | undefined> {
         return this.db.get<Customer>('customers').find(c => c.code === code);
     }
-    // FIX: Added validation and updated return type to match UI expectations.
     async createCustomer(payload: CreateCustomerPayload): Promise<Customer | { error: string }> {
-        const existing = this.db.get<Customer>('customers').find(c => c.code === payload.code);
-        if (existing) return { error: `مشتری با کد ${payload.code} از قبل وجود دارد.` };
-// FIX: Ensure the 'balances' property is not optional to match the 'Customer' type.
-        const newCustomer: Customer = { ...payload, id: this.generateId('cust'), balances: payload.balances || {} };
-        return this.db.add('customers', newCustomer);
+        const { user, ...customerData } = payload;
+        const existing = this.db.get<Customer>('customers').find(c => c.code === customerData.code);
+        if (existing) return { error: `مشتری با کد ${customerData.code} از قبل وجود دارد.` };
+        
+        const newCustomer: Customer = { 
+            ...customerData, 
+            id: this.generateId('cust'), 
+            balances: {} 
+        };
+        this.db.add('customers', newCustomer);
+
+        this.logActivity(user.name, `مشتری جدید ${newCustomer.name} (کد: ${newCustomer.code}) را با موجودی صفر ثبت کرد.`);
+        return newCustomer;
     }
      async updateCustomer(payload: UpdateCustomerPayload): Promise<Customer | { error: string }> {
-        this.logActivity(payload.user.name, `اطلاعات مشتری ${payload.name} (کد: ${payload.code}) را ویرایش کرد.`);
         const { id, user, ...customerData } = payload;
+        const customer = this.db.getById<Customer>('customers', id);
+        if (!customer) return { error: 'Customer not found' };
+
+        this.logActivity(user.name, `اطلاعات مشتری ${customer.name} (کد: ${customer.code}) را ویرایش کرد.`);
         const updated = this.db.update<Customer>('customers', id, customerData);
-        return updated || { error: 'Customer not found' };
+        return updated || { error: 'Failed to update customer' };
     }
     
     // --- Domestic Transfers ---
@@ -301,10 +375,15 @@ class SarrafiApiService {
     async getDomesticTransferById(id: string): Promise<DomesticTransfer | undefined> { return this.db.getById<DomesticTransfer>('domesticTransfers', id); }
     
     async createDomesticTransfer(payload: CreateDomesticTransferPayload): Promise<DomesticTransfer | { error: string }> {
-        // Prevent creation of dual-identity transfers
         if (payload.isCashPayment && payload.partnerReference) {
             return { error: 'یک حواله نمی‌تواند همزمان ورودی (دارای کد همکار) و پرداخت نقدی باشد.' };
         }
+
+        // For outgoing cash payments, the initial status is PendingCashbox.
+        // For incoming or customer account transfers, it's Unexecuted.
+        const initialStatus = payload.isCashPayment && !payload.partnerReference 
+            ? TransferStatus.PendingCashbox 
+            : TransferStatus.Unexecuted;
 
         const newTransfer: DomesticTransfer = {
             id: this.generateId('DT'),
@@ -317,20 +396,15 @@ class SarrafiApiService {
             destinationProvince: payload.destinationProvince,
             partnerSarraf: payload.partnerSarraf,
             partnerReference: payload.partnerReference,
-            status: TransferStatus.Unexecuted,
+            status: initialStatus,
             createdBy: payload.user.name,
-            history: [{ status: TransferStatus.Unexecuted, timestamp: new Date(), user: payload.user.name }]
+            history: [{ status: initialStatus, timestamp: new Date(), user: payload.user.name }]
         };
 
-        // Handle payment method & transfer type
-        // If partnerReference exists, it's an INCOMING transfer. No financial action on creation.
         if (payload.partnerReference) {
-            // This is the registration of an incoming transfer.
-            // Financials (cashbox withdrawal & partner balance update) will be handled upon execution.
+           // Incoming transfer - no financial action on creation
         }
-        // If it's an OUTGOING transfer...
         else if (payload.isCashPayment) {
-            // Create a cashbox deposit request for the cash received from a walk-in customer.
             const reason = `واریز نقدی برای حواله خروجی ${newTransfer.id} به نام ${newTransfer.receiver.name}`;
             await this.createCashboxRequest({
                 requestType: 'deposit',
@@ -341,14 +415,12 @@ class SarrafiApiService {
                 linkedEntity: {type: 'DomesticTransfer', id: newTransfer.id, description: reason}
             });
         } else {
-            // It's an OUTGOING transfer from a customer's account. Link the customer ID.
-            // The financial transaction (debit from customer) will happen upon execution.
             const customer = await this.getCustomerByCode(payload.customerCode!);
             if (!customer) return { error: 'مشتری با این کد یافت نشد.' };
             newTransfer.customerId = customer.id;
         }
 
-        this.logActivity(payload.user.name, `حواله ${newTransfer.id} را به مبلغ ${payload.amount} ${payload.currency} ایجاد کرد.`);
+        this.logActivity(payload.user.name, `درخواست حواله ${newTransfer.id} را به مبلغ ${payload.amount} ${payload.currency} ثبت کرد.`);
         return this.db.add('domesticTransfers', newTransfer);
     }
 
@@ -357,7 +429,8 @@ class SarrafiApiService {
         if (!transfer) return { error: "حواله یافت نشد." };
 
         const validTransitions: { [key in TransferStatus]?: TransferStatus[] } = {
-            [TransferStatus.Unexecuted]: [TransferStatus.Executed, TransferStatus.Cancelled],
+            [TransferStatus.Unexecuted]: [TransferStatus.Executed, TransferStatus.Cancelled, TransferStatus.PendingCashbox],
+            [TransferStatus.PendingCashbox]: [TransferStatus.Executed, TransferStatus.RejectedByCashbox, TransferStatus.Unexecuted] // Added Unexecuted for the new flow
         };
 
         if (validTransitions[transfer.status] && !validTransitions[transfer.status]!.includes(payload.newStatus)) {
@@ -369,60 +442,65 @@ class SarrafiApiService {
 
         const originalStatus = transfer.status;
         
-        // --- Handle Financial Transactions ONLY upon execution ---
         if (payload.newStatus === TransferStatus.Executed) {
             const isIncoming = !!transfer.partnerReference;
 
-            // Step 1: Handle customer debit for outgoing transfers
             if (!isIncoming && transfer.customerId) {
                 const customer = await this.getCustomerById(transfer.customerId);
                 if (!customer) return { error: 'مشتری مرتبط با این حواله یافت نشد.' };
                 
                 const totalDeduction = transfer.amount + transfer.commission;
+                const customerBalance = customer.balances[transfer.currency] || 0;
+                if (customerBalance < totalDeduction) {
+                    return { error: `موجودی حساب مشتری (${new Intl.NumberFormat().format(customerBalance)} ${transfer.currency}) برای اجرای این حواله کافی نیست.` };
+                }
+
                 const desc = `بابت اجرای حواله ${transfer.id} (مبلغ: ${transfer.amount}, کارمزد: ${transfer.commission})`;
                 this._updateCustomerBalance(customer.id, -totalDeduction, transfer.currency, 'debit', desc, transfer.id, 'DomesticTransfer');
             }
 
-            // Step 2: Handle partner and cashbox transactions
             const partner = await this.getPartnerAccountByName({ partnerName: transfer.partnerSarraf });
             if ('error' in partner) return { error: `همکار با نام '${transfer.partnerSarraf}' یافت نشد.` };
 
             if (isIncoming) {
-                // This is a transfer sent TO us. We are paying it out (Executing it).
-                
-                // SECURITY CHECK: Ensure cashbox has sufficient funds before proceeding.
-                const balances = this.db.get<CashboxBalance>('cashboxBalances');
-                const balance = balances.find(b => b.currency === transfer.currency);
-                const currentBalance = balance ? balance.balance : 0;
-
-                if (currentBalance < transfer.amount) {
-                    return { error: `موجودی صندوق ${transfer.currency} برای پرداخت این حواله کافی نیست. موجودی فعلی: ${new Intl.NumberFormat('en-US').format(currentBalance)}` };
-                }
-
-                const reason = `پرداخت به مشتری برای حواله ورودی ${transfer.id} از طرف ${transfer.partnerSarraf}`;
-                await this.createCashboxRequest({
-                    requestType: 'withdrawal',
-                    amount: transfer.amount,
-                    currency: transfer.currency,
-                    reason, user: payload.user,
-                    linkedEntity: { type: 'DomesticTransfer', id: transfer.id, description: reason }
-                });
+                // The actual withdrawal is now handled by the cashbox approval workflow.
+                // Here, we just mark the transfer as executed and update the partner balance.
                 this._updatePartnerBalance(partner.id, -transfer.amount, transfer.currency, 'debit', `پرداخت حواله ${transfer.id}`, transfer.id);
-
             } else {
-                // This is a transfer sent FROM us. Our partner paid it out (Executed it).
                 this._updatePartnerBalance(partner.id, transfer.amount, transfer.currency, 'credit', `اجرای حواله ${transfer.id}`, transfer.id);
             }
-             // Send notification if it was an outgoing transfer from a customer account
             if (!isIncoming && transfer.customerId) {
                 const customer = await this.getCustomerById(transfer.customerId);
                 if (customer?.whatsappNumber) {
                     notificationService.sendWhatsAppNotification(customer.whatsappNumber, `حواله شما با کد ${transfer.id} به مبلغ ${transfer.amount} ${transfer.currency} به گیرنده پرداخت شد. SarrafAI`);
                 }
             }
+        } else if (payload.newStatus === TransferStatus.Cancelled) {
+            const isCashPaidOutgoing = !transfer.customerId && !transfer.partnerReference;
+
+            if (isCashPaidOutgoing) {
+                const reason = `بازگشت وجه بابت لغو حواله ${transfer.id} به ${transfer.sender.name}`;
+                const rollbackAmount = transfer.amount + transfer.commission;
+                this.db.update<DomesticTransfer>(transfer.id, 'domesticTransfers', { status: TransferStatus.PendingCashbox, history: [...transfer.history, { status: TransferStatus.PendingCashbox, timestamp: new Date(), user: payload.user.name }]});
+                const cashboxResult = await this.createCashboxRequest({
+                    requestType: 'withdrawal',
+                    amount: rollbackAmount,
+                    currency: transfer.currency,
+                    reason,
+                    user: payload.user,
+                    linkedEntity: { type: 'DomesticTransfer', id: transfer.id, description: reason }
+                });
+                if('error' in cashboxResult) return cashboxResult;
+                // Don't update status here, let the cashbox rejection handle it if needed.
+                return this.db.getById<DomesticTransfer>('domesticTransfers', transfer.id)!;
+                
+            } else if (transfer.customerId) {
+                const totalReturnAmount = transfer.amount + transfer.commission;
+                const description = `بابت بازگشت وجه حواله لغو شده شماره ${transfer.id}`;
+                this._updateCustomerBalance(transfer.customerId, totalReturnAmount, transfer.currency, 'credit', description, transfer.id, 'DomesticTransfer');
+            }
         }
         
-        // Update status after all financial logic is successfully completed
         transfer.status = payload.newStatus;
         transfer.history.push({ status: payload.newStatus, timestamp: new Date(), user: payload.user.name });
 
@@ -447,12 +525,32 @@ class SarrafiApiService {
     }
 
     async payoutIncomingTransfer(payload: PayoutIncomingTransferPayload): Promise<DomesticTransfer | { error: string }> {
-        return this.updateTransferStatus({ ...payload, newStatus: TransferStatus.Executed });
+        const transfer = this.db.getById<DomesticTransfer>('domesticTransfers', payload.transferId);
+        if (!transfer) return { error: 'حواله یافت نشد.' };
+        if (transfer.status !== TransferStatus.Unexecuted) return { error: 'این حواله قبلا پردازش شده یا در وضعیت نامعتبر است.' };
+        
+        const reason = `پرداخت به مشتری برای حواله ورودی ${transfer.id} از طرف ${transfer.partnerSarraf}`;
+        this.db.update<DomesticTransfer>(transfer.id, 'domesticTransfers', { status: TransferStatus.PendingCashbox, history: [...transfer.history, { status: TransferStatus.PendingCashbox, timestamp: new Date(), user: payload.user.name }]});
+
+        const cashboxResult = await this.createCashboxRequest({
+            requestType: 'withdrawal',
+            amount: transfer.amount,
+            currency: transfer.currency,
+            reason, user: payload.user,
+            linkedEntity: { type: 'DomesticTransfer', id: transfer.id, description: reason }
+        });
+        
+        if ('error' in cashboxResult) {
+            // Rollback status change
+            this.db.update<DomesticTransfer>(transfer.id, 'domesticTransfers', { status: TransferStatus.Unexecuted, history: transfer.history });
+            return cashboxResult;
+        }
+
+        return this.db.getById<DomesticTransfer>('domesticTransfers', transfer.id)!;
     }
 
     // --- Partner Accounts ---
     async getPartnerAccounts(): Promise<PartnerAccount[]> { return this.db.get<PartnerAccount>('partnerAccounts'); }
-    // FIX: Explicitly provide the generic type to `getById` to ensure the full PartnerAccount object is returned.
     async getPartnerAccountById(id: string): Promise<PartnerAccount | undefined> { return this.db.getById<PartnerAccount>('partnerAccounts', id); }
     async getTransactionsForPartner(partnerId: string): Promise<PartnerTransaction[]> {
         return this.db.get<PartnerTransaction>('partnerTransactions').filter(t => t.partnerId === partnerId);
@@ -460,22 +558,64 @@ class SarrafiApiService {
     
     // --- Cashbox ---
     async getCashboxRequests(): Promise<CashboxRequest[]> { return this.db.get<CashboxRequest>('cashboxRequests'); }
-    // FIX: Explicitly provide the generic type to `getById` to ensure the full CashboxRequest object is returned.
     async getCashboxRequestById(id: string): Promise<CashboxRequest | undefined> { return this.db.getById<CashboxRequest>('cashboxRequests', id); }
-    async getCashboxBalances(): Promise<CashboxBalance[]> { return this.db.get<CashboxBalance>('cashboxBalances'); }
+    async getCashboxBalances(): Promise<CashboxBalance[]> {
+        const balances: CashboxBalance[] = this.db.get<CashboxBalance>('cashboxBalances');
+        
+        const conceptualIrtBank = balances.find(b => b.currency === Currency.IRT_BANK);
+        const conceptualIrtBankBalance = conceptualIrtBank ? conceptualIrtBank.balance : 0;
+        
+        const bankAccounts = this.db.get<BankAccount>('bankAccounts');
+        const totalPhysicalBankBalance = bankAccounts
+            .filter(acc => acc.status === 'Active' && acc.currency === Currency.IRT_BANK)
+            .reduce((sum, acc) => sum + acc.balance, 0);
+            
+        const finalIrtBankTotal = totalPhysicalBankBalance + conceptualIrtBankBalance;
 
-    // FIX: Added validation for customer code and updated return type to match UI expectations.
+        if (conceptualIrtBank) {
+            conceptualIrtBank.balance = finalIrtBankTotal;
+        } else {
+            balances.push({ currency: Currency.IRT_BANK, balance: finalIrtBankTotal });
+        }
+        
+        return balances;
+    }
+
+    private _hasCashierRole(): boolean {
+        const users = this.db.get<User>('users');
+        const roles = this.db.get<Role>('roles');
+        return users.some(u => {
+            const role = roles.find(r => r.id === u.roleId);
+            return role?.permissions?.cashbox?.approve === true;
+        });
+    }
+
     async createCashboxRequest(payload: CreateCashboxRequestPayload): Promise<CashboxRequest | { error: string }> {
         if (payload.customerCode) {
             const customer = this.db.get<Customer>('customers').find(c => c.code === payload.customerCode);
-            if (!customer) {
-                return { error: `مشتری با کد ${payload.customerCode} یافت نشد.` };
+            if (!customer) return { error: `مشتری با کد ${payload.customerCode} یافت نشد.` };
             }
-        }
 
         const settings = this.db.get<SystemSettings>('systemSettings')[0];
-        const threshold = settings.approvalThresholds[payload.currency] ?? 0;
-        const status = payload.amount <= threshold ? CashboxRequestStatus.AutoApproved : CashboxRequestStatus.Pending;
+        const threshold = settings.approvalThresholds[payload.currency];
+        const needsManagerApproval = typeof threshold === 'number' && payload.amount > threshold;
+        const hasCashier = this._hasCashierRole();
+
+        let status: CashboxRequestStatus;
+        if (payload.bypassCashier) {
+            status = CashboxRequestStatus.AutoApproved;
+        } else if (needsManagerApproval) {
+            status = CashboxRequestStatus.Pending;
+        } else if (hasCashier) {
+            status = CashboxRequestStatus.PendingCashboxApproval;
+        } else {
+            status = CashboxRequestStatus.Pending; // Fallback to manager if no cashier exists
+        }
+
+        if (status === CashboxRequestStatus.AutoApproved && payload.requestType === 'withdrawal') {
+            const checkResult = this._checkBalanceForRequest(payload.amount, payload.currency, payload.bankAccountId);
+            if (checkResult.error) return { error: checkResult.error };
+        }
 
         const newRequest: CashboxRequest = {
             id: this.generateId('CBR'),
@@ -497,29 +637,131 @@ class SarrafiApiService {
     async resolveCashboxRequest(payload: ResolveCashboxRequestPayload): Promise<CashboxRequest | { error: string }> {
         const request = this.db.getById<CashboxRequest>('cashboxRequests', payload.requestId);
         if (!request) return { error: "Request not found." };
-        if (request.status !== CashboxRequestStatus.Pending) return { error: "Request already resolved." };
-
-        const newStatus = payload.resolution === 'approve' ? CashboxRequestStatus.Approved : CashboxRequestStatus.Rejected;
-        request.status = newStatus;
-        request.resolvedBy = payload.user.name;
-        request.resolvedAt = new Date();
-
-        if (newStatus === CashboxRequestStatus.Approved) {
-            this._processCashboxRequest(request);
+        if (request.status !== CashboxRequestStatus.Pending && request.status !== CashboxRequestStatus.PendingCashboxApproval) {
+             return { error: "Request already resolved or not in a resolvable state." };
         }
-        
-        this.logActivity(payload.user.name, `درخواست صندوق ${request.id} را ${newStatus === 'Approved' ? 'تایید' : 'رد'} کرد.`);
-        const updatedRequest = this.db.update<CashboxRequest>('cashboxRequests', request.id, request);
-        return updatedRequest || { error: 'Failed to update request' };
+
+        if (payload.resolution === 'reject') {
+            const newStatus = CashboxRequestStatus.Rejected;
+            if (request.linkedEntity?.type === 'DomesticTransfer') {
+                await this.updateTransferStatus({ transferId: request.linkedEntity.id, newStatus: TransferStatus.RejectedByCashbox, user: payload.user });
+            }
+            if (request.linkedEntity?.type === 'ForeignTransaction') {
+                const ft = this.db.getById<ForeignTransaction>('foreignTransactions', request.linkedEntity.id);
+                if (ft) {
+                    this.db.update<ForeignTransaction>('foreignTransactions', ft.id, { status: ForeignTransactionStatus.Rejected });
+                }
+            }
+            if (request.linkedEntity?.type === 'CommissionTransfer') {
+                const ct = this.db.getById<CommissionTransfer>('commissionTransfers', request.linkedEntity.id);
+                if (ct) {
+                    this.db.update<CommissionTransfer>('commissionTransfers', ct.id, { status: CommissionTransferStatus.Rejected });
+                }
+            }
+            if (request.linkedEntity?.type === 'Expense') {
+                const expense = this.db.getById<Expense>('expenses', request.linkedEntity.id);
+                if (expense) {
+                    this.db.update<Expense>('expenses', expense.id, { status: ExpenseStatus.Rejected });
+                }
+            }
+            this.logActivity(payload.user.name, `درخواست صندوق ${request.id} را رد کرد.`);
+            return this.db.update<CashboxRequest>('cashboxRequests', request.id, { status: newStatus, resolvedBy: payload.user.name, resolvedAt: new Date() })!;
+        }
+
+        // --- Approval Logic ---
+        const isManagerApproval = request.status === CashboxRequestStatus.Pending;
+        const hasCashier = this._hasCashierRole();
+
+        if (isManagerApproval) {
+            if (hasCashier) {
+                // Pass down to cashier
+                this.logActivity(payload.user.name, `درخواست صندوق ${request.id} را تایید اولیه کرد.`);
+                return this.db.update<CashboxRequest>('cashboxRequests', request.id, { status: CashboxRequestStatus.PendingCashboxApproval })!;
+            } else {
+                // Manager is the final approver (no cashier exists)
+                const processResult = this._processCashboxRequest(request);
+                // FIX: Replaced optional chaining with a standard truthy check to ensure type safety.
+                if (processResult && processResult.error) return processResult;
+                
+                this.logActivity(payload.user.name, `درخواست صندوق ${request.id} را به عنوان تایید نهایی ثبت کرد.`);
+                const updatedRequest = this.db.update<CashboxRequest>('cashboxRequests', request.id, { status: CashboxRequestStatus.Approved, resolvedBy: payload.user.name, resolvedAt: new Date() })!;
+                await this._finalizeLinkedEntity(updatedRequest, payload.user);
+                return updatedRequest;
+            }
+        } else { // Is Cashier Approval
+            const processResult = this._processCashboxRequest(request);
+            // FIX: Replaced optional chaining with a standard truthy check to ensure type safety.
+            if (processResult && processResult.error) return processResult;
+            
+            this.logActivity(payload.user.name, `درخواست صندوق ${request.id} را تایید نهایی کرد.`);
+            const updatedRequest = this.db.update<CashboxRequest>('cashboxRequests', request.id, { status: CashboxRequestStatus.Approved, resolvedBy: payload.user.name, resolvedAt: new Date() })!;
+            await this._finalizeLinkedEntity(updatedRequest, payload.user);
+            return updatedRequest;
+        }
+    }
+
+    private async _finalizeLinkedEntity(request: CashboxRequest, user: User) {
+        if (request.linkedEntity?.type === 'DomesticTransfer') {
+            // This now handles both payout withdrawals and the new creation deposit flow
+            if (request.requestType === 'deposit') {
+                // Cash for an outgoing transfer was received and approved. The transfer can now be marked as unexecuted.
+                 await this.updateTransferStatus({ transferId: request.linkedEntity.id, newStatus: TransferStatus.Unexecuted, user });
+            } else { // withdrawal
+                // Cash for an incoming transfer was paid out. The transfer is now executed.
+                 await this.updateTransferStatus({ transferId: request.linkedEntity.id, newStatus: TransferStatus.Executed, user });
+            }
+        }
+        if (request.linkedEntity?.type === 'ForeignTransaction') { 
+            const ft = this.db.getById<ForeignTransaction>('foreignTransactions', request.linkedEntity.id);
+            if (!ft) return;
+            
+            if (request.requestType === 'withdrawal' && request.id === ft.withdrawalRequestId) {
+                // Withdrawal for FT is approved.
+                this.db.update<ForeignTransaction>('foreignTransactions', ft.id, { status: ForeignTransactionStatus.PendingDeposit });
+            } else if (request.requestType === 'deposit' && request.id === ft.depositRequestId) {
+                // Deposit for FT is approved. It is complete.
+                this.db.update<ForeignTransaction>('foreignTransactions', ft.id, { status: ForeignTransactionStatus.Completed });
+            }
+        }
+        if (request.linkedEntity?.type === 'CommissionTransfer') {
+            const ct = this.db.getById<CommissionTransfer>('commissionTransfers', request.linkedEntity.id);
+            if (!ct) return;
+    
+            if (request.requestType === 'deposit' && request.id === ct.depositRequestId) {
+                // Initial deposit is approved. Transfer is now ready for payout execution.
+                this.db.update<CommissionTransfer>('commissionTransfers', ct.id, { status: CommissionTransferStatus.PendingExecution });
+            } else if (request.requestType === 'withdrawal' && request.id === ct.withdrawalRequestId) {
+                // Payout withdrawal is approved. Transfer is complete.
+                this.db.update<CommissionTransfer>('commissionTransfers', ct.id, { status: CommissionTransferStatus.Completed });
+            }
+        }
+        if (request.linkedEntity?.type === 'Expense') {
+            const expense = this.db.getById<Expense>('expenses', request.linkedEntity.id);
+            if (expense) {
+                this.db.update<Expense>('expenses', expense.id, { status: ExpenseStatus.Approved });
+            }
+        }
+        if (request.linkedEntity?.type === 'PartnerSettlement') {
+            const details = request.linkedEntity.details as any;
+            this._updatePartnerBalance(
+                request.linkedEntity.id, // partnerId
+                details.amount,
+                details.currency,
+                details.type,
+                request.linkedEntity.description, // Use the reason from cashbox as description
+                undefined, // linkedTransferId
+                details.txDetails,
+            );
+        }
     }
 
     async increaseCashboxBalance(payload: IncreaseCashboxBalancePayload): Promise<CashboxRequest | { error: string }> {
         if (payload.amount <= 0) {
             return { error: 'مبلغ باید بیشتر از صفر باشد.' };
         }
-
+    
         const reason = `افزایش موجودی دستی توسط مدیر: ${payload.description || 'ثبت موجودی اولیه/جدید'}`;
-        
+    
         const requestPayload: CreateCashboxRequestPayload = {
             requestType: 'deposit',
             amount: payload.amount,
@@ -530,21 +772,56 @@ class SarrafiApiService {
                 type: 'Manual',
                 id: 'BALANCE_ADJUST',
                 description: reason
-            }
+            },
+            bankAccountId: payload.bankAccountId,
+            sourceAccountNumber: payload.sourceAccountNumber,
         };
-
+    
         const result = await this.createCashboxRequest(requestPayload);
-
+    
         if (!('error' in result)) {
-            this.logActivity(payload.user.name, `موجودی صندوق ${payload.currency} را به مبلغ ${payload.amount} افزایش داد.`);
+            this.logActivity(payload.user.name, `درخواست افزایش موجودی صندوق ${payload.currency} به مبلغ ${payload.amount} را ثبت کرد.`);
         }
-
+    
         return result;
     }
 
-    private _processCashboxRequest(request: CashboxRequest) {
+    private _checkBalanceForRequest(amount: number, currency: Currency, bankAccountId?: string): { error?: string } {
+        if (currency === Currency.IRT_BANK) {
+            if (!bankAccountId) return { error: 'برای تراکنش بانکی، حساب بانکی مشخص نشده است.' };
+            const bankAccount = this.db.getById<BankAccount>('bankAccounts', bankAccountId);
+            if (!bankAccount) return { error: `حساب بانکی با شناسه ${bankAccountId} یافت نشد.` };
+            if (bankAccount.balance < amount) return { error: `موجودی حساب بانکی ${bankAccount.bankName} (${new Intl.NumberFormat().format(bankAccount.balance)}) برای این عملیات کافی نیست.` };
+        } else {
+            const balance = this.db.get<CashboxBalance>('cashboxBalances').find(b => b.currency === currency);
+            if (!balance || balance.balance < amount) return { error: `موجودی صندوق ${currency} (${new Intl.NumberFormat().format(balance?.balance || 0)}) برای این عملیات کافی نیست.` };
+        }
+        return {};
+    }
+
+    private _processCashboxRequest(request: CashboxRequest): void | { error: string } {
+        if (request.requestType === 'withdrawal') {
+            const checkResult = this._checkBalanceForRequest(request.amount, request.currency, request.bankAccountId);
+            if (checkResult.error) {
+                // FIX: Explicitly return an object with the 'error' property to match the return type.
+                return { error: checkResult.error };
+            }
+        }
+
         const multiplier = request.requestType === 'deposit' ? 1 : -1;
-        this._updateCashboxBalance(request.currency, request.amount * multiplier);
+        const amountChange = request.amount * multiplier;
+
+        if (request.currency === Currency.IRT_BANK && request.bankAccountId) {
+            const bankAccount = this.db.getById<BankAccount>('bankAccounts', request.bankAccountId);
+            if (bankAccount) {
+                 this.db.update<BankAccount>('bankAccounts', bankAccount.id, { balance: bankAccount.balance + amountChange });
+            } else {
+                 console.error(`Bank account with ID ${request.bankAccountId} not found.`);
+                 return { error: `حساب بانکی با شناسه ${request.bankAccountId} یافت نشد.` };
+            }
+        } else {
+             this._updateCashboxBalance(request.currency, amountChange);
+        }
 
         if (request.customerCode) {
             const customer = this.db.get<Customer>('customers').find(c => c.code === request.customerCode);
@@ -556,10 +833,12 @@ class SarrafiApiService {
     }
     
     private _updateCashboxBalance(currency: Currency, amount: number) {
-        const balances = this.db.get<CashboxBalance>('cashboxBalances');
+        const dbState = this.db.getDbState() as { [key: string]: any[] };
+        const balances = dbState.cashboxBalances as CashboxBalance[];
         const balance = balances.find(b => b.currency === currency);
         if (balance) {
             balance.balance += amount;
+            this.db.replaceDb(dbState);
         }
     }
 
@@ -586,14 +865,12 @@ class SarrafiApiService {
         return this.db.add('customerTransactions', transaction);
     }
 
-    private _updatePartnerBalance(partnerId: string, amount: number, currency: Currency, type: 'credit' | 'debit', description: string, linkedTransferId?: string) {
+    private _updatePartnerBalance(partnerId: string, amount: number, currency: Currency, type: 'credit' | 'debit', description: string, linkedTransferId?: string, txDetails: Partial<PartnerTransaction> = {}) {
         const partner = this.db.getById<PartnerAccount>('partnerAccounts', partnerId);
         if (!partner) return;
 
-        // Corrected logic: The 'amount' parameter directly represents the change in balance.
-        // Positive amount means our liability increases (credit).
-        // Negative amount means our liability decreases (debit).
-        const newBalance = (partner.balances[currency] || 0) + amount;
+        const amountChange = type === 'credit' ? Math.abs(amount) : -Math.abs(amount);
+        const newBalance = (partner.balances[currency] || 0) + amountChange;
         partner.balances[currency] = newBalance;
         this.db.update<PartnerAccount>('partnerAccounts', partnerId, { balances: partner.balances });
         
@@ -606,6 +883,7 @@ class SarrafiApiService {
             currency,
             description,
             linkedTransferId,
+            ...txDetails,
         };
         this.db.add('partnerTransactions', transaction);
     }
@@ -621,6 +899,7 @@ class SarrafiApiService {
             createdAt: new Date(),
             user: user.name,
             ...expenseData,
+            status: ExpenseStatus.PendingApproval,
         };
 
         if(!skipCashboxRequest) {
@@ -634,7 +913,6 @@ class SarrafiApiService {
                 linkedEntity: { type: 'Expense', id: expenseId, description: reason }
             });
             if ('error' in cashRequest) {
-                // This shouldn't happen if validation is correct, but handle it.
                 return cashRequest;
             }
             newExpense.linkedCashboxRequestId = cashRequest.id;
@@ -646,33 +924,65 @@ class SarrafiApiService {
     
     // --- Reports & Analytics ---
     async getActivityLogs(): Promise<ActivityLog[]> { 
-        return this.db.get<ActivityLog>('activityLogs').sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 50); 
+        return this.db.get<ActivityLog>('activityLogs').sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 50); 
     }
     
     async getDashboardAnalytics(): Promise<DashboardAnalyticsData> {
-        // This is a mock. A real implementation would query and aggregate data.
-        const expenses = this.db.get<Expense>('expenses');
-        const expensesByCategory = expenses.reduce((acc, exp) => {
-            const item = acc.find(i => i.label === exp.category);
-            if(item) item.value += exp.amount;
-            else acc.push({ label: exp.category, value: exp.amount });
-            return acc;
-        }, [] as {label: string, value: number}[]);
+        const domesticTransfers = this.db.get<DomesticTransfer>('domesticTransfers');
+        const foreignTransfers = this.db.get<ForeignTransaction>('foreignTransfers');
+        const partners = this.db.get<PartnerAccount>('partnerAccounts');
+        
+        // 1. Weekly Activity Trend (last 6 weeks)
+        const weeklyActivity = {
+            labels: [] as string[],
+            domesticCounts: [] as number[],
+            foreignCounts: [] as number[],
+        };
+        const now = new Date();
+        for (let i = 5; i >= 0; i--) {
+            const weekStart = new Date(now);
+            weekStart.setDate(now.getDate() - (i * 7) - now.getDay()); // Start of week (Sunday)
+            weekStart.setHours(0, 0, 0, 0);
+            
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            weekEnd.setHours(23, 59, 59, 999);
 
-        const partnerActivity = this.db.get<PartnerAccount>('partnerAccounts').map(p => ({
-            label: p.name,
-            value: Math.floor(Math.random() * 50) + 5 // random data
+            if (i === 0) {
+                weeklyActivity.labels.push('هفته فعلی');
+            } else if (i === 1) {
+                weeklyActivity.labels.push('هفته گذشته');
+            } else {
+                weeklyActivity.labels.push(`-هفته ${i}`);
+            }
+
+            const domesticCount = domesticTransfers.filter(t => t.createdAt >= weekStart && t.createdAt <= weekEnd).length;
+            const foreignCount = foreignTransfers.filter(t => t.timestamp >= weekStart && t.timestamp <= weekEnd).length;
+            
+            weeklyActivity.domesticCounts.push(domesticCount);
+            weeklyActivity.foreignCounts.push(foreignCount);
+        }
+
+        // 2. Real Partner Activity (Top 10)
+        const partnerActivity = partners
+            .filter(p => p.status === 'Active')
+            .map(p => {
+                const transferCount = domesticTransfers.filter(t => t.partnerSarraf === p.name).length;
+                return { label: p.name, value: transferCount };
+            })
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 10);
+
+        // 3. Cashbox Balances Summary
+        const cashboxSummary = (await this.getCashboxBalances()).map(b => ({
+            currency: b.currency,
+            balance: b.balance
         }));
 
-        const profitLossTrend = [
-            { month: 'Jan', revenue: 5000, expenses: 2000 }, { month: 'Feb', revenue: 7000, expenses: 2500 },
-            { month: 'Mar', revenue: 6000, expenses: 3000 }, { month: 'Apr', revenue: 8000, expenses: 2800 }
-        ];
-
-        return { expensesByCategory, partnerActivity, profitLossTrend };
+        return { weeklyActivity, partnerActivity, cashboxSummary };
     }
 
-    // --- Placeholder for other methods ---
+
     async getSystemSettings(): Promise<SystemSettings> { return this.db.get<SystemSettings>('systemSettings')[0]; }
     async updateSystemSettings(payload: UpdateSystemSettingsPayload): Promise<SystemSettings> {
         const dbState = this.db.getDbState() as any;
@@ -700,7 +1010,6 @@ class SarrafiApiService {
         return { success: true };
     }
 
-    // --- Other methods from payloads ---
     async getTransactionsForCustomer(customerId: string): Promise<CustomerTransaction[]> {
         return this.db.get<CustomerTransaction>('customerTransactions').filter(t => t.customerId === customerId);
     }
@@ -708,54 +1017,134 @@ class SarrafiApiService {
         const partner = this.db.get<PartnerAccount>('partnerAccounts').find(p => p.name === payload.partnerName);
         return partner || { error: 'Partner not found' };
     }
-    async settlePartnerBalance(payload: SettlePartnerBalancePayload): Promise<PartnerTransaction | { error: string }> {
+    
+    async settlePartnerBalanceByName(payload: { partnerName: string, amount: number, currency: Currency, type: 'pay' | 'receive', user: User }): Promise<{success: true} | { error: string }> {
+        const partnerRes = await this.getPartnerAccountByName({ partnerName: payload.partnerName });
+        if ('error' in partnerRes) {
+            return { error: `همکار با نام '${payload.partnerName}' یافت نشد.` };
+        }
+        
+        let result;
+        if (payload.type === 'pay') {
+            result = await this.payToPartner({
+                partnerId: partnerRes.id,
+                amount: payload.amount,
+                currency: payload.currency,
+                user: payload.user,
+            });
+        } else { // 'receive'
+             result = await this.receiveFromPartner({
+                partnerId: partnerRes.id,
+                amount: payload.amount,
+                currency: payload.currency,
+                user: payload.user,
+            });
+        }
+
+        if ('error' in result) return result;
+
+        return { success: true };
+    }
+
+    async receiveFromPartner(payload: ReceiveFromPartnerPayload): Promise<CashboxRequest | { error: string }> {
         const partner = this.db.getById<PartnerAccount>('partnerAccounts', payload.partnerId);
-        if (!partner) return { error: "Partner not found." };
-    
-        const amount = payload.amount;
-        const currency = payload.currency;
-        
-        const type = amount >= 0 ? 'credit' : 'debit';
-    
-        const newBalance = (partner.balances[currency] || 0) + amount;
-        partner.balances[currency] = newBalance;
-        this.db.update<PartnerAccount>('partnerAccounts', partner.id, { balances: partner.balances });
-    
-        const transaction: PartnerTransaction = {
-            id: this.generateId('PT'),
-            partnerId: partner.id,
-            timestamp: new Date(),
-            type: type,
-            amount: Math.abs(amount),
-            currency: currency,
-            description: `تسویه حساب توسط ${payload.user.name}`,
+        if (!partner) return { error: "همکار یافت نشد." };
+
+        const amount = Math.abs(payload.amount);
+        const description = `دریافت وجه تسویه حساب از همکار ${partner.name}`;
+
+        const txDetails: Partial<PartnerTransaction> = {
+            bankAccountId: payload.bankAccountId,
+            sourceAccountNumber: payload.sourceAccountNumber,
+            destinationAccountNumber: payload.destinationAccountNumber,
         };
         
-        this.logActivity(payload.user.name, `تسویه حساب با ${partner.name} به مبلغ ${amount} ${currency} را ثبت کرد.`);
-        return this.db.add('partnerTransactions', transaction);
-    }
-     async settlePartnerBalanceByName(payload: SettlePartnerBalanceByNamePayload): Promise<PartnerTransaction | { error: string }> {
-        const partner = this.db.get<PartnerAccount>('partnerAccounts').find(p => p.name === payload.partnerName);
-        if (!partner) return { error: 'Partner not found' };
-        
-        const settlePayload: SettlePartnerBalancePayload = {
-            partnerId: partner.id,
-            amount: payload.amount,
+        const linkedEntity = {
+            type: 'PartnerSettlement',
+            id: partner.id, // partnerId
+            description: description,
+            details: {
+                amount: amount,
+                currency: payload.currency,
+                type: 'debit', // Receiving from partner DEBITS their account with us
+                txDetails: txDetails
+            }
+        };
+
+        const cashboxRequestResult = await this.createCashboxRequest({
+            requestType: 'deposit',
+            amount,
             currency: payload.currency,
-            user: payload.user
-        };
-        return this.settlePartnerBalance(settlePayload);
+            reason: description,
+            user: payload.user,
+            bankAccountId: payload.bankAccountId,
+            sourceAccountNumber: payload.sourceAccountNumber,
+            destinationAccountNumber: payload.destinationAccountNumber,
+            linkedEntity: linkedEntity as any, // Cast to any to avoid type complexity here
+        });
+
+        if ('error' in cashboxRequestResult) return cashboxRequestResult;
+
+        this.logActivity(payload.user.name, `درخواست دریافت تسویه از ${partner.name} به مبلغ ${amount} ${payload.currency} را ثبت کرد.`);
+        
+        return cashboxRequestResult;
     }
-    async createAccountTransfer(payload: CreateAccountTransferPayload): Promise<AccountTransfer | { error: string }> {
+
+    async payToPartner(payload: PayToPartnerPayload): Promise<CashboxRequest | { error: string }> {
+        const partner = this.db.getById<PartnerAccount>('partnerAccounts', payload.partnerId);
+        if (!partner) return { error: "همکار یافت نشد." };
+
+        const amount = Math.abs(payload.amount);
+        const description = `پرداخت وجه تسویه حساب به همکار ${partner.name}`;
+        
+        const txDetails: Partial<PartnerTransaction> = {
+             bankAccountId: payload.bankAccountId,
+            sourceAccountNumber: payload.sourceAccountNumber,
+            destinationAccountNumber: payload.destinationAccountNumber,
+        };
+
+        const linkedEntity = {
+            type: 'PartnerSettlement',
+            id: partner.id, // partnerId
+            description: description,
+            details: {
+                amount: amount,
+                currency: payload.currency,
+                type: 'credit', // Paying a partner CREDITS their account with us
+                txDetails: txDetails
+            }
+        };
+
+        const cashboxRequestResult = await this.createCashboxRequest({
+            requestType: 'withdrawal',
+            amount,
+            currency: payload.currency,
+            reason: description,
+            user: payload.user,
+            bankAccountId: payload.bankAccountId,
+            sourceAccountNumber: payload.sourceAccountNumber,
+            destinationAccountNumber: payload.destinationAccountNumber,
+            linkedEntity: linkedEntity as any, // Cast to any
+        });
+
+        if ('error' in cashboxRequestResult) return cashboxRequestResult;
+        
+        this.logActivity(payload.user.name, `درخواست پرداخت تسویه به ${partner.name} به مبلغ ${amount} ${payload.currency} را ثبت کرد.`);
+
+        return cashboxRequestResult;
+    }
+
+     async createAccountTransfer(payload: CreateAccountTransferPayload): Promise<AccountTransfer | { error: string }> {
         const fromCustomer = await this.getCustomerByCode(payload.fromCustomerCode);
+        if (!fromCustomer) return { error: `مشتری مبدا با کد ${payload.fromCustomerCode} یافت نشد.` };
+        
         const toCustomer = await this.getCustomerByCode(payload.toCustomerCode);
-        if (!fromCustomer || !toCustomer) return { error: "Customer not found" };
-
-        const debitDesc = `انتقال به ${toCustomer.name} (کد: ${toCustomer.code})`;
-        const creditDesc = `انتقال از ${fromCustomer.name} (کد: ${fromCustomer.code})`;
-
-        this._updateCustomerBalance(fromCustomer.id, payload.amount, payload.currency, 'debit', debitDesc, '', 'AccountTransfer');
-        this._updateCustomerBalance(toCustomer.id, payload.amount, payload.currency, 'credit', creditDesc, '', 'AccountTransfer');
+        if (!toCustomer) return { error: `مشتری مقصد با کد ${payload.toCustomerCode} یافت نشد.` };
+        
+        const fromBalance = fromCustomer.balances[payload.currency] || 0;
+        if (fromBalance < payload.amount) {
+            return { error: `موجودی مشتری مبدا (${fromCustomer.name}) برای این انتقال کافی نیست.` };
+        }
 
         const newTransfer: AccountTransfer = {
             id: this.generateId('AT'),
@@ -767,16 +1156,81 @@ class SarrafiApiService {
             description: payload.description,
             user: payload.user.name,
             status: payload.isPendingAssignment ? 'PendingAssignment' : 'Completed',
-            debitTransactionId: '', // Would be set in a real scenario
-            creditTransactionId: '',
+            debitTransactionId: '', // Will be filled below
+            creditTransactionId: '', // Will be filled below
         };
+
+        const debitDesc = `انتقال به ${toCustomer.name} (کد: ${toCustomer.code})`;
+        const creditDesc = `انتقال از ${fromCustomer.name} (کد: ${fromCustomer.code})`;
+
+        const debitTx = this._updateCustomerBalance(fromCustomer.id, payload.amount, payload.currency, 'debit', debitDesc, newTransfer.id, 'AccountTransfer');
+        const creditTx = this._updateCustomerBalance(toCustomer.id, payload.amount, payload.currency, 'credit', creditDesc, newTransfer.id, 'AccountTransfer');
+        
+        newTransfer.debitTransactionId = debitTx.id;
+        newTransfer.creditTransactionId = creditTx.id;
+
         this.logActivity(payload.user.name, `مبلغ ${payload.amount} ${payload.currency} را از ${fromCustomer.name} به ${toCustomer.name} انتقال داد.`);
         return this.db.add('accountTransfers', newTransfer);
     }
     async getAccountTransfers(): Promise<AccountTransfer[]> { return this.db.get('accountTransfers'); }
-    async reassignPendingTransfer(payload: ReassignTransferPayload): Promise<AccountTransfer | { error: string }> { return { error: "Not implemented" }; }
+    async reassignPendingTransfer(payload: ReassignTransferPayload): Promise<AccountTransfer | { error: string }> {
+        const { transferId, finalCustomerCode, user } = payload;
+
+        // 1. Find the original transfer
+        const transfer = this.db.getById<AccountTransfer>('accountTransfers', transferId);
+        if (!transfer) {
+            return { error: 'انتقال مورد نظر یافت نشد.' };
+        }
+        if (transfer.status !== 'PendingAssignment') {
+            return { error: 'این انتقال در وضعیت انتظار برای تخصیص قرار ندارد.' };
+        }
+
+        // 2. Find the final customer and suspense account
+        const finalCustomer = await this.getCustomerByCode(finalCustomerCode);
+        if (!finalCustomer) {
+            return { error: `مشتری با کد ${finalCustomerCode} یافت نشد.` };
+        }
+
+        const suspenseCustomer = await this.getCustomerByCode('_SUSPENSE_');
+        if (!suspenseCustomer) {
+            return { error: 'خطای سیستمی: حساب معلق یافت نشد.' };
+        }
+
+        // 3. Perform balance updates: debit suspense, credit final customer
+        const amount = transfer.amount;
+        const currency = transfer.currency;
+        
+        const suspenseBalance = suspenseCustomer.balances[currency] || 0;
+        if (suspenseBalance < amount) {
+            return { error: `موجودی حساب معلق برای تخصیص این حواله کافی نیست. موجودی فعلی: ${suspenseBalance} ${currency}` };
+        }
+
+        const debitDesc = `تخصیص حواله ${transfer.id} به ${finalCustomer.name} (کد: ${finalCustomer.code})`;
+        this._updateCustomerBalance(suspenseCustomer.id, amount, currency, 'debit', debitDesc, transfer.id, 'AccountTransfer');
+
+        const creditDesc = `دریافت از حساب معلق بابت حواله ${transfer.id}`;
+        this._updateCustomerBalance(finalCustomer.id, amount, currency, 'credit', creditDesc, transfer.id, 'AccountTransfer');
+
+        // 4. Update the original transfer record
+        const updates: Partial<AccountTransfer> = {
+            status: 'Completed',
+            toCustomerId: finalCustomer.id,
+            description: `${transfer.description} (تخصیص داده شده به ${finalCustomer.name})`,
+        };
+        const updatedTransfer = this.db.update<AccountTransfer>('accountTransfers', transferId, updates);
+
+        if (!updatedTransfer) {
+            // This case should be rare, but good to handle. A rollback would be ideal in a real DB.
+            return { error: 'خطا در بروزرسانی سند انتقال اصلی.' };
+        }
+
+        // 5. Log activity
+        this.logActivity(user.name, `حواله معلق ${transfer.id} را به مشتری ${finalCustomer.name} تخصیص داد.`);
+
+        // 6. Return the now-completed transfer
+        return updatedTransfer;
+    }
     
-    // FIX: Added validation and updated return type to match UI expectations.
     async addBankAccount(payload: AddBankAccountPayload): Promise<BankAccount | { error: string }> {
         const existing = this.db.get<BankAccount>('bankAccounts').find(b => b.accountNumber === payload.accountNumber && b.bankName === payload.bankName);
         if (existing) return { error: `حساب بانکی با این شماره حساب و نام بانک از قبل وجود دارد.` };
@@ -785,16 +1239,19 @@ class SarrafiApiService {
         const newAccount: BankAccount = {
             ...accountData,
             id: this.generateId('BA'),
-            balance: payload.initialBalance,
+            balance: 0,
             status: 'Active',
         };
+
+        const addedAccount = this.db.add('bankAccounts', newAccount);
+        
         this.logActivity(user.name, `حساب بانکی جدیدی برای ${payload.accountHolder} در بانک ${payload.bankName} ثبت کرد.`);
-        return this.db.add('bankAccounts', newAccount);
+        return addedAccount;
     }
+
 
     async getBankAccounts(): Promise<BankAccount[]> { return this.db.get('bankAccounts'); }
 
-    // FIX: Added validation and updated return type to match UI expectations.
     async createPartner(payload: CreatePartnerPayload): Promise<PartnerAccount | { error: string }> {
         const existing = this.db.get<PartnerAccount>('partnerAccounts').find(p => p.name === payload.name);
         if (existing) return { error: `همکار با نام "${payload.name}" از قبل وجود دارد.` };
@@ -804,9 +1261,12 @@ class SarrafiApiService {
             ...partnerData,
             id: this.generateId('PA'),
             status: 'Active',
+            balances: {},
         };
+        this.db.add('partnerAccounts', newPartner);
         this.logActivity(user.name, `همکار جدیدی با نام "${payload.name}" در ولایت ${payload.province} ثبت کرد.`);
-        return this.db.add('partnerAccounts', newPartner);
+        
+        return newPartner;
     }
 
     async updatePartner(payload: UpdatePartnerPayload): Promise<PartnerAccount | { error: string}> {
@@ -822,7 +1282,7 @@ class SarrafiApiService {
     async deletePartner(payload: DeletePartnerPayload): Promise<PartnerAccount | { error: string }> {
         const updated = this.db.update<PartnerAccount>('partnerAccounts', payload.id, { status: 'Inactive' });
         if (updated) {
-            // FIX: The 'user' object is available on the payload, not in the global scope.
+            // FIX: Correctly access the user from the payload for logging.
             this.logActivity(payload.user.name, `همکار "${updated.name}" را غیرفعال کرد.`);
             return updated;
         }
@@ -842,17 +1302,17 @@ class SarrafiApiService {
     async deleteBankAccount(payload: DeleteBankAccountPayload): Promise<BankAccount | { error: string }> {
         const updated = this.db.update<BankAccount>('bankAccounts', payload.id, { status: 'Inactive' });
         if(updated) {
-            // FIX: Cannot find name 'user'. The 'user' object is available on the payload.
+            // FIX: Correctly access the user from the payload for logging.
             this.logActivity(payload.user.name, `حساب بانکی "${updated.accountHolder} - ${updated.bankName}" را غیرفعال کرد.`);
             return updated;
         }
         return { error: 'Bank account not found' };
     }
     
-    // --- Exchanges (Formerly Foreign Transfers) ---
-
     private _getAllAssets(): Asset[] {
-        const cashboxAssets = this.db.get<CashboxBalance>('cashboxBalances').map(cb => ({
+        const cashboxAssets = this.db.get<CashboxBalance>('cashboxBalances')
+          .filter(cb => cb.currency !== Currency.IRT_BANK) // Exclude the conceptual IRT_BANK cashbox
+          .map(cb => ({
             id: `cashbox_${cb.currency}`,
             name: `صندوق ${cb.currency}`,
             currency: cb.currency,
@@ -861,7 +1321,7 @@ class SarrafiApiService {
           .filter(ba => ba.status === 'Active')
           .map(ba => ({
             id: `bank_${ba.id}`,
-            name: `${ba.bankName} - ${ba.accountHolder}`,
+            name: `${ba.bankName} - ${ba.accountNumber}`,
             currency: ba.currency,
         }));
         return [...cashboxAssets, ...bankAssets];
@@ -870,8 +1330,6 @@ class SarrafiApiService {
         return this._getAllAssets();
     }
 
-// FIX: Fix for TS error on line 976
-// Create explicitly typed update object to avoid issues with strict object literal checking.
     private _updateAssetBalance(assetId: string, amountChange: number): { success: boolean, error?: string } {
         const [type, id] = assetId.split(/_(.*)/s);
         
@@ -887,9 +1345,7 @@ class SarrafiApiService {
         } else if (type === 'bank') {
             const bankAccount = this.db.getById<BankAccount>('bankAccounts', id);
             if (bankAccount) {
-                bankAccount.balance += amountChange;
-                // FIX: Explicitly create a typed object to prevent TypeScript from incorrectly inferring the update payload type.
-                const updates: Partial<BankAccount> = { balance: bankAccount.balance };
+                const updates: Partial<BankAccount> = { balance: bankAccount.balance + amountChange };
                 this.db.update<BankAccount>('bankAccounts', id, updates);
                 return { success: true };
             }
@@ -898,41 +1354,88 @@ class SarrafiApiService {
         return { success: false, error: 'نوع دارایی نامعتبر است' };
     }
     
-    async logForeignTransaction(payload: LogForeignTransactionPayload): Promise<ForeignTransaction | { error: string }> {
-        const { user, description, fromAssetId, fromAmount, toAssetId, toAmount } = payload;
-        
+    // FIX: Add initiateForeignExchange method to handle the first step of a foreign exchange.
+    async initiateForeignExchange(payload: InitiateForeignExchangePayload): Promise<ForeignTransaction | { error: string }> {
+        const { user, description, fromAssetId, fromAmount } = payload;
+
         const allAssets = this._getAllAssets();
         const fromAsset = allAssets.find(a => a.id === fromAssetId);
-        const toAsset = allAssets.find(a => a.id === toAssetId);
+        if (!fromAsset) return { error: 'دارایی مبدا نامعتبر است.' };
 
-        if (!fromAsset || !toAsset) return { error: 'دارایی مبدا یا مقصد نامعتبر است.' };
-        if (fromAmount <= 0 || toAmount <= 0) return { error: 'مبالغ باید مثبت باشند.' };
+        const transactionId = this.generateId('FT');
+        const reason = `برد بابت تبادله ${transactionId}: ${description}`;
 
-        // 1. Update internal asset balances
-        const fromUpdateResult = this._updateAssetBalance(fromAssetId, -fromAmount);
-        if (!fromUpdateResult.success) return { error: fromUpdateResult.error };
+        const cashRequest = await this.createCashboxRequest({
+            requestType: 'withdrawal',
+            amount: fromAmount,
+            currency: fromAsset.currency,
+            reason,
+            user,
+            bankAccountId: fromAssetId.startsWith('bank_') ? fromAssetId.substring(5) : undefined,
+            linkedEntity: { type: 'ForeignTransaction', id: transactionId, description: reason }
+        });
 
-        const toUpdateResult = this._updateAssetBalance(toAssetId, toAmount);
-        if (!toUpdateResult.success) {
-            this._updateAssetBalance(fromAssetId, fromAmount); // Rollback
-            return { error: toUpdateResult.error };
+        if ('error' in cashRequest) {
+            return cashRequest;
         }
-        
+
         const newTransaction: ForeignTransaction = {
-            id: this.generateId('FT'),
+            id: transactionId,
             timestamp: new Date(),
             description,
-            fromAsset: fromAsset.name,
+            user: user.name,
+            status: ForeignTransactionStatus.PendingWithdrawalApproval,
+            fromAssetId,
+            fromAssetName: fromAsset.name,
             fromCurrency: fromAsset.currency,
             fromAmount,
-            toAsset: toAsset.name,
-            toCurrency: toAsset.currency,
-            toAmount,
-            user: user.name,
+            withdrawalRequestId: cashRequest.id,
         };
 
-        this.logActivity(user.name, `تبادله ${fromAmount} ${fromAsset.currency} به ${toAmount} ${toAsset.currency} را ثبت کرد.`);
+        this.logActivity(user.name, `درخواست تبادله ${fromAmount} ${fromAsset.currency} از ${fromAsset.name} را ثبت کرد.`);
         return this.db.add('foreignTransactions', newTransaction);
+    }
+
+    // FIX: Add completeForeignExchange method to handle the second step of a foreign exchange.
+    async completeForeignExchange(payload: CompleteForeignExchangePayload): Promise<ForeignTransaction | { error: string }> {
+        const { user, transactionId, toAssetId, toAmount } = payload;
+        
+        const transaction = this.db.getById<ForeignTransaction>('foreignTransactions', transactionId);
+        if (!transaction) return { error: 'تبادله مورد نظر یافت نشد.' };
+        if (transaction.status !== ForeignTransactionStatus.PendingDeposit) return { error: 'این تبادله در وضعیت مناسب برای تکمیل نیست.' };
+
+        const allAssets = this._getAllAssets();
+        const toAsset = allAssets.find(a => a.id === toAssetId);
+        if (!toAsset) return { error: 'دارایی مقصد نامعتبر است.' };
+        
+        const reason = `رسید بابت تبادله ${transactionId}: ${transaction.description}`;
+
+        const cashRequest = await this.createCashboxRequest({
+            requestType: 'deposit',
+            amount: toAmount,
+            currency: toAsset.currency,
+            reason,
+            user,
+            bankAccountId: toAssetId.startsWith('bank_') ? toAssetId.substring(5) : undefined,
+            linkedEntity: { type: 'ForeignTransaction', id: transactionId, description: reason }
+        });
+
+        if ('error' in cashRequest) {
+            return cashRequest;
+        }
+        
+        const updates: Partial<ForeignTransaction> = {
+            status: ForeignTransactionStatus.PendingDepositApproval,
+            toAssetId,
+            toAssetName: toAsset.name,
+            toCurrency: toAsset.currency,
+            toAmount,
+            depositRequestId: cashRequest.id,
+        };
+        
+        this.logActivity(user.name, `مرحله دوم تبادله ${transactionId} را با واریز ${toAmount} ${toAsset.currency} ثبت کرد.`);
+        const updatedTransaction = this.db.update<ForeignTransaction>('foreignTransactions', transactionId, updates);
+        return updatedTransaction || { error: 'خطا در بروزرسانی تبادله.' };
     }
 
     private _getAssetBalance(assetId: string): number {
@@ -946,14 +1449,11 @@ class SarrafiApiService {
         return 0;
     }
     
-// FIX: Fix for TS error on line 1018
-// Create explicitly typed update objects to avoid issues with strict object literal checking.
     private _rollbackAssetBalances(fromAssetId: string, fromBalance: number, toAssetId: string, toBalance: number) {
         const [fromType, fromId] = fromAssetId.split(/_(.*)/s);
         if (fromType === 'cashbox') {
             this.db.get<CashboxBalance>('cashboxBalances').find(b => b.currency === fromId as Currency)!.balance = fromBalance;
         } else {
-            // FIX: Explicitly create a typed object to prevent TypeScript from incorrectly inferring the update payload type.
             const fromUpdates: Partial<BankAccount> = { balance: fromBalance };
             this.db.update<BankAccount>('bankAccounts', fromId, fromUpdates);
         }
@@ -962,7 +1462,6 @@ class SarrafiApiService {
         if (toType === 'cashbox') {
             this.db.get<CashboxBalance>('cashboxBalances').find(b => b.currency === toId as Currency)!.balance = toBalance;
         } else {
-            // FIX: Explicitly create a typed object to prevent TypeScript from incorrectly inferring the update payload type.
             const toUpdates: Partial<BankAccount> = { balance: toBalance };
             this.db.update<BankAccount>('bankAccounts', toId, toUpdates);
         }
@@ -975,17 +1474,28 @@ class SarrafiApiService {
         if (!customer) return { error: 'مشتری یافت نشد.' };
         
         const currentBalance = customer.balances[fromCurrency] || 0;
-        if (currentBalance < fromAmount) return { error: `موجودی ${fromCurrency} مشتری کافی نیست. موجودی فعلی: ${currentBalance}` };
+        if (currentBalance < fromAmount) {
+            return { error: `موجودی ${fromCurrency} مشتری کافی نیست. موجودی فعلی: ${currentBalance}` };
+        }
 
-        const exchangeId = this.generateId('IEX');
+        const newExchange: InternalExchange = {
+            id: this.generateId('IEX'),
+            timestamp: new Date(),
+            customerId,
+            fromCurrency,
+            fromAmount,
+            toCurrency,
+            toAmount,
+            rate,
+            user: user.name,
+        };
+        this.db.add('internalExchanges', newExchange);
         
-        // Debit the from amount
         const debitDesc = `تبدیل ${fromAmount} ${fromCurrency} به ${toCurrency} با نرخ ${rate}`;
-        this._updateCustomerBalance(customerId, fromAmount, fromCurrency, 'debit', debitDesc, exchangeId, 'InternalExchange');
+        this._updateCustomerBalance(customerId, fromAmount, fromCurrency, 'debit', debitDesc, newExchange.id, 'InternalExchange');
 
-        // Credit the to amount
         const creditDesc = `دریافت ${toAmount} ${toCurrency} از تبدیل ${fromCurrency} با نرخ ${rate}`;
-        this._updateCustomerBalance(customerId, toAmount, toCurrency, 'credit', creditDesc, exchangeId, 'InternalExchange');
+        this._updateCustomerBalance(customerId, toAmount, toCurrency, 'credit', creditDesc, newExchange.id, 'InternalExchange');
         
         this.logActivity(user.name, `مبلغ ${fromAmount} ${fromCurrency} از حساب ${customer.name} را به ${toAmount} ${toCurrency} تبدیل کرد.`);
         
@@ -997,7 +1507,10 @@ class SarrafiApiService {
 
     async getForeignTransactions(): Promise<ForeignTransaction[]> { return this.db.get('foreignTransactions'); }
     
-    // --- Commission Transfers ---
+    async getInternalExchangesForCustomer(customerId: string): Promise<InternalExchange[]> {
+        return this.db.get<InternalExchange>('internalExchanges').filter(ex => ex.customerId === customerId);
+    }
+
     async getCommissionTransfers(): Promise<CommissionTransfer[]> {
         return this.db.get<CommissionTransfer>('commissionTransfers');
     }
@@ -1022,30 +1535,31 @@ class SarrafiApiService {
             initiatorName = partner.name;
         }
         
-        if (amount <= 0 || commissionPercentage < 0) {
-            return { error: 'مبلغ و فیصدی کمیشن باید معتبر باشند.' };
-        }
-        if (!sourceAccountNumber) {
-             return { error: 'شماره حساب مبدأ الزامی است.' };
-        }
+        if (amount <= 0 || commissionPercentage < 0) return { error: 'مبلغ و فیصدی کمیشن باید معتبر باشند.' };
+        if (!sourceAccountNumber) return { error: 'شماره حساب مبدأ الزامی است.' };
 
-        const currency = Currency.IRT_BANK; // Hardcoded currency
-
+        const currency = Currency.IRT_BANK;
         const bankAccount = this.db.getById<BankAccount>('bankAccounts', receivedIntoBankAccountId);
         if (!bankAccount) return { error: 'حساب بانکی دریافت کننده وجه یافت نشد.' };
         if (bankAccount.currency !== currency) return { error: `این عملیات فقط برای حساب‌های تومان بانکی (${currency}) مجاز است.` };
 
+        const transferId = this.generateId('CTF');
+        const reason = `واریز وجه کمیشن‌کاری از طرف ${initiatorName} به حساب ${bankAccount.bankName}`;
+        const cashRequest = await this.createCashboxRequest({
+            requestType: 'deposit',
+            amount,
+            currency,
+            reason,
+            user,
+            bankAccountId: receivedIntoBankAccountId,
+            sourceAccountNumber,
+            linkedEntity: { type: 'CommissionTransfer', id: transferId, description: reason }
+        });
 
-        // 1. Update bank account balance (Increase)
-        bankAccount.balance += amount;
-        this.db.update<BankAccount>('bankAccounts', bankAccount.id, { balance: bankAccount.balance });
+        if ('error' in cashRequest) return cashRequest;
 
-        // 2. Update cashbox balance (Increase) as per user request
-        this._updateCashboxBalance(currency, amount);
-
-        // 3. Create the commission transfer record
         const newTransfer: CommissionTransfer = {
-            id: this.generateId('CTF'),
+            id: transferId,
             createdAt: new Date(),
             initiatorType,
             initiatorId,
@@ -1053,12 +1567,13 @@ class SarrafiApiService {
             currency,
             sourceAccountNumber,
             receivedIntoBankAccountId,
-            commissionPercentage: commissionPercentage,
-            status: 'PendingExecution',
+            commissionPercentage,
+            status: CommissionTransferStatus.PendingDepositApproval,
             createdBy: user.name,
+            depositRequestId: cashRequest.id,
         };
 
-        this.logActivity(user.name, `ورود وجه کمیشن‌کاری به مبلغ ${amount} ${currency} از ${initiatorName} را ثبت کرد.`);
+        this.logActivity(user.name, `درخواست ورود وجه کمیشن‌کاری به مبلغ ${amount} ${currency} از ${initiatorName} را ثبت کرد.`);
         return this.db.add('commissionTransfers', newTransfer);
     }
 
@@ -1067,7 +1582,7 @@ class SarrafiApiService {
 
         const transfer = this.db.getById<CommissionTransfer>('commissionTransfers', transferId);
         if (!transfer) return { error: 'حواله کمیشن‌کاری یافت نشد.' };
-        if (transfer.status === 'Completed') return { error: 'این حواله قبلاً اجرا شده است.' };
+        if (transfer.status !== CommissionTransferStatus.PendingExecution) return { error: 'این حواله در وضعیت مناسب برای اجرا نیست.' };
 
         const bankAccount = this.db.getById<BankAccount>('bankAccounts', paidFromBankAccountId);
         if (!bankAccount) return { error: 'حساب بانکی پرداخت کننده وجه یافت نشد.' };
@@ -1079,47 +1594,40 @@ class SarrafiApiService {
         if (bankAccount.balance < finalAmountPaid) {
             return { error: `موجودی حساب بانکی ${bankAccount.bankName} (${new Intl.NumberFormat().format(bankAccount.balance)}) کافی نیست. مبلغ مورد نیاز: ${new Intl.NumberFormat().format(finalAmountPaid)}` };
         }
-
-        // 1. Update paying bank account balance (Decrease)
-        bankAccount.balance -= finalAmountPaid;
-        this.db.update<BankAccount>('bankAccounts', bankAccount.id, { balance: bankAccount.balance });
-
-        // 2. Update cashbox balance (Decrease) by the paid amount
-        this._updateCashboxBalance(transfer.currency, -finalAmountPaid);
         
-        // 3. Log commission as revenue. The net effect on the cashbox (+amount initially, -finalAmountPaid now) is that
-        // the commissionAmount remains, representing our income. We just need to log it for reporting.
-        const commissionReason = `درآمد کمیشن بابت حواله ${transfer.id}`;
-        // Note: Creating an "Expense" for revenue is an anti-pattern, but it's the only existing mechanism 
-        // in this system to log an item that could appear in a Profit & Loss report.
-        await this.createExpense({
-            category: ExpenseCategory.Commission,
-            amount: commissionAmount,
+        const reason = `پرداخت نهایی حواله کمیشن‌کاری ${transferId} به حساب ${destinationAccountNumber}`;
+        const cashRequest = await this.createCashboxRequest({
+            requestType: 'withdrawal',
+            amount: finalAmountPaid,
             currency: transfer.currency,
-            description: commissionReason,
+            reason,
             user,
-            skipCashboxRequest: true, // This is crucial, as it's not a cash expense.
+            bankAccountId: paidFromBankAccountId,
+            destinationAccountNumber,
+            linkedEntity: { type: 'CommissionTransfer', id: transferId, description: reason }
         });
 
-        // 4. Update the commission transfer record
-        const updates: Partial<CommissionTransfer> = {
-            status: 'Completed',
+        if ('error' in cashRequest) return cashRequest;
+        
+        const transferUpdates: Partial<CommissionTransfer> = {
+            status: CommissionTransferStatus.PendingWithdrawalApproval,
             completedAt: new Date(),
             paidFromBankAccountId,
             destinationAccountNumber,
             commissionAmount,
             finalAmountPaid,
+            withdrawalRequestId: cashRequest.id,
         };
 
-        const updatedTransfer = this.db.update<CommissionTransfer>('commissionTransfers', transferId, updates);
+        const updatedTransfer = this.db.update<CommissionTransfer>('commissionTransfers', transferId, transferUpdates);
         
-        this.logActivity(user.name, `دستور پرداخت حواله کمیشن‌کاری ${transferId} را به مبلغ نهایی ${finalAmountPaid} ${transfer.currency} اجرا کرد.`);
+        this.logActivity(user.name, `دستور پرداخت حواله کمیشن‌کاری ${transferId} را به مبلغ نهایی ${finalAmountPaid} ${transfer.currency} صادر کرد.`);
         
         const initiator = transfer.initiatorType === 'Customer'
             ? await this.getCustomerById(transfer.initiatorId)
             : await this.getPartnerAccountById(transfer.initiatorId);
             
-        if(initiator && initiator.whatsappNumber) {
+        if(initiator && initiator.whatsappNumber && updatedTransfer?.status === CommissionTransferStatus.Completed) {
             notificationService.sendWhatsAppNotification(initiator.whatsappNumber, `مبلغ ${new Intl.NumberFormat().format(finalAmountPaid)} ${transfer.currency} طبق دستور شما به حساب ${destinationAccountNumber} واریز گردید. کمیسیون: ${new Intl.NumberFormat().format(commissionAmount)} ${transfer.currency}. SarrafAI`);
         }
         
@@ -1128,25 +1636,127 @@ class SarrafiApiService {
 
 
     async generateReport(payload: GenerateReportPayload): Promise<ProfitAndLossReportData | CashboxSummaryReportData | InternalLedgerReportData | { error: string }> {
-        const { reportType, startDate, endDate } = payload;
+        const { reportType, startDate, endDate, currency } = payload;
         const start = new Date(startDate);
         const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999); // Include the whole end day
+        end.setHours(23, 59, 59, 999);
 
         if (reportType === ReportType.InternalLedger) {
             const allTransactions = this.db.get<ForeignTransaction>('foreignTransactions');
             const filtered = allTransactions.filter(tx => {
-                const txDate = new Date(tx.timestamp);
+                const txDate = tx.timestamp;
                 return txDate >= start && txDate <= end;
             });
-            return { transactions: filtered.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()) };
+            return { transactions: filtered.sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime()) };
+        }
+        
+        if (reportType === ReportType.ProfitAndLoss) {
+            const revenueItems: { date: Date; description: string; amount: number }[] = [];
+            const expenseItems: { date: Date; description: string; amount: number }[] = [];
+
+            const domesticTransfers = this.db.get<DomesticTransfer>('domesticTransfers');
+            domesticTransfers
+                .filter(t => {
+                    const completedDate = t.history.find(h => h.status === TransferStatus.Executed)?.timestamp;
+                    return completedDate && completedDate >= start && completedDate <= end && t.commission > 0 && t.currency === payload.currency;
+                })
+                .forEach(t => {
+                    const completedDate = t.history.find(h => h.status === TransferStatus.Executed)!.timestamp;
+                    revenueItems.push({
+                        date: completedDate,
+                        description: `کارمزد حواله داخلی ${t.id}`,
+                        amount: t.commission
+                    });
+                });
+
+            const commissionTransfers = this.db.get<CommissionTransfer>('commissionTransfers');
+            commissionTransfers
+                .filter(t => t.status === 'Completed' && t.completedAt && t.completedAt >= start && t.completedAt <= end && t.commissionAmount && t.commissionAmount > 0 && t.currency === payload.currency)
+                .forEach(t => {
+                    revenueItems.push({
+                        date: t.completedAt!,
+                        description: `کمیشن حواله ${t.id}`,
+                        amount: t.commissionAmount!
+                    });
+                });
+
+            const allExpenses = this.db.get<Expense>('expenses');
+            allExpenses
+                .filter(e => {
+                    const expenseDate = e.createdAt;
+                    return expenseDate >= start && expenseDate <= end && e.currency === payload.currency;
+                })
+                .forEach(e => {
+                    expenseItems.push({
+                        date: e.createdAt,
+                        description: e.description,
+                        amount: e.amount
+                    });
+                });
+
+            const totalRevenue = revenueItems.reduce((sum, item) => sum + item.amount, 0);
+            const totalExpenses = expenseItems.reduce((sum, item) => sum + item.amount, 0);
+
+            return {
+                totalRevenue,
+                totalExpenses,
+                netProfit: totalRevenue - totalExpenses,
+                currency: payload.currency,
+                revenueItems: revenueItems.sort((a,b) => b.date.getTime() - a.date.getTime()),
+                expenseItems: expenseItems.sort((a,b) => b.date.getTime() - a.date.getTime()),
+            } as ProfitAndLossReportData;
         }
 
-        // Placeholder for other reports
+        if (reportType === ReportType.CashboxSummary) {
+            const allRequests = this.db.get<CashboxRequest>('cashboxRequests');
+            
+            const filteredRequests = allRequests.filter(req => {
+                const reqDate = new Date(req.createdAt);
+                const isApproved = req.status === CashboxRequestStatus.Approved || req.status === CashboxRequestStatus.AutoApproved;
+                return isApproved && req.currency === currency && reqDate >= start && reqDate <= end;
+            });
+
+            let totalInflow = 0;
+            let totalOutflow = 0;
+
+            const transactions = filteredRequests.map(req => {
+                if (req.requestType === 'deposit') {
+                    totalInflow += req.amount;
+                    return {
+                        id: req.id,
+                        timestamp: req.createdAt,
+                        type: 'inflow' as const,
+                        amount: req.amount,
+                        currency: req.currency,
+                        reason: req.reason,
+                        user: req.requestedBy,
+                    };
+                } else { // withdrawal
+                    totalOutflow += req.amount;
+                    return {
+                        id: req.id,
+                        timestamp: req.createdAt,
+                        type: 'outflow' as const,
+                        amount: req.amount,
+                        currency: req.currency,
+                        reason: req.reason,
+                        user: req.requestedBy,
+                    };
+                }
+            });
+
+            return {
+                totalInflow,
+                totalOutflow,
+                netChange: totalInflow - totalOutflow,
+                currency,
+                transactions: transactions.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+            } as CashboxSummaryReportData;
+        }
+
         return { error: `گزارش از نوع '${reportType}' هنوز پیاده‌سازی نشده است.` };
     }
     
-    // FIX: Add methods for Amanat feature
     async getAmanat(): Promise<Amanat[]> {
         return this.db.get<Amanat>('amanat');
     }
@@ -1162,6 +1772,7 @@ class SarrafiApiService {
             currency: amanatData.currency,
             reason,
             user,
+            bankAccountId: amanatData.bankAccountId,
             linkedEntity: { type: 'Amanat', id: amanatId, description: reason }
         });
         
@@ -1189,13 +1800,6 @@ class SarrafiApiService {
         if (!amanat) return { error: 'امانت یافت نشد.' };
         if (amanat.status === AmanatStatus.Returned) return { error: 'این امانت قبلاً بازگشت داده شده است.' };
         
-        const balances = this.db.get<CashboxBalance>('cashboxBalances');
-        const balance = balances.find(b => b.currency === amanat.currency);
-        const currentBalance = balance ? balance.balance : 0;
-        if (currentBalance < amanat.amount) {
-            return { error: `موجودی صندوق ${amanat.currency} برای بازگشت این امانت کافی نیست.` };
-        }
-        
         const reason = `بابت بازگشت امانت ${amanat.id} به ${amanat.customerName}`;
         const cashRequest = await this.createCashboxRequest({
             requestType: 'withdrawal',
@@ -1203,6 +1807,7 @@ class SarrafiApiService {
             currency: amanat.currency,
             reason,
             user,
+            bankAccountId: amanat.bankAccountId,
             linkedEntity: { type: 'Amanat', id: amanat.id, description: reason }
         });
         

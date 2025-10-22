@@ -1,8 +1,9 @@
-import React, { useState, FormEvent } from 'react';
+import React, { useState, FormEvent, useEffect } from 'react';
 import { useApi } from '../hooks/useApi';
-import { CreateAmanatPayload, Currency, User } from '../types';
+import { CreateAmanatPayload, Currency, User, BankAccount } from '../types';
 import { CURRENCIES } from '../constants';
 import { persianToEnglishNumber } from '../utils/translations';
+import { useToast } from '../contexts/ToastContext';
 
 interface CreateAmanatModalProps {
     isOpen: boolean;
@@ -13,14 +14,31 @@ interface CreateAmanatModalProps {
 
 const CreateAmanatModal: React.FC<CreateAmanatModalProps> = ({ isOpen, onClose, onSuccess, currentUser }) => {
     const api = useApi();
+    const { addToast } = useToast();
     const [formData, setFormData] = useState({
         customerName: '',
         amount: '',
         currency: Currency.USD,
         notes: '',
+        bankAccountId: '',
     });
+    const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    
+    const isBankTransaction = formData.currency === Currency.IRT_BANK;
+
+    useEffect(() => {
+        if (isOpen) {
+            api.getBankAccounts().then(accounts => {
+                const activeIrtAccounts = accounts.filter(a => a.status === 'Active' && a.currency === Currency.IRT_BANK);
+                setBankAccounts(activeIrtAccounts);
+                if (activeIrtAccounts.length > 0) {
+                    setFormData(prev => ({ ...prev, bankAccountId: activeIrtAccounts[0].id }));
+                }
+            });
+        }
+    }, [isOpen, api]);
+
 
     if (!isOpen) return null;
     
@@ -30,8 +48,8 @@ const CreateAmanatModal: React.FC<CreateAmanatModalProps> = ({ isOpen, onClose, 
             amount: '',
             currency: Currency.USD,
             notes: '',
+            bankAccountId: bankAccounts.find(b => b.currency === Currency.IRT_BANK)?.id || '',
         });
-        setError(null);
         setIsLoading(false);
     };
 
@@ -52,20 +70,23 @@ const CreateAmanatModal: React.FC<CreateAmanatModalProps> = ({ isOpen, onClose, 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        setError(null);
 
         const payload: CreateAmanatPayload = {
-            ...formData,
+            customerName: formData.customerName,
             amount: parseFloat(formData.amount) || 0,
+            currency: formData.currency,
+            notes: formData.notes,
             user: currentUser,
+            bankAccountId: isBankTransaction ? formData.bankAccountId : undefined,
         };
 
         const result = await api.createAmanat(payload);
         setIsLoading(false);
 
         if ('error' in result) {
-            setError(result.error);
+            addToast(result.error, 'error');
         } else {
+            addToast("درخواست ثبت امانت به صندوق ارسال شد.", 'success');
             onSuccess();
             handleClose();
         }
@@ -77,7 +98,6 @@ const CreateAmanatModal: React.FC<CreateAmanatModalProps> = ({ isOpen, onClose, 
                 <form onSubmit={handleSubmit}>
                     <div className="px-8 py-5 border-b-2 border-cyan-400/20"><h2 className="text-4xl font-bold text-cyan-300 tracking-wider">ثبت امانت جدید</h2></div>
                     <div className="p-8 space-y-6">
-                        {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
                         
                         <input
                             type="text"
@@ -102,11 +122,21 @@ const CreateAmanatModal: React.FC<CreateAmanatModalProps> = ({ isOpen, onClose, 
                             </div>
                         </div>
 
+                         {isBankTransaction && (
+                            <div className="animate-fadeIn">
+                                <label htmlFor="bankAccountId" className="block text-lg font-medium text-cyan-300 mb-2">واریز به حساب بانکی</label>
+                                <select id="bankAccountId" name="bankAccountId" value={formData.bankAccountId} onChange={handleChange} required={isBankTransaction} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100">
+                                    <option value="" disabled>-- انتخاب حساب --</option>
+                                    {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.bankName} - {b.accountHolder}</option>)}
+                                </select>
+                            </div>
+                        )}
+
                         <div>
                             <label htmlFor="notes" className="block text-lg font-medium text-cyan-300 mb-2">یادداشت</label>
                             <textarea name="notes" id="notes" value={formData.notes} onChange={handleChange} placeholder="توضیحات مربوط به امانت..." required rows={3} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right"></textarea>
                         </div>
-                        <p className="text-yellow-400 text-base">توجه: با ثبت این امانت، یک درخواست واریز به صندوق به صورت خودکار ایجاد خواهد شد.</p>
+                        <p className="text-yellow-400 text-base">توجه: با ثبت این امانت، یک درخواست واریز به صندوق (یا حساب بانکی) به صورت خودکار ایجاد خواهد شد.</p>
                     </div>
                     <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end space-x-4 space-x-reverse">
                         <button type="button" onClick={handleClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md">لغو</button>
