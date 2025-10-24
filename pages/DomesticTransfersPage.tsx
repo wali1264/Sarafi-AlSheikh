@@ -118,7 +118,7 @@ const DomesticTransfersPage: React.FC = () => {
     const fetchData = useCallback(async () => {
         setIsLoading(true);
         const data = await api.getDomesticTransfers();
-        setTransfers(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+        setTransfers(data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
         setIsLoading(false);
     }, [api]);
 
@@ -175,18 +175,18 @@ const DomesticTransfersPage: React.FC = () => {
             
             const matchesTrackingCode = !filters.trackingCode || 
                 t.id.toLowerCase().includes(filters.trackingCode.toLowerCase()) || 
-                (t.partnerReference && t.partnerReference.toLowerCase().includes(filters.trackingCode.toLowerCase()));
+                (t.partner_reference && t.partner_reference.toLowerCase().includes(filters.trackingCode.toLowerCase()));
             
             const matchesSender = !filters.senderName || t.sender.name.toLowerCase().includes(filters.senderName.toLowerCase());
             const matchesReceiver = !filters.receiverName || t.receiver.name.toLowerCase().includes(filters.receiverName.toLowerCase());
-            const matchesPartner = !filters.partnerSarraf || t.partnerSarraf.toLowerCase().includes(filters.partnerSarraf.toLowerCase());
-            const matchesProvince = filters.province === 'all' || t.destinationProvince === filters.province;
+            const matchesPartner = !filters.partnerSarraf || t.partner_sarraf.toLowerCase().includes(filters.partnerSarraf.toLowerCase());
+            const matchesProvince = filters.province === 'all' || t.destination_province === filters.province;
             const matchesCurrency = filters.currency === 'all' || t.currency === filters.currency;
 
             const matchesMinAmount = !filters.minAmount || t.amount >= parseFloat(filters.minAmount);
             const matchesMaxAmount = !filters.maxAmount || t.amount <= parseFloat(filters.maxAmount);
             
-            const createdAt = new Date(t.createdAt);
+            const createdAt = new Date(t.created_at);
             createdAt.setHours(0,0,0,0);
             
             const matchesStartDate = !filters.startDate || createdAt >= new Date(filters.startDate);
@@ -312,14 +312,14 @@ const DomesticTransfersPage: React.FC = () => {
                                 <tr key={t.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5 transition-colors">
                                     <td className="px-6 py-4">
                                         <div className="font-mono text-cyan-300">{t.id}</div>
-                                        {t.partnerReference && <div className="font-mono text-xs text-amber-400">همکار: {t.partnerReference}</div>}
-                                        <div className="text-sm text-slate-400">{new Date(t.createdAt).toLocaleDateString('fa-IR-u-nu-latn')}</div>
+                                        {t.partner_reference && <div className="font-mono text-xs text-amber-400">همکار: {t.partner_reference}</div>}
+                                        <div className="text-sm text-slate-400">{new Date(t.created_at).toLocaleDateString('fa-IR-u-nu-latn')}</div>
                                     </td>
                                     <td className="px-6 py-4 text-slate-100 font-semibold">{t.sender.name}</td>
                                     <td className="px-6 py-4 text-slate-100 font-semibold">{t.receiver.name}</td>
                                     <td className="px-6 py-4">
-                                        <div>{t.destinationProvince}</div>
-                                        <div className="text-sm text-slate-400">{t.partnerSarraf}</div>
+                                        <div>{t.destination_province}</div>
+                                        <div className="text-sm text-slate-400">{t.partner_sarraf}</div>
                                     </td>
                                     <td className="px-6 py-4 font-mono text-left">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(t.amount)} {t.currency}</td>
                                     <td className="px-6 py-4">
@@ -328,7 +328,7 @@ const DomesticTransfersPage: React.FC = () => {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-left whitespace-nowrap space-x-2 space-x-reverse">
-                                        {hasPermission('domesticTransfers', 'edit') && (t.status === TransferStatus.Unexecuted || t.status === TransferStatus.PendingCashbox) && !t.partnerReference && (
+                                        {hasPermission('domesticTransfers', 'edit') && (t.status === TransferStatus.Unexecuted || t.status === TransferStatus.PendingCashbox) && !t.partner_reference && (
                                             <button onClick={() => handleUpdateClick(t)} className="px-5 py-2 bg-slate-600/50 text-slate-100 hover:bg-cyan-400/20 hover:text-cyan-300 text-lg transition-colors border border-slate-500/50 hover:border-cyan-400/60 rounded">
                                                 تغییر وضعیت
                                             </button>

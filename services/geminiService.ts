@@ -19,17 +19,18 @@ class GeminiService {
         return [
             {
                 name: 'createAccountTransfer',
-                description: 'انتقال مبلغ بین حساب دو مشتری ثبت شده در سیستم',
+                description: 'انتقال مبلغ بین حساب دو مشتری ثبت شده در سیستم. اگر گیرنده نامشخص بود، از is_pending_assignment استفاده کنید.',
                 parameters: {
                     type: Type.OBJECT,
                     properties: {
-                        fromCustomerCode: { type: Type.STRING, description: 'کد مشتری که پول از حساب او کسر می‌شود' },
-                        toCustomerCode: { type: Type.STRING, description: 'کد مشتری که پول به حساب او اضافه می‌شود' },
+                        from_customer_code: { type: Type.STRING, description: 'کد مشتری که پول از حساب او کسر می‌شود' },
+                        to_customer_code: { type: Type.STRING, description: 'کد مشتری که پول به حساب او اضافه می‌شود. اگر نامشخص بود، از کد "_SUSPENSE_" استفاده کنید.' },
                         amount: { type: Type.NUMBER, description: 'مبلغ انتقال' },
                         currency: { type: Type.STRING, description: 'واحد پولی انتقال', enum: Object.values(Currency) },
                         description: { type: Type.STRING, description: 'توضیحات مربوط به انتقال' },
+                        is_pending_assignment: { type: Type.BOOLEAN, description: 'اگر گیرنده نهایی مشخص نیست و باید به حساب معلق واریز شود، این را true قرار دهید. در این صورت to_customer_code باید "_SUSPENSE_" باشد.', nullable: true }
                     },
-                    required: ['fromCustomerCode', 'toCustomerCode', 'amount', 'currency', 'description'],
+                    required: ['from_customer_code', 'to_customer_code', 'amount', 'currency', 'description'],
                 },
             },
             {
@@ -40,7 +41,7 @@ class GeminiService {
                     properties: {
                         name: { type: Type.STRING, description: 'نام کامل مشتری' },
                         code: { type: Type.STRING, description: 'کد منحصر به فرد مشتری' },
-                        whatsappNumber: { type: Type.STRING, description: 'شماره واتس‌اپ مشتری' },
+                        whatsapp_number: { type: Type.STRING, description: 'شماره واتس‌اپ مشتری' },
                         balances: {
                             type: Type.OBJECT,
                             description: 'موجودی‌های اولیه برای هر ارز. برای بدهکاری از مقادیر منفی استفاده کنید.',
@@ -54,26 +55,28 @@ class GeminiService {
                             }
                         }
                     },
-                    required: ['name', 'code', 'whatsappNumber'],
+                    required: ['name', 'code', 'whatsapp_number'],
                 },
             },
             {
                 name: 'createDomesticTransfer',
-                description: 'ایجاد یک حواله داخلی جدید',
+                description: 'ایجاد یک حواله داخلی جدید. میتواند به صورت پرداخت نقدی یا کسر از حساب مشتری باشد.',
                 parameters: {
                     type: Type.OBJECT,
                     properties: {
-                        senderName: { type: Type.STRING, description: 'نام کامل فرستنده' },
-                        senderTazkereh: { type: Type.STRING, description: 'شماره تذکره فرستنده' },
-                        receiverName: { type: Type.STRING, description: 'نام کامل گیرنده' },
-                        receiverTazkereh: { type: Type.STRING, description: 'شماره تذکره گیرنده' },
+                        sender_name: { type: Type.STRING, description: 'نام کامل فرستنده' },
+                        sender_tazkereh: { type: Type.STRING, description: 'شماره تذکره فرستنده' },
+                        receiver_name: { type: Type.STRING, description: 'نام کامل گیرنده' },
+                        receiver_tazkereh: { type: Type.STRING, description: 'شماره تذکره گیرنده' },
                         amount: { type: Type.NUMBER, description: 'مبلغ حواله' },
                         currency: { type: Type.STRING, description: 'واحد پولی حواله', enum: Object.values(Currency) },
                         commission: { type: Type.NUMBER, description: 'کارمزد حواله' },
-                        destinationProvince: { type: Type.STRING, description: 'ولایت مقصد' },
-                        partnerSarraf: { type: Type.STRING, description: 'نام صراف همکار در مقصد' },
+                        destination_province: { type: Type.STRING, description: 'ولایت مقصد' },
+                        partner_sarraf: { type: Type.STRING, description: 'نام صراف همکار در مقصد' },
+                        is_cash_payment: { type: Type.BOOLEAN, description: 'مشخص میکند که آیا پرداخت نقدی است یا از حساب مشتری کسر میشود. اگر true باشد، نقدی است.' },
+                        customer_code: { type: Type.STRING, description: 'اگر is_cash_payment برابر false باشد، کد مشتری که پول از حساب او کسر میشود باید اینجا وارد شود.', nullable: true }
                     },
-                    required: ['senderName', 'senderTazkereh', 'receiverName', 'receiverTazkereh', 'amount', 'currency', 'commission', 'destinationProvince', 'partnerSarraf'],
+                    required: ['sender_name', 'sender_tazkereh', 'receiver_name', 'receiver_tazkereh', 'amount', 'currency', 'commission', 'destination_province', 'partner_sarraf', 'is_cash_payment'],
                 },
             },
             {
@@ -129,12 +132,12 @@ class GeminiService {
                     type: Type.OBJECT,
                     properties: {
                         id: { type: Type.STRING, description: 'ID حساب بانکی' },
-                        accountHolder: { type: Type.STRING, description: 'نام جدید صاحب حساب' },
-                        bankName: { type: Type.STRING, description: 'نام جدید بانک' },
-                        accountNumber: { type: Type.STRING, description: 'شماره حساب جدید' },
-                        cardToCardNumber: { type: Type.STRING, description: 'شماره کارت جدید (اختیاری)' },
+                        account_holder: { type: Type.STRING, description: 'نام جدید صاحب حساب' },
+                        bank_name: { type: Type.STRING, description: 'نام جدید بانک' },
+                        account_number: { type: Type.STRING, description: 'شماره حساب جدید' },
+                        card_to_card_number: { type: Type.STRING, description: 'شماره کارت جدید (اختیاری)' },
                     },
-                    required: ['id', 'accountHolder', 'bankName', 'accountNumber'],
+                    required: ['id', 'account_holder', 'bank_name', 'account_number'],
                 },
             },
             {
@@ -154,10 +157,10 @@ class GeminiService {
                 parameters: {
                     type: Type.OBJECT,
                     properties: {
-                        transferId: { type: Type.STRING, description: 'کد رهگیری حواله، مثلا DT-12345' },
-                        newStatus: { type: Type.STRING, description: 'وضعیت جدید حواله', enum: [TransferStatus.Executed, TransferStatus.Cancelled] },
+                        transfer_id: { type: Type.STRING, description: 'کد رهگیری حواله، مثلا DT-12345' },
+                        new_status: { type: Type.STRING, description: 'وضعیت جدید حواله', enum: [TransferStatus.Executed, TransferStatus.Cancelled] },
                     },
-                    required: ['transferId', 'newStatus'],
+                    required: ['transfer_id', 'new_status'],
                 },
             },
             {
@@ -166,9 +169,9 @@ class GeminiService {
                 parameters: {
                     type: Type.OBJECT,
                     properties: {
-                        transferId: { type: Type.STRING, description: 'کد رهگیری حواله ورودی' },
+                        transfer_id: { type: Type.STRING, description: 'کد رهگیری حواله ورودی' },
                     },
-                    required: ['transferId'],
+                    required: ['transfer_id'],
                 },
             },
             {
@@ -192,10 +195,10 @@ class GeminiService {
                     type: Type.OBJECT,
                     properties: {
                         description: { type: Type.STRING, description: 'شرح تبادله' },
-                        fromAssetId: { type: Type.STRING, description: 'کد دارایی مبدا (مانند cashbox_USD یا bank_ba-1). مبلغ از این دارایی کسر می‌شود.' },
-                        fromAmount: { type: Type.NUMBER, description: 'مبلغ برداشتی از مبدا' },
+                        from_asset_id: { type: Type.STRING, description: 'کد دارایی مبدا (مانند cashbox_USD یا bank_ba-1). مبلغ از این دارایی کسر می‌شود.' },
+                        from_amount: { type: Type.NUMBER, description: 'مبلغ برداشتی از مبدا' },
                     },
-                    required: ['description', 'fromAssetId', 'fromAmount'],
+                    required: ['description', 'from_asset_id', 'from_amount'],
                 },
             },
             {
@@ -204,9 +207,9 @@ class GeminiService {
                 parameters: {
                     type: Type.OBJECT,
                     properties: {
-                        partnerName: { type: Type.STRING, description: 'نام صراف همکار' },
+                        partner_name: { type: Type.STRING, description: 'نام صراف همکار' },
                     },
-                    required: ['partnerName'],
+                    required: ['partner_name'],
                 },
             },
             // FIX: Added function declaration for 'settlePartnerBalance' to enable the voice assistant feature.
@@ -216,12 +219,12 @@ class GeminiService {
                 parameters: {
                     type: Type.OBJECT,
                     properties: {
-                        partnerName: { type: Type.STRING, description: 'نام کامل صراف همکار' },
+                        partner_name: { type: Type.STRING, description: 'نام کامل صراف همکار' },
                         amount: { type: Type.NUMBER, description: 'مبلغی که پرداخت یا دریافت می‌شود' },
                         currency: { type: Type.STRING, description: 'واحد پولی مبلغ', enum: Object.values(Currency) },
                         type: { type: Type.STRING, description: 'نوع عملیات: "pay" برای پرداخت به همکار، "receive" برای دریافت از همکار', enum: ['pay', 'receive'] },
                     },
-                    required: ['partnerName', 'amount', 'currency', 'type'],
+                    required: ['partner_name', 'amount', 'currency', 'type'],
                 },
             },
             {

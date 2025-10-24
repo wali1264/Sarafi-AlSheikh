@@ -110,14 +110,15 @@ const LogCommissionTransferModal: React.FC<LogCommissionTransferModalProps> = ({
             return;
         }
 
+        // FIX: Changed payload keys to snake_case to match the API definition.
         const payload: LogCommissionTransferPayload = {
-            initiatorType,
-            customerCode: initiatorType === 'Customer' ? customerCode : undefined,
-            partnerId: initiatorType === 'Partner' ? partnerId : undefined,
+            initiator_type: initiatorType,
+            customer_code: initiatorType === 'Customer' ? customerCode : undefined,
+            partner_id: initiatorType === 'Partner' ? partnerId : undefined,
             amount: parseFloat(persianToEnglishNumber(amount)) || 0,
-            sourceAccountNumber,
-            receivedIntoBankAccountId,
-            commissionPercentage: parseFloat(persianToEnglishNumber(commissionPercentage)) || 0,
+            source_account_number: sourceAccountNumber,
+            received_into_bank_account_id: receivedIntoBankAccountId,
+            commission_percentage: parseFloat(persianToEnglishNumber(commissionPercentage)) || 0,
             user: currentUser,
         };
 
@@ -179,7 +180,7 @@ const LogCommissionTransferModal: React.FC<LogCommissionTransferModalProps> = ({
                         <select value={receivedIntoBankAccountId} onChange={e => setReceivedIntoBankAccountId(e.target.value)} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100">
                             <option value="" disabled>-- واریز به حساب بانکی شما --</option>
                              {filteredBankAccounts.length > 0 ? (
-                                filteredBankAccounts.map(b => <option key={b.id} value={b.id}>{b.bankName} - {b.accountHolder}</option>)
+                                filteredBankAccounts.map(b => <option key={b.id} value={b.id}>{b.bank_name} - {b.account_holder}</option>)
                             ) : (
                                 <option disabled>هیچ حساب بانکی (IRT_BANK) یافت نشد</option>
                             )}

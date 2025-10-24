@@ -48,9 +48,9 @@ const CompleteExchangeModal: React.FC<CompleteExchangeModalProps> = ({ isOpen, o
         setIsLoading(true);
 
         const payload: CompleteForeignExchangePayload = {
-            transactionId: transaction.id,
-            toAssetId,
-            toAmount: parseFloat(persianToEnglishNumber(toAmount)) || 0,
+            transaction_id: transaction.id,
+            to_asset_id: toAssetId,
+            to_amount: parseFloat(persianToEnglishNumber(toAmount)) || 0,
             user: currentUser,
         };
         
@@ -76,7 +76,7 @@ const CompleteExchangeModal: React.FC<CompleteExchangeModalProps> = ({ isOpen, o
                             <h3 className="text-xl font-bold text-slate-300">جزئیات مرحله اول (برد)</h3>
                             <p className="text-lg"><strong>شرح:</strong> {transaction.description}</p>
                             <p className="text-lg font-mono">
-                                <strong>مبلغ برداشتی:</strong> <span className="text-red-400">{new Intl.NumberFormat().format(transaction.fromAmount)} {transaction.fromCurrency}</span> از {transaction.fromAssetName}
+                                <strong>مبلغ برداشتی:</strong> <span className="text-red-400">{new Intl.NumberFormat().format(transaction.from_amount)} {transaction.from_currency}</span> از {transaction.from_asset_name}
                             </p>
                         </div>
 
@@ -193,14 +193,14 @@ const ForeignTransfersPage: React.FC = () => {
                                     <td className="px-6 py-4 whitespace-nowrap">{new Date(tx.timestamp).toLocaleString('fa-IR-u-nu-latn')}</td>
                                     <td className="px-6 py-4 text-slate-100">{tx.description}</td>
                                     <td className="px-6 py-4">
-                                        <div className="font-mono text-left text-red-400">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.fromAmount)} {tx.fromCurrency}</div>
-                                        <div className="text-sm text-slate-400 text-left">از: {tx.fromAssetName}</div>
+                                        <div className="font-mono text-left text-red-400">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.from_amount)} {tx.from_currency}</div>
+                                        <div className="text-sm text-slate-400 text-left">از: {tx.from_asset_name}</div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        {tx.toAmount ? (
+                                        {tx.to_amount ? (
                                             <>
-                                                <div className="font-mono text-left text-green-400">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.toAmount)} {tx.toCurrency}</div>
-                                                <div className="text-sm text-slate-400 text-left">به: {tx.toAssetName}</div>
+                                                <div className="font-mono text-left text-green-400">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.to_amount)} {tx.to_currency}</div>
+                                                <div className="text-sm text-slate-400 text-left">به: {tx.to_asset_name}</div>
                                             </>
                                         ) : (
                                             <span className="text-slate-500">-</span>

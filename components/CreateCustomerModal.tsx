@@ -52,7 +52,12 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({ isOpen, onClo
             return;
         }
 
-        const payload: CreateCustomerPayload = { ...formData, user };
+        const payload: CreateCustomerPayload = { 
+            name: formData.name,
+            code: formData.code,
+            whatsapp_number: formData.whatsappNumber,
+            user 
+        };
         const result = await api.createCustomer(payload);
 
         setIsLoading(false);

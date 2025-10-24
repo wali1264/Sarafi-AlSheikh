@@ -37,7 +37,7 @@ const ExpensesPage: React.FC = () => {
     const fetchData = useCallback(async () => {
         setIsLoading(true);
         const data = await api.getExpenses();
-        setExpenses(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+        setExpenses(data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
         setIsLoading(false);
     }, [api]);
 
@@ -68,7 +68,7 @@ const ExpensesPage: React.FC = () => {
             const matchesMinAmount = !filters.minAmount || exp.amount >= parseFloat(filters.minAmount);
             const matchesMaxAmount = !filters.maxAmount || exp.amount <= parseFloat(filters.maxAmount);
 
-            const createdAt = new Date(exp.createdAt);
+            const createdAt = new Date(exp.created_at);
             const matchesStartDate = !filters.startDate || createdAt >= new Date(filters.startDate);
             let matchesEndDate = true;
             if (filters.endDate) {
@@ -169,7 +169,7 @@ const ExpensesPage: React.FC = () => {
                         <tbody>
                             {filteredExpenses.map(exp => (
                                 <tr key={exp.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5 transition-colors">
-                                    <td className="px-6 py-4 whitespace-nowrap">{new Date(exp.createdAt).toLocaleString('fa-IR-u-nu-latn')}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap">{new Date(exp.created_at).toLocaleString('fa-IR-u-nu-latn')}</td>
                                     <td className="px-6 py-4 font-semibold text-cyan-300">{expenseCategoryTranslations[exp.category]}</td>
                                     <td className="px-6 py-4 text-slate-100">{exp.description}</td>
                                     <td className="px-6 py-4 font-mono text-left text-red-400">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(exp.amount)} {exp.currency}</td>

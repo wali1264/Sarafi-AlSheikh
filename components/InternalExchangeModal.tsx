@@ -75,17 +75,18 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
         e.preventDefault();
         setIsLoading(true);
 
+        // FIX: Changed payload keys to snake_case to match the API definition.
         const payload: InternalCustomerExchangePayload = {
-            customerId: customer.id,
-            fromCurrency: formData.fromCurrency as Currency,
-            fromAmount: parseFloat(formData.fromAmount) || 0,
-            toCurrency: formData.toCurrency as Currency,
-            toAmount: parseFloat(toAmount) || 0,
+            customer_id: customer.id,
+            from_currency: formData.fromCurrency as Currency,
+            from_amount: parseFloat(formData.fromAmount) || 0,
+            to_currency: formData.toCurrency as Currency,
+            to_amount: parseFloat(toAmount) || 0,
             rate: parseFloat(formData.rate) || 0,
             user: currentUser,
         };
         
-        if(payload.fromAmount <= 0 || payload.toAmount <= 0) {
+        if(payload.from_amount <= 0 || payload.to_amount <= 0) {
             addToast("مبالغ باید بزرگتر از صفر باشند.", 'error');
             setIsLoading(false);
             return;

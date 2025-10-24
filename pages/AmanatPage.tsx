@@ -39,7 +39,8 @@ const AmanatPage: React.FC = () => {
     const fetchData = useCallback(async () => {
         setIsLoading(true);
         const data = await api.getAmanat();
-        setAmanatList(data.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+        // FIX: Changed 'createdAt' to 'created_at' to match the 'Amanat' type.
+        setAmanatList(data.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
         setIsLoading(false);
     }, [api]);
 
@@ -57,7 +58,8 @@ const AmanatPage: React.FC = () => {
         // This narrows the `AuthenticatedUser` union type to the `User` type expected by the API.
         if (!user || user.userType !== 'internal') return;
         if (window.confirm("آیا از بازگشت این امانت اطمینان دارید؟ یک درخواست برداشت از صندوق ایجاد خواهد شد.")) {
-            const payload: ReturnAmanatPayload = { amanatId, user };
+            // FIX: Changed 'amanatId' to 'amanat_id' to match the 'ReturnAmanatPayload' type.
+            const payload: ReturnAmanatPayload = { amanat_id: amanatId, user };
             const result = await api.returnAmanat(payload);
             if ('error' in result) {
                 addToast(result.error, 'error');
@@ -80,13 +82,13 @@ const AmanatPage: React.FC = () => {
     const filteredList = useMemo(() => {
         return amanatList.filter(a => {
             const matchesStatus = a.status === statusFilter;
-            const matchesCustomer = !filters.customerName || a.customerName.toLowerCase().includes(filters.customerName.toLowerCase());
+            const matchesCustomer = !filters.customerName || a.customer_name.toLowerCase().includes(filters.customerName.toLowerCase());
             const matchesNotes = !filters.notes || a.notes.toLowerCase().includes(filters.notes.toLowerCase());
             const matchesCurrency = filters.currency === 'all' || a.currency === filters.currency;
             const matchesMinAmount = !filters.minAmount || a.amount >= parseFloat(filters.minAmount);
             const matchesMaxAmount = !filters.maxAmount || a.amount <= parseFloat(filters.maxAmount);
             
-            const createdAt = new Date(a.createdAt);
+            const createdAt = new Date(a.created_at);
             const matchesStartDate = !filters.startDate || createdAt >= new Date(filters.startDate);
             let matchesEndDate = true;
             if (filters.endDate) {
@@ -182,8 +184,8 @@ const AmanatPage: React.FC = () => {
                         <tbody>
                             {filteredList.map(a => (
                                 <tr key={a.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5 transition-colors">
-                                    <td className="px-6 py-4 whitespace-nowrap">{new Date(a.createdAt).toLocaleString('fa-IR-u-nu-latn')}</td>
-                                    <td className="px-6 py-4 font-semibold text-slate-100">{a.customerName}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap">{new Date(a.created_at).toLocaleString('fa-IR-u-nu-latn')}</td>
+                                    <td className="px-6 py-4 font-semibold text-slate-100">{a.customer_name}</td>
                                     <td className="px-6 py-4 font-mono text-left">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(a.amount)} {a.currency}</td>
                                     <td className="px-6 py-4">{a.notes}</td>
                                     <td className="px-6 py-4">

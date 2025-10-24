@@ -93,17 +93,17 @@ const CreateIncomingTransferModal: React.FC<CreateIncomingTransferModalProps> = 
         setIsLoading(true);
 
         const payload: CreateDomesticTransferPayload = {
-            senderName: formData.partnerSarraf, // For incoming, sender is the partner
-            senderTazkereh: '-', // Placeholder as it's not relevant
-            receiverName: formData.receiverName,
-            receiverTazkereh: formData.receiverTazkereh,
+            sender_name: formData.partnerSarraf, // For incoming, sender is the partner
+            sender_tazkereh: '-', // Placeholder as it's not relevant
+            receiver_name: formData.receiverName,
+            receiver_tazkereh: formData.receiverTazkereh,
             amount: parseFloat(formData.amount) || 0,
             commission: 0, // No commission for incoming transfers between partners
             currency: formData.currency as Currency,
-            destinationProvince: formData.destinationProvince,
-            partnerSarraf: formData.partnerSarraf,
-            partnerReference: formData.partnerReference,
-            isCashPayment: false, // FIX: Incoming transfers are never cash payments upon creation.
+            destination_province: formData.destinationProvince,
+            partner_sarraf: formData.partnerSarraf,
+            partner_reference: formData.partnerReference,
+            is_cash_payment: false, // This value is ignored by the DB function when partner_reference is set, but kept for type consistency.
             user: currentUser,
         };
 

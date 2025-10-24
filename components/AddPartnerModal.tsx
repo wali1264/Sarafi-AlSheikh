@@ -1,10 +1,10 @@
-
 import React, { useState, FormEvent } from 'react';
 import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
 import { CreatePartnerPayload, Currency, User } from '../types';
 import { CURRENCIES, AFGHANISTAN_PROVINCES } from '../constants';
 import { persianToEnglishNumber } from '../utils/translations';
+import { useToast } from '../contexts/ToastContext';
 
 interface AddPartnerModalProps {
     isOpen: boolean;
@@ -15,6 +15,7 @@ interface AddPartnerModalProps {
 
 const AddPartnerModal: React.FC<AddPartnerModalProps> = ({ isOpen, onClose, onSuccess, currentUser }) => {
     const api = useApi();
+    const { addToast } = useToast();
     const [formData, setFormData] = useState({
         name: '',
         province: AFGHANISTAN_PROVINCES[0],
@@ -22,7 +23,6 @@ const AddPartnerModal: React.FC<AddPartnerModalProps> = ({ isOpen, onClose, onSu
     });
     
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     if (!isOpen) return null;
 
@@ -34,10 +34,11 @@ const AddPartnerModal: React.FC<AddPartnerModalProps> = ({ isOpen, onClose, onSu
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        setError(null);
         
         const payload: CreatePartnerPayload = {
-            ...formData,
+            name: formData.name,
+            province: formData.province,
+            whatsapp_number: formData.whatsappNumber,
             user: currentUser,
         };
 
@@ -45,8 +46,9 @@ const AddPartnerModal: React.FC<AddPartnerModalProps> = ({ isOpen, onClose, onSu
         setIsLoading(false);
 
         if ('error' in result) {
-            setError(result.error);
+            addToast(result.error, 'error');
         } else {
+            addToast("همکار جدید با موفقیت ثبت شد.", 'success');
             onSuccess();
         }
     };
@@ -59,7 +61,6 @@ const AddPartnerModal: React.FC<AddPartnerModalProps> = ({ isOpen, onClose, onSu
                         <h2 className="text-4xl font-bold text-cyan-300 tracking-wider">ثبت همکار جدید</h2>
                     </div>
                     <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
-                        {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
                         
                         <div>
                              <label htmlFor="name" className="block text-lg font-medium text-cyan-300 mb-2">نام کامل همکار</label>

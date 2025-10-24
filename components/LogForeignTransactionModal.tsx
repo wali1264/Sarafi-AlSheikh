@@ -16,19 +16,19 @@ const InitiateExchangeModal: React.FC<InitiateExchangeModalProps> = ({ isOpen, o
     const api = useApi();
     const { addToast } = useToast();
     const [formData, setFormData] = useState({
-        fromAssetId: '',
-        fromAmount: '',
+        from_asset_id: '',
+        from_amount: '',
         description: '',
     });
     
     const [isLoading, setIsLoading] = useState(false);
     
-    const fromAsset = useMemo(() => assets.find(a => a.id === formData.fromAssetId), [assets, formData.fromAssetId]);
+    const fromAsset = useMemo(() => assets.find(a => a.id === formData.from_asset_id), [assets, formData.from_asset_id]);
 
     if (!isOpen) return null;
 
     const resetForm = () => {
-        setFormData({ fromAssetId: '', fromAmount: '', description: '' });
+        setFormData({ from_asset_id: '', from_amount: '', description: '' });
         setIsLoading(false);
     };
 
@@ -39,7 +39,7 @@ const InitiateExchangeModal: React.FC<InitiateExchangeModalProps> = ({ isOpen, o
     
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
-        if (name === 'fromAmount') {
+        if (name === 'from_amount') {
             setFormData(prev => ({ ...prev, [name]: persianToEnglishNumber(value) }));
         } else {
             setFormData(prev => ({ ...prev, [name]: value }));
@@ -52,8 +52,8 @@ const InitiateExchangeModal: React.FC<InitiateExchangeModalProps> = ({ isOpen, o
 
         const payload: InitiateForeignExchangePayload = {
             description: formData.description,
-            fromAssetId: formData.fromAssetId,
-            fromAmount: parseFloat(formData.fromAmount) || 0,
+            from_asset_id: formData.from_asset_id,
+            from_amount: parseFloat(formData.from_amount) || 0,
             user: currentUser,
         };
         
@@ -86,14 +86,14 @@ const InitiateExchangeModal: React.FC<InitiateExchangeModalProps> = ({ isOpen, o
                             <h3 className="text-2xl font-bold text-red-300">برد وجه جهت تبادله</h3>
                             <div>
                                 <label className="block text-lg font-medium text-slate-200 mb-2">کدام دارایی را خارج می‌کنید؟ (مبدا)</label>
-                                <select name="fromAssetId" value={formData.fromAssetId} onChange={handleChange} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-red-400 text-right">
+                                <select name="from_asset_id" value={formData.from_asset_id} onChange={handleChange} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-red-400 text-right">
                                     <option value="">-- انتخاب دارایی --</option>
                                     {assets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                                 </select>
                             </div>
                             <div>
                                  <label className="block text-lg font-medium text-slate-200 mb-2">چه مبلغی خارج می‌کنید؟ ({fromAsset?.currency})</label>
-                                 <input name="fromAmount" value={formData.fromAmount} onChange={handleChange} placeholder="0.00" required type="text" inputMode="decimal" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-red-400 text-right font-mono" />
+                                 <input name="from_amount" value={formData.from_amount} onChange={handleChange} placeholder="0.00" required type="text" inputMode="decimal" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-red-400 text-right font-mono" />
                             </div>
                         </div>
                         <p className="text-yellow-400 text-base">توجه: با ثبت این فرم، یک درخواست برداشت (برد) به صندوق ارسال می‌شود. پس از تایید صندوقدار، می‌توانید مرحله بعدی (ثبت رسید) را انجام دهید.</p>

@@ -2,6 +2,7 @@ import React, { useState, FormEvent, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
 import { UpdateBankAccountPayload, User, BankAccount } from '../types';
+import { useToast } from '../contexts/ToastContext';
 
 interface EditBankAccountModalProps {
     isOpen: boolean;
@@ -13,22 +14,22 @@ interface EditBankAccountModalProps {
 
 const EditBankAccountModal: React.FC<EditBankAccountModalProps> = ({ isOpen, onClose, onSuccess, currentUser, bankAccount }) => {
     const api = useApi();
+    const { addToast } = useToast();
     const [formData, setFormData] = useState({
-        accountHolder: '',
-        bankName: '',
-        accountNumber: '',
-        cardToCardNumber: '',
+        account_holder: '',
+        bank_name: '',
+        account_number: '',
+        card_to_card_number: '',
     });
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if(bankAccount) {
             setFormData({
-                accountHolder: bankAccount.accountHolder,
-                bankName: bankAccount.bankName,
-                accountNumber: bankAccount.accountNumber,
-                cardToCardNumber: bankAccount.cardToCardNumber || '',
+                account_holder: bankAccount.account_holder,
+                bank_name: bankAccount.bank_name,
+                account_number: bankAccount.account_number,
+                card_to_card_number: bankAccount.card_to_card_number || '',
             });
         }
     }, [bankAccount]);
@@ -43,20 +44,22 @@ const EditBankAccountModal: React.FC<EditBankAccountModalProps> = ({ isOpen, onC
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        setError(null);
 
         const payload: UpdateBankAccountPayload = {
             id: bankAccount.id,
-            ...formData,
-            cardToCardNumber: formData.cardToCardNumber || undefined,
+            account_holder: formData.account_holder,
+            bank_name: formData.bank_name,
+            account_number: formData.account_number,
+            card_to_card_number: formData.card_to_card_number || undefined,
             user: currentUser,
         };
         const result = await api.updateBankAccount(payload);
         setIsLoading(false);
 
         if ('error' in result) {
-            setError(result.error);
+            addToast(result.error, 'error');
         } else {
+            addToast("اطلاعات حساب بانکی با موفقیت ویرایش شد.", 'success');
             onSuccess();
         }
     };
@@ -69,11 +72,10 @@ const EditBankAccountModal: React.FC<EditBankAccountModalProps> = ({ isOpen, onC
                         <h2 className="text-4xl font-bold text-cyan-300 tracking-wider">ویرایش حساب بانکی</h2>
                     </div>
                     <div className="p-8 space-y-6">
-                        {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
-                        <input name="accountHolder" value={formData.accountHolder} onChange={handleChange} placeholder="نام صاحب حساب" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
-                        <input name="bankName" value={formData.bankName} onChange={handleChange} placeholder="نام بانک" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
-                        <input name="accountNumber" value={formData.accountNumber} onChange={handleChange} placeholder="شماره حساب" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
-                        <input name="cardToCardNumber" value={formData.cardToCardNumber} onChange={handleChange} placeholder="شماره کارت (اختیاری)" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
+                        <input name="account_holder" value={formData.account_holder} onChange={handleChange} placeholder="نام صاحب حساب" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
+                        <input name="bank_name" value={formData.bank_name} onChange={handleChange} placeholder="نام بانک" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
+                        <input name="account_number" value={formData.account_number} onChange={handleChange} placeholder="شماره حساب" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
+                        <input name="card_to_card_number" value={formData.card_to_card_number} onChange={handleChange} placeholder="شماره کارت (اختیاری)" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
                          <p className="text-sm text-slate-400 mt-2">توجه: موجودی حساب از این بخش قابل ویرایش نیست و تنها از طریق تراکنش‌ها تغییر می‌کند.</p>
                     </div>
                     <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end space-x-4 space-x-reverse">

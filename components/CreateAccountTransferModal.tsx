@@ -117,14 +117,15 @@ const CreateAccountTransferModal: React.FC<CreateAccountTransferModalProps> = ({
 
         setIsLoading(true);
 
+        // FIX: Changed payload keys to snake_case to match the API definition.
         const payload: CreateAccountTransferPayload = {
-            fromCustomerCode: fromCode,
-            toCustomerCode: toCode,
+            from_customer_code: fromCode,
+            to_customer_code: toCode,
             amount: parseFloat(amount) || 0,
             currency,
             description,
             user: currentUser,
-            isPendingAssignment,
+            is_pending_assignment: isPendingAssignment,
         };
 
         const result = await api.createAccountTransfer(payload);

@@ -56,10 +56,11 @@ const ReportPrintView: React.FC<ReportPrintViewProps> = ({ reportData, reportTyp
                     <tr key={tx.id} className="odd:bg-white even:bg-gray-50">
                         <td className="p-2 border whitespace-nowrap">{new Date(tx.timestamp).toLocaleString('fa-IR-u-nu-latn')}</td>
                         <td className="p-2 border">{tx.description}</td>
-                        <td className="p-2 border">{tx.fromAssetName}</td>
-                        <td className="p-2 border font-mono text-left text-red-700">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.fromAmount)} {tx.fromCurrency}</td>
-                        <td className="p-2 border">{tx.toAssetName}</td>
-                        <td className="p-2 border font-mono text-left text-green-700">{tx.toAmount ? `${new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.toAmount)} ${tx.toCurrency}` : '-'}</td>
+                        {/* FIX: Changed property access to snake_case to match type definitions. */}
+                        <td className="p-2 border">{tx.from_asset_name}</td>
+                        <td className="p-2 border font-mono text-left text-red-700">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.from_amount)} {tx.from_currency}</td>
+                        <td className="p-2 border">{tx.to_asset_name}</td>
+                        <td className="p-2 border font-mono text-left text-green-700">{tx.to_amount ? `${new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.to_amount)} ${tx.to_currency}` : '-'}</td>
                         <td className="p-2 border">{foreignTransactionStatusTranslations[tx.status]}</td>
                     </tr>
                 ))}

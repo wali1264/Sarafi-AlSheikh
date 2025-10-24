@@ -71,13 +71,14 @@ const CreateAmanatModal: React.FC<CreateAmanatModalProps> = ({ isOpen, onClose, 
         e.preventDefault();
         setIsLoading(true);
 
+        // FIX: Changed payload keys to snake_case to match the API definition.
         const payload: CreateAmanatPayload = {
-            customerName: formData.customerName,
+            customer_name: formData.customerName,
             amount: parseFloat(formData.amount) || 0,
             currency: formData.currency,
             notes: formData.notes,
             user: currentUser,
-            bankAccountId: isBankTransaction ? formData.bankAccountId : undefined,
+            bank_account_id: isBankTransaction ? formData.bankAccountId : undefined,
         };
 
         const result = await api.createAmanat(payload);
@@ -127,7 +128,7 @@ const CreateAmanatModal: React.FC<CreateAmanatModalProps> = ({ isOpen, onClose, 
                                 <label htmlFor="bankAccountId" className="block text-lg font-medium text-cyan-300 mb-2">واریز به حساب بانکی</label>
                                 <select id="bankAccountId" name="bankAccountId" value={formData.bankAccountId} onChange={handleChange} required={isBankTransaction} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100">
                                     <option value="" disabled>-- انتخاب حساب --</option>
-                                    {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.bankName} - {b.accountHolder}</option>)}
+                                    {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.bank_name} - {b.account_holder}</option>)}
                                 </select>
                             </div>
                         )}

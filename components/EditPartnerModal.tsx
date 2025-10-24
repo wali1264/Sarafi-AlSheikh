@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
 import { UpdatePartnerPayload, User, PartnerAccount } from '../types';
 import { AFGHANISTAN_PROVINCES } from '../constants';
+import { useToast } from '../contexts/ToastContext';
 
 interface EditPartnerModalProps {
     isOpen: boolean;
@@ -14,20 +15,20 @@ interface EditPartnerModalProps {
 
 const EditPartnerModal: React.FC<EditPartnerModalProps> = ({ isOpen, onClose, onSuccess, currentUser, partner }) => {
     const api = useApi();
+    const { addToast } = useToast();
     const [formData, setFormData] = useState({
         name: '',
         province: '',
         whatsappNumber: '',
     });
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (partner) {
             setFormData({
                 name: partner.name,
                 province: partner.province,
-                whatsappNumber: partner.whatsappNumber,
+                whatsappNumber: partner.whatsapp_number,
             });
         }
     }, [partner]);
@@ -43,7 +44,6 @@ const EditPartnerModal: React.FC<EditPartnerModalProps> = ({ isOpen, onClose, on
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        setError(null);
 
         const payload: UpdatePartnerPayload = {
             id: partner.id,
@@ -55,8 +55,9 @@ const EditPartnerModal: React.FC<EditPartnerModalProps> = ({ isOpen, onClose, on
         setIsLoading(false);
 
         if ('error' in result) {
-            setError(result.error);
+            addToast(result.error, 'error');
         } else {
+            addToast("اطلاعات همکار با موفقیت ویرایش شد.", 'success');
             onSuccess();
         }
     };
@@ -69,7 +70,6 @@ const EditPartnerModal: React.FC<EditPartnerModalProps> = ({ isOpen, onClose, on
                         <h2 className="text-4xl font-bold text-cyan-300 tracking-wider">ویرایش همکار</h2>
                     </div>
                     <div className="p-8 space-y-6">
-                        {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
                         
                         <div>
                              <label htmlFor="name" className="block text-lg font-medium text-cyan-300 mb-2">نام همکار</label>

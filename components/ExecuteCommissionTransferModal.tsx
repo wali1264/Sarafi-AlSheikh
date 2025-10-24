@@ -33,7 +33,7 @@ const ExecuteCommissionTransferModal: React.FC<ExecuteCommissionTransferModalPro
         }
     }, [isOpen, api, transfer.currency]);
     
-    const commissionAmount = useMemo(() => transfer.amount * (transfer.commissionPercentage / 100), [transfer]);
+    const commissionAmount = useMemo(() => transfer.amount * (transfer.commission_percentage / 100), [transfer]);
     const finalAmountPaid = useMemo(() => transfer.amount - commissionAmount, [transfer, commissionAmount]);
 
     if (!isOpen) return null;
@@ -48,10 +48,11 @@ const ExecuteCommissionTransferModal: React.FC<ExecuteCommissionTransferModalPro
         e.preventDefault();
         setIsLoading(true);
 
+        // FIX: Changed payload keys to snake_case to match the API definition.
         const payload: ExecuteCommissionTransferPayload = {
-            transferId: transfer.id,
-            paidFromBankAccountId,
-            destinationAccountNumber,
+            transfer_id: transfer.id,
+            paid_from_bank_account_id: paidFromBankAccountId,
+            destination_account_number: destinationAccountNumber,
             user: currentUser,
         };
 
@@ -83,7 +84,7 @@ const ExecuteCommissionTransferModal: React.FC<ExecuteCommissionTransferModalPro
                                 <p className="text-2xl font-mono text-slate-200">{new Intl.NumberFormat().format(transfer.amount)} {transfer.currency}</p>
                             </div>
                              <div className="bg-slate-800/50 p-3 rounded">
-                                <h4 className="text-lg text-slate-400">کمیسیون ({transfer.commissionPercentage}%)</h4>
+                                <h4 className="text-lg text-slate-400">کمیسیون ({transfer.commission_percentage}%)</h4>
                                 <p className="text-2xl font-mono text-amber-400">{new Intl.NumberFormat().format(commissionAmount)} {transfer.currency}</p>
                             </div>
                         </div>
@@ -94,7 +95,7 @@ const ExecuteCommissionTransferModal: React.FC<ExecuteCommissionTransferModalPro
 
                         <select value={paidFromBankAccountId} onChange={e => setPaidFromBankAccountId(e.target.value)} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100">
                             <option value="" disabled>-- پرداخت از حساب بانکی --</option>
-                            {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.bankName} - {b.accountHolder} (موجودی: {new Intl.NumberFormat().format(b.balance)})</option>)}
+                            {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.bank_name} - {b.account_holder} (موجودی: {new Intl.NumberFormat().format(b.balance)})</option>)}
                         </select>
                         
                         <input value={destinationAccountNumber} onChange={e => setDestinationAccountNumber(e.target.value)} placeholder="شماره حساب / کارت مقصد" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100" />

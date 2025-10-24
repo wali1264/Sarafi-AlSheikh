@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
@@ -14,6 +11,7 @@ import AddBankAccountModal from '../components/AddBankAccountModal';
 import EditPartnerModal from '../components/EditPartnerModal';
 import EditBankAccountModal from '../components/EditBankAccountModal';
 import { debounce } from '../utils/debounce';
+import { useToast } from '../contexts/ToastContext';
 
 
 // --- Reusable Components ---
@@ -90,6 +88,7 @@ const SettingsPage: React.FC = () => {
 // --- Tab Content Components ---
 const UserManagement = () => {
     const api = useApi();
+    const { addToast } = useToast();
     const [users, setUsers] = useState<User[]>([]);
     const [roles, setRoles] = useState<Role[]>([]);
     const [isUserModalOpen, setUserModalOpen] = useState(false);
@@ -115,8 +114,13 @@ const UserManagement = () => {
     
     const handleDeleteUser = async (userId: string) => {
         if (window.confirm('آیا از حذف این کاربر اطمینان دارید؟ این عمل قابل بازگشت نیست.')) {
-            await api.deleteUser({ id: userId });
-            fetchData();
+            const { success } = await api.deleteUser({ id: userId });
+            if (success) {
+                addToast("کاربر با موفقیت حذف شد.", 'success');
+                fetchData();
+            } else {
+                addToast("خطا در حذف کاربر.", 'error');
+            }
         }
     };
     
@@ -140,7 +144,7 @@ const UserManagement = () => {
                             <tr key={user.id} className="border-b border-cyan-400/10">
                                 <td className="px-6 py-4 font-semibold text-slate-100">{user.name}</td>
                                 <td className="px-6 py-4 font-mono text-cyan-300">{user.username}</td>
-                                <td className="px-6 py-4">{rolesMap.get(user.roleId) || 'نامشخص'}</td>
+                                <td className="px-6 py-4">{rolesMap.get(user.role_id) || 'نامشخص'}</td>
                                 <td className="px-6 py-4 text-left space-x-4 space-x-reverse">
                                     <button onClick={() => { setSelectedUser(user); setUserModalOpen(true); }} className="text-amber-400 hover:text-amber-300">ویرایش</button>
                                     <button onClick={() => handleDeleteUser(user.id)} className="text-red-400 hover:text-red-300">حذف</button>
@@ -157,6 +161,7 @@ const UserManagement = () => {
 
 const RoleManagement = () => {
     const api = useApi();
+    const { addToast } = useToast();
     const [roles, setRoles] = useState<Role[]>([]);
     const [isRoleModalOpen, setRoleModalOpen] = useState(false);
     const [selectedRole, setSelectedRole] = useState<Role | null>(null);
@@ -177,8 +182,13 @@ const RoleManagement = () => {
 
     const handleDeleteRole = async (roleId: string) => {
          if (window.confirm('آیا از حذف این نقش اطمینان دارید؟ کاربرانی که این نقش را دارند دسترسی خود را از دست خواهند داد.')) {
-            await api.deleteRole({ id: roleId });
-            fetchData();
+            const { success } = await api.deleteRole({ id: roleId });
+            if (success) {
+                addToast("نقش با موفقیت حذف شد.", 'success');
+                fetchData();
+            } else {
+                addToast("خطا در حذف نقش.", 'error');
+            }
         }
     };
 
@@ -216,6 +226,7 @@ const RoleManagement = () => {
 const ExternalUserManagement = () => {
     const api = useApi();
     const { user } = useAuth();
+    const { addToast } = useToast();
     const [logins, setLogins] = useState<(ExternalLogin & { entityName: string })[]>([]);
     const [partners, setPartners] = useState<PartnerAccount[]>([]);
     
@@ -232,7 +243,6 @@ const ExternalUserManagement = () => {
     const [selectedPartnerId, setSelectedPartnerId] = useState('');
 
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     const fetchData = useCallback(async () => {
         setIsLoading(true);
@@ -271,53 +281,55 @@ const ExternalUserManagement = () => {
         setSelectedPartnerId('');
         setUsername('');
         setPassword('');
-        setError(null);
     };
     
     const handleSubmit = async (e: React.FormEvent, type: 'customer' | 'partner') => {
         e.preventDefault();
-        // FIX: Add a type guard to ensure the user is an internal user before creating the payload.
         if (!user || user.userType !== 'internal') return;
-        setError(null);
         setIsLoading(true);
 
         let payload: CreateExternalLoginPayload;
         if (type === 'customer') {
             if (!foundCustomer) {
-                setError('لطفا یک کد مشتری معتبر وارد کنید.');
+                addToast('لطفا یک کد مشتری معتبر وارد کنید.', 'error');
                 setIsLoading(false);
                 return;
             }
             payload = {
-                username, password, loginType: 'customer', linkedEntityId: foundCustomer.id, user
+                username, password, login_type: 'customer', linked_entity_id: foundCustomer.id, user
             };
         } else { // partner
             if (!selectedPartnerId) {
-                setError('لطفا یک همکار را انتخاب کنید.');
+                addToast('لطفا یک همکار را انتخاب کنید.', 'error');
                 setIsLoading(false);
                 return;
             }
             payload = {
-                username, password, loginType: 'partner', linkedEntityId: selectedPartnerId, user
+                username, password, login_type: 'partner', linked_entity_id: selectedPartnerId, user
             };
         }
 
         const result = await api.createExternalLogin(payload);
         setIsLoading(false);
         if ('error' in result) {
-            setError(result.error);
+            addToast(result.error, 'error');
         } else {
+            addToast(`دسترسی برای ${username} با موفقیت ایجاد شد.`, 'success');
             resetForms();
             fetchData();
         }
     };
 
     const handleDelete = async (id: string) => {
-        // FIX: Add a type guard to ensure the user is an internal user before using it in an API payload.
         if (!user || user.userType !== 'internal') return;
         if (window.confirm('آیا از حذف این دسترسی اطمینان دارید؟')) {
-            await api.deleteExternalLogin({ id, user });
-            fetchData();
+            const { success } = await api.deleteExternalLogin({ id, user });
+            if (success) {
+                addToast("دسترسی با موفقیت حذف شد.", 'success');
+                fetchData();
+            } else {
+                addToast("خطا در حذف دسترسی.", 'error');
+            }
         }
     };
 
@@ -335,7 +347,6 @@ const ExternalUserManagement = () => {
                         </div>
                         <input type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="نام کاربری (انگلیسی)" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-left" style={{direction: 'ltr'}}/>
                         <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="رمز عبور" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-left" style={{direction: 'ltr'}}/>
-                        {error && <p className="text-red-400">{error}</p>}
                         <div className="text-left pt-2"><ActionButton type="submit" disabled={isLoading || !foundCustomer}>ایجاد دسترسی</ActionButton></div>
                     </form>
                 </SettingsCard>
@@ -350,7 +361,6 @@ const ExternalUserManagement = () => {
                         </div>
                         <input type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="نام کاربری (انگلیسی)" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-left" style={{direction: 'ltr'}}/>
                         <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="رمز عبور" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-left" style={{direction: 'ltr'}}/>
-                         {error && <p className="text-red-400">{error}</p>}
                         <div className="text-left pt-2"><ActionButton type="submit" disabled={isLoading || !selectedPartnerId}>ایجاد دسترسی</ActionButton></div>
                     </form>
                 </SettingsCard>
@@ -370,7 +380,7 @@ const ExternalUserManagement = () => {
                             {logins.map(login => (
                                 <tr key={login.id} className="border-b border-cyan-400/10">
                                     <td className="px-6 py-4 font-mono text-cyan-300">{login.username}</td>
-                                    <td className="px-6 py-4">{login.loginType === 'customer' ? 'مشتری' : 'همکار'}</td>
+                                    <td className="px-6 py-4">{login.login_type === 'customer' ? 'مشتری' : 'همکار'}</td>
                                     <td className="px-6 py-4 font-semibold">{login.entityName}</td>
                                     <td className="px-6 py-4 text-left">
                                         <button onClick={() => handleDelete(login.id)} className="text-red-400 hover:text-red-300">حذف</button>
@@ -409,6 +419,7 @@ const BalanceSummary: React.FC<{ balances: PartnerAccount['balances'] }> = ({ ba
 const PartnerManagement = () => {
     const api = useApi();
     const { user, hasPermission } = useAuth();
+    const { addToast } = useToast();
     const [partners, setPartners] = useState<PartnerAccount[]>([]);
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
     const [isEditModalOpen, setEditModalOpen] = useState(false);
@@ -436,11 +447,15 @@ const PartnerManagement = () => {
     };
 
     const handleDeleteClick = async (partner: PartnerAccount) => {
-        // FIX: Add a type guard to ensure the user is an internal user before creating the payload.
         if (!user || user.userType !== 'internal') return;
         if (window.confirm(`آیا از غیرفعال کردن همکار "${partner.name}" اطمینان دارید؟ این همکار دیگر در لیست‌های انتخابی نمایش داده نخواهد شد.`)) {
-            await api.deletePartner({ id: partner.id, user });
-            fetchData();
+            const result = await api.deletePartner({ id: partner.id, user });
+            if ('error' in result) {
+                addToast(result.error, 'error');
+            } else {
+                addToast("همکار با موفقیت غیرفعال شد.", 'success');
+                fetchData();
+            }
         }
     };
 
@@ -470,7 +485,7 @@ const PartnerManagement = () => {
                             <tr key={p.id} className={`border-b border-cyan-400/10 ${p.status === 'Inactive' ? 'opacity-50' : ''}`}>
                                 <td className="px-6 py-4 font-semibold text-slate-100">{p.name}</td>
                                 <td className="px-6 py-4">{p.province}</td>
-                                <td className="px-6 py-4 font-mono">{p.whatsappNumber}</td>
+                                <td className="px-6 py-4 font-mono">{p.whatsapp_number}</td>
                                 <td className="px-6 py-4 text-left">
                                     <BalanceSummary balances={p.balances} />
                                 </td>
@@ -497,6 +512,7 @@ const PartnerManagement = () => {
 const BankAccountManagement = () => {
     const api = useApi();
     const { user, hasPermission } = useAuth();
+    const { addToast } = useToast();
     const [accounts, setAccounts] = useState<BankAccount[]>([]);
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
     const [isEditModalOpen, setEditModalOpen] = useState(false);
@@ -523,11 +539,15 @@ const BankAccountManagement = () => {
     };
 
     const handleDeleteClick = async (account: BankAccount) => {
-        // FIX: Add a type guard to ensure the user is an internal user before creating the payload.
         if (!user || user.userType !== 'internal') return;
-        if (window.confirm(`آیا از غیرفعال کردن حساب بانکی "${account.accountHolder}" اطمینان دارید؟`)) {
-            await api.deleteBankAccount({ id: account.id, user });
-            fetchData();
+        if (window.confirm(`آیا از غیرفعال کردن حساب بانکی "${account.account_holder}" اطمینان دارید؟`)) {
+            const result = await api.deleteBankAccount({ id: account.id, user });
+            if ('error' in result) {
+                addToast(result.error, 'error');
+            } else {
+                addToast("حساب بانکی با موفقیت غیرفعال شد.", 'success');
+                fetchData();
+            }
         }
     };
 
@@ -556,9 +576,9 @@ const BankAccountManagement = () => {
                     <tbody>
                         {accounts.map(acc => (
                             <tr key={acc.id} className={`border-b border-cyan-400/10 ${acc.status === 'Inactive' ? 'opacity-50' : ''}`}>
-                                <td className="px-6 py-4 font-semibold text-slate-100">{acc.accountHolder}</td>
-                                <td className="px-6 py-4">{acc.bankName}</td>
-                                <td className="px-6 py-4 font-mono text-cyan-300">{acc.accountNumber}</td>
+                                <td className="px-6 py-4 font-semibold text-slate-100">{acc.account_holder}</td>
+                                <td className="px-6 py-4">{acc.bank_name}</td>
+                                <td className="px-6 py-4 font-mono text-cyan-300">{acc.account_number}</td>
                                 <td className="px-6 py-4 font-mono">{new Intl.NumberFormat('fa-IR').format(acc.balance)} {acc.currency}</td>
                                 <td className={`px-6 py-4 font-bold ${getStatusStyle(acc.status)}`}>{acc.status === 'Active' ? 'فعال' : 'غیرفعال'}</td>
                                 <td className="px-6 py-4 text-left space-x-4 space-x-reverse">
@@ -599,6 +619,7 @@ const getStatusStyle = (status: CashboxRequestStatus) => {
 const GeneralSettings = () => {
     const api = useApi();
     const { user } = useAuth();
+    const { addToast } = useToast();
     const [settings, setSettings] = useState<SystemSettings | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
@@ -625,8 +646,8 @@ const GeneralSettings = () => {
             setIncreaseBankAccountId(activeIrtAccounts[0].id);
         }
         const manualRequests = allRequests
-            .filter(r => r.linkedEntity?.type === 'Manual' && r.linkedEntity.id === 'BALANCE_ADJUST')
-            .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            .filter(r => r.linked_entity?.type === 'Manual' && r.linked_entity.id === 'BALANCE_ADJUST')
+            .sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         setRequestHistory(manualRequests);
     }, [api]);
 
@@ -639,8 +660,8 @@ const GeneralSettings = () => {
             if (!prev) return null;
             return {
                 ...prev,
-                approvalThresholds: {
-                    ...prev.approvalThresholds,
+                approval_thresholds: {
+                    ...prev.approval_thresholds,
                     [currency]: parseFloat(persianToEnglishNumber(value)) || 0,
                 }
             };
@@ -650,17 +671,16 @@ const GeneralSettings = () => {
     const handleSaveSettings = async () => {
         if (!settings) return;
         await api.updateSystemSettings({ settings });
-        alert("تنظیمات با موفقیت ذخیره شد.");
+        addToast("تنظیمات با موفقیت ذخیره شد.", 'success');
         fetchData();
     };
 
     const handleIncreaseBalance = async (e: React.FormEvent) => {
         e.preventDefault();
-        // FIX: Add a type guard to ensure the user is an internal user before creating the payload.
         if (!user || user.userType !== 'internal') return;
 
         if (increaseCurrency === Currency.IRT_BANK && !increaseBankAccountId) {
-            alert("لطفاً یک حساب بانکی مقصد را انتخاب کنید.");
+            addToast("لطفاً یک حساب بانکی مقصد را انتخاب کنید.", 'error');
             return;
         }
 
@@ -670,14 +690,14 @@ const GeneralSettings = () => {
             currency: increaseCurrency,
             description: increaseDescription,
             user,
-            bankAccountId: increaseCurrency === Currency.IRT_BANK ? increaseBankAccountId : undefined,
-            sourceAccountNumber: increaseCurrency === Currency.IRT_BANK ? increaseSourceAccount : undefined,
+            bank_account_id: increaseCurrency === Currency.IRT_BANK ? increaseBankAccountId : undefined,
+            source_account_number: increaseCurrency === Currency.IRT_BANK ? increaseSourceAccount : undefined,
         });
         setIsIncreasing(false);
         if ('error' in result) {
-            alert(`خطا: ${result.error}`);
+            addToast(result.error, 'error');
         } else {
-            alert('درخواست افزایش موجودی به صندوق ارسال شد.');
+            addToast('درخواست افزایش موجودی به صندوق ارسال شد.', 'success');
             setIncreaseAmount('');
             setIncreaseDescription('');
             setIncreaseSourceAccount('');
@@ -698,6 +718,7 @@ const GeneralSettings = () => {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+        addToast("فایل پشتیبان با موفقیت ایجاد شد.", 'success');
     };
 
     const handleRestoreClick = () => {
@@ -716,13 +737,17 @@ const GeneralSettings = () => {
                 const backupData = JSON.parse(text);
                 
                 if (window.confirm("آیا اطمینان دارید؟ با این کار تمام اطلاعات فعلی شما با اطلاعات فایل پشتیبان جایگزین خواهد شد. این عمل غیرقابل بازگشت است.")) {
-                    await api.restoreState(backupData);
-                    alert("بازیابی با موفقیت انجام شد! برنامه اکنون دوباره بارگیری می‌شود.");
-                    window.location.reload();
+                    const { success, error } = await api.restoreState(backupData);
+                    if (success) {
+                        addToast("بازیابی با موفقیت انجام شد! برنامه اکنون دوباره بارگیری می‌شود.", 'success');
+                        setTimeout(() => window.location.reload(), 2000);
+                    } else {
+                        throw new Error(error || "خطای ناشناخته در بازیابی");
+                    }
                 }
-            } catch (err) {
+            } catch (err: any) {
                 console.error(err);
-                alert("بازیابی پشتیبان با شکست مواجه شد. ممکن است فایل نامعتبر باشد.");
+                addToast(`بازیابی پشتیبان با شکست مواجه شد: ${err.message}`, "error");
             } finally {
                 if(fileInputRef.current) {
                     fileInputRef.current.value = "";
@@ -771,7 +796,7 @@ const GeneralSettings = () => {
                                 <select value={increaseBankAccountId} onChange={(e) => setIncreaseBankAccountId(e.target.value)} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100">
                                     <option value="" disabled>-- حساب مقصد را انتخاب کنید --</option>
                                     {bankAccounts.map(b => (
-                                        <option key={b.id} value={b.id}>{b.bankName} - {b.accountHolder}</option>
+                                        <option key={b.id} value={b.id}>{b.bank_name} - {b.account_holder}</option>
                                     ))}
                                 </select>
                             </div>
@@ -801,10 +826,10 @@ const GeneralSettings = () => {
                         <tbody>
                             {requestHistory.map(req => (
                                 <tr key={req.id} className="border-b border-cyan-400/10">
-                                    <td className="px-6 py-4 whitespace-nowrap">{new Date(req.createdAt).toLocaleString('fa-IR-u-nu-latn')}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap">{new Date(req.created_at).toLocaleString('fa-IR-u-nu-latn')}</td>
                                     <td className="px-6 py-4 font-mono text-left">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(req.amount)} {req.currency}</td>
                                     <td className="px-6 py-4">{req.reason}</td>
-                                    <td className="px-6 py-4">{req.requestedBy}</td>
+                                    <td className="px-6 py-4">{req.requested_by}</td>
                                     <td className="px-6 py-4">
                                         <span className={`px-3 py-1 text-base font-semibold rounded-full ${getStatusStyle(req.status)}`}>
                                             {cashboxRequestStatusTranslations[req.status]}
@@ -842,7 +867,7 @@ const GeneralSettings = () => {
                         {CURRENCIES.map(currency => (
                             <div key={currency}>
                                 <label className="block text-lg font-medium text-cyan-300 mb-2">حد تایید برای {currency}</label>
-                                <input type="text" inputMode="decimal" value={settings.approvalThresholds[currency] || ''} onChange={(e) => handleSettingsChange(currency, e.target.value)}
+                                <input type="text" inputMode="decimal" value={settings.approval_thresholds[currency] || ''} onChange={(e) => handleSettingsChange(currency, e.target.value)}
                                     className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right"/>
                             </div>
                         ))}
@@ -858,12 +883,13 @@ const GeneralSettings = () => {
 interface UserModalProps { user: User | null; roles: Role[]; onClose: () => void; onSuccess: () => void; }
 const UserModal: React.FC<UserModalProps> = ({ user, roles, onClose, onSuccess }) => {
     const api = useApi();
-    const [formData, setFormData] = useState({ name: '', username: '', password: '', roleId: roles[0]?.id || '' });
+    const { addToast } = useToast();
+    const [formData, setFormData] = useState({ name: '', username: '', password: '', role_id: roles[0]?.id || '' });
     const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
         if (user) {
-            setFormData({ name: user.name, username: user.username, password: '', roleId: user.roleId });
+            setFormData({ name: user.name, username: user.username, password: '', role_id: user.role_id });
         }
     }, [user]);
 
@@ -876,6 +902,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, roles, onClose, onSuccess }
             await api.createUser(formData);
         }
         setIsLoading(false);
+        addToast("اطلاعات کاربر با موفقیت به‌روزرسانی شد.", 'success');
         onSuccess();
     };
 
@@ -888,7 +915,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, roles, onClose, onSuccess }
                         <input type="text" placeholder='نام کامل' value={formData.name} onChange={e => setFormData(f => ({...f, name: e.target.value}))} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400"/>
                         <input type="text" placeholder='نام کاربری (انگلیسی)' value={formData.username} onChange={e => setFormData(f => ({...f, username: e.target.value}))} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-left" style={{direction: 'ltr'}}/>
                         <input type="password" placeholder={user ? 'رمز عبور جدید (اختیاری)' : 'رمز عبور'} value={formData.password} onChange={e => setFormData(f => ({...f, password: e.target.value}))} required={!user} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-left" style={{direction: 'ltr'}}/>
-                        <select value={formData.roleId} onChange={e => setFormData(f => ({...f, roleId: e.target.value}))} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400">
+                        <select value={formData.role_id} onChange={e => setFormData(f => ({...f, role_id: e.target.value}))} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400">
                            {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                         </select>
                     </div>
@@ -906,6 +933,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, roles, onClose, onSuccess }
 interface RoleModalProps { role: Role | null; onClose: () => void; onSuccess: () => void; }
 const RoleModal: React.FC<RoleModalProps> = ({ role, onClose, onSuccess }) => {
     const api = useApi();
+    const { addToast } = useToast();
     const [name, setName] = useState(role?.name || '');
     const [permissions, setPermissions] = useState<Permissions>(role?.permissions || {} as Permissions);
     const [isLoading, setIsLoading] = useState(false);
@@ -929,6 +957,7 @@ const RoleModal: React.FC<RoleModalProps> = ({ role, onClose, onSuccess }) => {
             await api.createRole({ name, permissions });
         }
         setIsLoading(false);
+        addToast("نقش با موفقیت ذخیره شد.", 'success');
         onSuccess();
     };
     

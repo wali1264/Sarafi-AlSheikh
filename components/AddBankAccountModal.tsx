@@ -2,6 +2,7 @@ import React, { useState, FormEvent } from 'react';
 import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
 import { AddBankAccountPayload, Currency, User } from '../types';
+import { useToast } from '../contexts/ToastContext';
 
 interface AddBankAccountModalProps {
     isOpen: boolean;
@@ -12,14 +13,14 @@ interface AddBankAccountModalProps {
 
 const AddBankAccountModal: React.FC<AddBankAccountModalProps> = ({ isOpen, onClose, onSuccess, currentUser }) => {
     const api = useApi();
+    const { addToast } = useToast();
     const [formData, setFormData] = useState({
-        accountHolder: '',
-        bankName: '',
-        accountNumber: '',
-        cardToCardNumber: '',
+        account_holder: '',
+        bank_name: '',
+        account_number: '',
+        card_to_card_number: '',
     });
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     if (!isOpen) return null;
 
@@ -31,11 +32,10 @@ const AddBankAccountModal: React.FC<AddBankAccountModalProps> = ({ isOpen, onClo
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        setError(null);
 
         const payload: AddBankAccountPayload = {
             ...formData,
-            cardToCardNumber: formData.cardToCardNumber || undefined,
+            card_to_card_number: formData.card_to_card_number || undefined,
             currency: Currency.IRT_BANK, // Use IRT_BANK as the default currency for bank accounts
             user: currentUser,
         };
@@ -43,8 +43,9 @@ const AddBankAccountModal: React.FC<AddBankAccountModalProps> = ({ isOpen, onClo
         setIsLoading(false);
 
         if ('error' in result) {
-            setError(result.error);
+            addToast(result.error, 'error');
         } else {
+            addToast("حساب بانکی جدید با موفقیت ثبت شد.", 'success');
             onSuccess();
         }
     };
@@ -57,11 +58,10 @@ const AddBankAccountModal: React.FC<AddBankAccountModalProps> = ({ isOpen, onClo
                         <h2 className="text-4xl font-bold text-cyan-300 tracking-wider">افزودن حساب بانکی جدید (ایران)</h2>
                     </div>
                     <div className="p-8 space-y-6">
-                        {error && <div className="border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
-                        <input name="accountHolder" value={formData.accountHolder} onChange={handleChange} placeholder="نام صاحب حساب" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
-                        <input name="bankName" value={formData.bankName} onChange={handleChange} placeholder="نام بانک" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
-                        <input name="accountNumber" value={formData.accountNumber} onChange={handleChange} placeholder="شماره حساب" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
-                        <input name="cardToCardNumber" value={formData.cardToCardNumber} onChange={handleChange} placeholder="شماره کارت (اختیاری)" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
+                        <input name="account_holder" value={formData.account_holder} onChange={handleChange} placeholder="نام صاحب حساب" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
+                        <input name="bank_name" value={formData.bank_name} onChange={handleChange} placeholder="نام بانک" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
+                        <input name="account_number" value={formData.account_number} onChange={handleChange} placeholder="شماره حساب" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
+                        <input name="card_to_card_number" value={formData.card_to_card_number} onChange={handleChange} placeholder="شماره کارت (اختیاری)" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right" />
                         <p className="text-yellow-400 text-base pt-4 border-t border-cyan-400/20">
                             توجه: حساب بانکی با موجودی صفر ثبت خواهد شد. برای ثبت موجودی اولیه، لطفاً از بخش «تنظیمات عمومی» و گزینه «افزایش موجودی صندوق» برای حساب بانکی مورد نظر استفاده کنید.
                         </p>

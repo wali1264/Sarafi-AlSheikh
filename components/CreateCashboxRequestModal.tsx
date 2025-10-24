@@ -89,17 +89,17 @@ const CreateCashboxRequestModal: React.FC<CreateCashboxRequestModalProps> = ({ i
             setIsLoading(false);
             return;
         }
-
+// FIX: Changed payload keys to snake_case to match the API definition.
         const payload: CreateCashboxRequestPayload = {
-            requestType: formData.requestType,
+            request_type: formData.requestType,
             amount: parseFloat(formData.amount) || 0,
             currency: formData.currency,
             reason: formData.reason,
-            customerCode: formData.customerCode || undefined,
+            customer_code: formData.customerCode || undefined,
             user: currentUser,
-            bankAccountId: isBankTransaction ? formData.bankAccountId : undefined,
-            sourceAccountNumber: isBankTransaction && formData.requestType === 'deposit' ? formData.sourceAccountNumber : undefined,
-            destinationAccountNumber: isBankTransaction && formData.requestType === 'withdrawal' ? formData.destinationAccountNumber : undefined,
+            bank_account_id: isBankTransaction ? formData.bankAccountId : undefined,
+            source_account_number: isBankTransaction && formData.requestType === 'deposit' ? formData.sourceAccountNumber : undefined,
+            destination_account_number: isBankTransaction && formData.requestType === 'withdrawal' ? formData.destinationAccountNumber : undefined,
         };
 
         const result = await api.createCashboxRequest(payload);
@@ -148,14 +148,14 @@ const CreateCashboxRequestModal: React.FC<CreateCashboxRequestModalProps> = ({ i
                                         <input name="sourceAccountNumber" value={formData.sourceAccountNumber} onChange={handleChange} placeholder="شماره حساب/کارت مبدأ (فرستنده)" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md" />
                                         <select name="bankAccountId" value={formData.bankAccountId} onChange={handleChange} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md">
                                             <option value="" disabled>-- واریز به حساب بانکی ما --</option>
-                                            {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.bankName} - {b.accountHolder}</option>)}
+                                            {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.bank_name} - {b.account_holder}</option>)}
                                         </select>
                                     </>
                                 ) : ( // withdrawal
                                     <>
                                         <select name="bankAccountId" value={formData.bankAccountId} onChange={handleChange} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md">
                                             <option value="" disabled>-- برداشت از حساب بانکی ما --</option>
-                                            {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.bankName} - {b.accountHolder} (موجودی: {new Intl.NumberFormat().format(b.balance)})</option>)}
+                                            {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.bank_name} - {b.account_holder} (موجودی: {new Intl.NumberFormat().format(b.balance)})</option>)}
                                         </select>
                                         <input name="destinationAccountNumber" value={formData.destinationAccountNumber} onChange={handleChange} placeholder="شماره حساب/کارت مقصد (گیرنده)" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md" />
                                     </>

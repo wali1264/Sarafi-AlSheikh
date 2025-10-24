@@ -27,7 +27,7 @@ const DashboardPage: React.FC = () => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const transfersToday = transfers.filter(t => new Date(t.createdAt) >= today);
+        const transfersToday = transfers.filter(t => new Date(t.created_at) >= today);
         
         const volumeByCurrency = transfersToday.reduce((acc, t) => {
             if (!acc[t.currency]) {

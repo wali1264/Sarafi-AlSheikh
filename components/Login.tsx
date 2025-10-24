@@ -21,9 +21,6 @@ const Login: React.FC = () => {
         if ('error' in result) {
             setError(result.error);
         } else {
-            // FIX: The `api.login` method returns a `User` object, but the `login` context function
-            // expects an `AuthenticatedUser`. We need to ensure the `role` exists and add the `userType`.
-            // The related fix in `sarrafiApiService` makes this call type-safe.
             login(result);
         }
     };

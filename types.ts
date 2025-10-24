@@ -56,15 +56,15 @@ export interface User {
     name: string;
     username: string;
     password?: string;
-    roleId: string;
+    role_id: string;
     role?: Role;
 }
 
 export interface ExternalLogin {
     username: string;
     password?: string; // Optional on return
-    loginType: 'customer' | 'partner';
-    linkedEntityId: string;
+    login_type: 'customer' | 'partner';
+    linked_entity_id: string;
     id: string; // To uniquely identify and delete logins
 }
 
@@ -76,8 +76,8 @@ export type AuthenticatedUser = (User & { userType: 'internal'; role: Role }) |
 export interface CreateExternalLoginPayload {
     username: string;
     password?: string;
-    loginType: 'customer' | 'partner';
-    linkedEntityId: string;
+    login_type: 'customer' | 'partner';
+    linked_entity_id: string;
     user: User;
 }
 export interface DeleteExternalLoginPayload {
@@ -90,7 +90,7 @@ export interface CreateUserPayload {
     name: string;
     username: string;
     password?: string;
-    roleId: string;
+    role_id: string;
 }
 export interface UpdateUserPayload extends Partial<CreateUserPayload> {
     id: string;
@@ -111,26 +111,26 @@ export interface Customer {
     id: string;
     name: string;
     code: string;
-    whatsappNumber: string;
+    whatsapp_number: string;
     balances: { [key in Currency]?: number };
 }
 
 export interface CustomerTransaction {
     id: string;
-    customerId: string;
+    customer_id: string;
     timestamp: Date;
     type: 'credit' | 'debit';
     amount: number;
     currency: Currency;
     description: string;
-    linkedEntityId: string;
-    linkedEntityType: 'DomesticTransfer' | 'CashDeposit' | 'CashWithdrawal' | 'AccountTransfer' | 'ForeignTransaction' | 'InternalExchange' | 'CommissionTransfer';
+    linked_entity_id: string;
+    linked_entity_type: 'DomesticTransfer' | 'CashDeposit' | 'CashWithdrawal' | 'AccountTransfer' | 'ForeignTransaction' | 'InternalExchange' | 'CommissionTransfer';
 }
 
 export interface CreateCustomerPayload {
     name: string;
     code: string;
-    whatsappNumber: string;
+    whatsapp_number: string;
     user: User;
 }
 export interface UpdateCustomerPayload extends Partial<Omit<Customer, 'id' | 'balances'>> {
@@ -142,29 +142,29 @@ export interface PartnerAccount {
     id: string;
     name: string;
     province: string;
-    whatsappNumber: string;
+    whatsapp_number: string;
     balances: { [key in Currency]?: number };
     status: 'Active' | 'Inactive';
 }
 
 export interface PartnerTransaction {
     id: string;
-    partnerId: string;
+    partner_id: string;
     timestamp: Date;
     type: 'credit' | 'debit';
     amount: number;
     currency: Currency;
     description: string;
-    linkedTransferId?: string;
-    bankAccountId?: string;
-    sourceAccountNumber?: string;
-    destinationAccountNumber?: string;
+    linked_transfer_id?: string;
+    bank_account_id?: string;
+    source_account_number?: string;
+    destination_account_number?: string;
 }
 
 export interface CreatePartnerPayload {
     name: string;
     province: string;
-    whatsappNumber: string;
+    whatsapp_number: string;
     user: User;
 }
 export interface UpdatePartnerPayload extends Partial<Omit<CreatePartnerPayload, 'user'>> {
@@ -177,26 +177,26 @@ export interface DeletePartnerPayload {
 }
 
 export interface ReceiveFromPartnerPayload {
-    partnerId: string;
+    partner_id: string;
     amount: number;
     currency: Currency;
     user: User;
-    bankAccountId?: string;
-    sourceAccountNumber?: string;
-    destinationAccountNumber?: string;
+    bank_account_id?: string;
+    source_account_number?: string;
+    destination_account_number?: string;
 }
 export interface PayToPartnerPayload {
-    partnerId: string;
+    partner_id: string;
     amount: number;
     currency: Currency;
     user: User;
-    bankAccountId?: string;
-    sourceAccountNumber?: string;
-    destinationAccountNumber?: string;
+    bank_account_id?: string;
+    source_account_number?: string;
+    destination_account_number?: string;
 }
 
 export interface GetPartnerAccountByNamePayload {
-    partnerName: string;
+    partner_name: string;
 }
 
 
@@ -210,46 +210,46 @@ export enum TransferStatus {
 
 export interface DomesticTransfer {
     id: string;
-    createdAt: Date;
+    created_at: Date;
     sender: { name: string; tazkereh: string };
     receiver: { name: string; tazkereh: string };
     amount: number;
     currency: Currency;
     commission: number;
-    destinationProvince: string;
-    partnerSarraf: string;
-    partnerReference?: string;
+    destination_province: string;
+    partner_sarraf: string;
+    partner_reference?: string;
     status: TransferStatus;
-    createdBy: string;
+    created_by: string;
     history: { status: TransferStatus; timestamp: Date; user: string }[];
-    customerId?: string;
+    customer_id?: string;
 }
 
 export interface CreateDomesticTransferPayload {
-    senderName: string;
-    senderTazkereh: string;
-    receiverName: string;
-    receiverTazkereh: string;
+    sender_name: string;
+    sender_tazkereh: string;
+    receiver_name: string;
+    receiver_tazkereh: string;
     amount: number;
     currency: Currency;
     commission: number;
-    destinationProvince: string;
-    partnerSarraf: string;
-    partnerReference?: string;
-    isCashPayment: boolean;
-    customerCode?: string;
+    destination_province: string;
+    partner_sarraf: string;
+    partner_reference?: string;
+    is_cash_payment: boolean;
+    customer_code?: string;
     user: User;
 }
 export interface UpdateTransferStatusPayload {
-    transferId: string;
-    newStatus: TransferStatus;
+    transfer_id: string;
+    new_status: TransferStatus;
     user: User;
 }
 export interface FindTransfersByQueryPayload {
     query: string;
 }
 export interface PayoutIncomingTransferPayload {
-    transferId: string;
+    transfer_id: string;
     user: User;
 }
 
@@ -268,50 +268,49 @@ export interface CashboxBalance {
 
 export interface CashboxRequest {
     id: string;
-    createdAt: Date;
-    requestedBy: string;
+    created_at: Date;
+    requested_by: string;
     status: CashboxRequestStatus;
     reviewed: boolean;
-    requestType: 'withdrawal' | 'deposit';
+    request_type: 'withdrawal' | 'deposit';
     amount: number;
     currency: Currency;
     reason: string;
-    customerCode?: string;
-    resolvedBy?: string;
-    resolvedAt?: Date;
-    reviewedAt?: Date;
-    linkedEntity?: {
+    customer_code?: string;
+    resolved_by?: string;
+    resolved_at?: Date;
+    reviewed_at?: Date;
+    linked_entity?: {
         type: string;
         id: string;
         description: string;
-        // FIX: Added optional 'details' property to support linked entities like PartnerSettlement that carry extra data.
         details?: any;
     };
-    bankAccountId?: string;
-    sourceAccountNumber?: string;
-    destinationAccountNumber?: string;
+    bank_account_id?: string;
+    source_account_number?: string;
+    destination_account_number?: string;
 }
 
 export interface CreateCashboxRequestPayload {
-    requestType: 'withdrawal' | 'deposit';
+    request_type: 'withdrawal' | 'deposit';
     amount: number;
     currency: Currency;
     reason: string;
     user: User;
-    customerCode?: string;
-    linkedEntity?: {
+    customer_code?: string;
+    linked_entity?: {
         type: string;
         id: string;
         description: string;
         details?: any;
     };
-    bankAccountId?: string;
-    sourceAccountNumber?: string;
-    destinationAccountNumber?: string;
-    bypassCashier?: boolean;
+    bank_account_id?: string;
+    source_account_number?: string;
+    destination_account_number?: string;
+    bypass_cashier?: boolean;
 }
 export interface ResolveCashboxRequestPayload {
-    requestId: string;
+    request_id: string;
     resolution: 'approve' | 'reject';
     user: User;
 }
@@ -320,8 +319,8 @@ export interface IncreaseCashboxBalancePayload {
     currency: Currency;
     description: string;
     user: User;
-    bankAccountId?: string;
-    sourceAccountNumber?: string;
+    bank_account_id?: string;
+    source_account_number?: string;
 }
 
 export enum ExpenseCategory {
@@ -340,15 +339,15 @@ export enum ExpenseStatus {
 
 export interface Expense {
     id: string;
-    createdAt: Date;
+    created_at: Date;
     user: string;
     category: ExpenseCategory;
     amount: number;
     currency: Currency;
     description: string;
     status: ExpenseStatus;
-    linkedCashboxRequestId?: string;
-    linkedForeignTransactionId?: string;
+    linked_cashbox_request_id?: string;
+    linked_foreign_transaction_id?: string;
 }
 
 export interface CreateExpensePayload {
@@ -357,26 +356,26 @@ export interface CreateExpensePayload {
     currency: Currency;
     description: string;
     user: User;
-    skipCashboxRequest?: boolean;
-    linkedForeignTransactionId?: string;
+    skip_cashbox_request?: boolean;
+    linked_foreign_transaction_id?: string;
 }
 
 export interface BankAccount {
     id: string;
-    accountHolder: string;
-    bankName: string;
-    accountNumber: string;
-    cardToCardNumber?: string;
+    account_holder: string;
+    bank_name: string;
+    account_number: string;
+    card_to_card_number?: string;
     balance: number;
     currency: Currency;
     status: 'Active' | 'Inactive';
 }
 
 export interface AddBankAccountPayload {
-    accountHolder: string;
-    bankName: string;
-    accountNumber: string;
-    cardToCardNumber?: string;
+    account_holder: string;
+    bank_name: string;
+    account_number: string;
+    card_to_card_number?: string;
     currency: Currency;
     user: User;
 }
@@ -410,42 +409,40 @@ export interface ForeignTransaction {
     user: string;
     status: ForeignTransactionStatus;
 
-    // Phase 1: Withdrawal
-    fromAssetId: string;
-    fromAssetName: string;
-    fromCurrency: Currency;
-    fromAmount: number;
-    withdrawalRequestId: string;
+    from_asset_id: string;
+    from_asset_name: string;
+    from_currency: Currency;
+    from_amount: number;
+    withdrawal_request_id: string;
 
-    // Phase 2: Deposit (optional until completion)
-    toAssetId?: string;
-    toAssetName?: string;
-    toCurrency?: Currency;
-    toAmount?: number;
-    depositRequestId?: string;
+    to_asset_id?: string;
+    to_asset_name?: string;
+    to_currency?: Currency;
+    to_amount?: number;
+    deposit_request_id?: string;
 }
 
 
 export interface InitiateForeignExchangePayload {
     user: User;
     description: string;
-    fromAssetId: string;
-    fromAmount: number;
+    from_asset_id: string;
+    from_amount: number;
 }
 
 export interface CompleteForeignExchangePayload {
     user: User;
-    transactionId: string;
-    toAssetId: string;
-    toAmount: number;
+    transaction_id: string;
+    to_asset_id: string;
+    to_amount: number;
 }
 
 export interface InternalCustomerExchangePayload {
-    customerId: string;
-    fromCurrency: Currency;
-    fromAmount: number;
-    toCurrency: Currency;
-    toAmount: number;
+    customer_id: string;
+    from_currency: Currency;
+    from_amount: number;
+    to_currency: Currency;
+    to_amount: number;
     rate: number;
     user: User;
 }
@@ -453,11 +450,11 @@ export interface InternalCustomerExchangePayload {
 export interface InternalExchange {
     id: string;
     timestamp: Date;
-    customerId: string;
-    fromCurrency: Currency;
-    fromAmount: number;
-    toCurrency: Currency;
-    toAmount: number;
+    customer_id: string;
+    from_currency: Currency;
+    from_amount: number;
+    to_currency: Currency;
+    to_amount: number;
     rate: number;
     user: string;
 }
@@ -472,49 +469,47 @@ export enum CommissionTransferStatus {
 
 export interface CommissionTransfer {
     id: string;
-    createdAt: Date;
-    initiatorType: 'Customer' | 'Partner';
-    initiatorId: string; // customer.id or partner.id
-    amount: number; // The initial amount received
-    currency: Currency; // will be fixed to IRT_BANK
-    sourceAccountNumber: string; // The customer's bank account number
-    receivedIntoBankAccountId: string;
-    commissionPercentage: number;
+    created_at: Date;
+    initiator_type: 'Customer' | 'Partner';
+    initiator_id: string;
+    amount: number;
+    currency: Currency;
+    source_account_number: string;
+    received_into_bank_account_id: string;
+    commission_percentage: number;
     status: CommissionTransferStatus;
-    createdBy: string;
+    created_by: string;
     
-    // Fields populated on execution
-    completedAt?: Date;
-    paidFromBankAccountId?: string;
-    destinationAccountNumber?: string;
-    commissionAmount?: number; // Calculated commission value
-    finalAmountPaid?: number; // amount - commissionAmount
+    completed_at?: Date;
+    paid_from_bank_account_id?: string;
+    destination_account_number?: string;
+    commission_amount?: number;
+    final_amount_paid?: number;
     
-    // Link to cashbox requests
-    depositRequestId?: string;
-    withdrawalRequestId?: string;
+    deposit_request_id?: string;
+    withdrawal_request_id?: string;
 }
 
 export interface LogCommissionTransferPayload {
     user: User;
-    initiatorType: 'Customer' | 'Partner';
-    customerCode?: string;
-    partnerId?: string;
+    initiator_type: 'Customer' | 'Partner';
+    customer_code?: string;
+    partner_id?: string;
     amount: number;
-    sourceAccountNumber: string;
-    receivedIntoBankAccountId: string;
-    commissionPercentage: number;
+    source_account_number: string;
+    received_into_bank_account_id: string;
+    commission_percentage: number;
 }
 
 export interface ExecuteCommissionTransferPayload {
     user: User;
-    transferId: string;
-    paidFromBankAccountId: string;
-    destinationAccountNumber: string;
+    transfer_id: string;
+    paid_from_bank_account_id: string;
+    destination_account_number: string;
 }
 
 export interface SystemSettings {
-    approvalThresholds: {
+    approval_thresholds: {
         [key in Currency]?: number;
     };
 }
@@ -532,30 +527,30 @@ export interface ActivityLog {
 export interface AccountTransfer {
     id: string;
     timestamp: Date;
-    fromCustomerId: string;
-    toCustomerId: string;
+    from_customer_id: string;
+    to_customer_id: string;
     amount: number;
     currency: Currency;
     description: string;
     user: string;
     status: 'PendingAssignment' | 'Completed';
-    debitTransactionId: string;
-    creditTransactionId: string;
+    debit_transaction_id: string;
+    credit_transaction_id: string;
 }
 
 export interface CreateAccountTransferPayload {
-    fromCustomerCode: string;
-    toCustomerCode: string;
+    from_customer_code: string;
+    to_customer_code: string;
     amount: number;
     currency: Currency;
     description: string;
     user: User;
-    isPendingAssignment: boolean;
+    is_pending_assignment: boolean;
 }
 
 export interface ReassignTransferPayload {
-    transferId: string;
-    finalCustomerCode: string;
+    transfer_id: string;
+    final_customer_code: string;
     user: User;
 }
 
@@ -606,9 +601,9 @@ export interface InternalLedgerReportData {
 }
 
 export interface GenerateReportPayload {
-    reportType: ReportType;
-    startDate: string;
-    endDate: string;
+    report_type: ReportType;
+    start_date: string;
+    end_date: string;
     currency: Currency;
 }
 
@@ -619,30 +614,30 @@ export enum AmanatStatus {
 
 export interface Amanat {
     id: string;
-    createdAt: Date;
-    customerName: string;
+    created_at: Date;
+    customer_name: string;
     amount: number;
     currency: Currency;
     notes: string;
     status: AmanatStatus;
-    createdBy: string;
-    linkedCashboxDepositId: string;
-    returnedAt?: Date;
-    returnedBy?: string;
-    linkedCashboxWithdrawalId?: string;
-    bankAccountId?: string; // To track which bank account received the amanat
+    created_by: string;
+    linked_cashbox_deposit_id: string;
+    returned_at?: Date;
+    returned_by?: string;
+    linked_cashbox_withdrawal_id?: string;
+    bank_account_id?: string;
 }
 
 export interface CreateAmanatPayload {
-    customerName: string;
+    customer_name: string;
     amount: number;
     currency: Currency;
     notes: string;
     user: User;
-    bankAccountId?: string; // To specify deposit account for IRT_BANK
+    bank_account_id?: string;
 }
 
 export interface ReturnAmanatPayload {
-    amanatId: string;
+    amanat_id: string;
     user: User;
 }

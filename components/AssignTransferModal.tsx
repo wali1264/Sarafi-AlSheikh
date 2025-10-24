@@ -59,9 +59,10 @@ const AssignTransferModal: React.FC<AssignTransferModalProps> = ({ isOpen, onClo
 
         setIsLoading(true);
 
+        // FIX: Changed payload keys to snake_case to match the API definition.
         const payload: ReassignTransferPayload = {
-            transferId: transfer.id,
-            finalCustomerCode,
+            transfer_id: transfer.id,
+            final_customer_code: finalCustomerCode,
             user: currentUser,
         };
 

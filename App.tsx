@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate, Outlet, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -16,7 +17,8 @@ import VoiceAssistant from './components/VoiceAssistant';
 import PartnerAccountsPage from './pages/PartnerAccountsPage';
 import PartnerAccountDetailPage from './pages/PartnerAccountDetailPage';
 import AccountTransfersPage from './pages/AccountTransfersPage';
-import ReportsPage from './pages/ReportsPage';
+// FIX: ReportsPage is not a default export.
+import { ReportsPage } from './pages/ReportsPage';
 import SettingsPage from './pages/SettingsPage';
 import CustomersPage from './pages/CustomersPage';
 import CustomerDetailPage from './pages/CustomerDetailPage';

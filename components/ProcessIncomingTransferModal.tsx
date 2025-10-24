@@ -57,7 +57,7 @@ const ProcessIncomingTransferModal: React.FC<ProcessIncomingTransferModalProps> 
         setError(null);
 
         const payload: PayoutIncomingTransferPayload = {
-            transferId,
+            transfer_id: transferId,
             user: currentUser,
         };
         

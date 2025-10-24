@@ -171,12 +171,18 @@ const CreateOutgoingTransferModal: React.FC<CreateOutgoingTransferModalProps> = 
         setIsLoading(true);
 
         const payload: CreateDomesticTransferPayload = {
-            ...formData,
+            sender_name: formData.senderName,
+            sender_tazkereh: formData.senderTazkereh,
+            receiver_name: formData.receiverName,
+            receiver_tazkereh: formData.receiverTazkereh,
             amount: parseFloat(formData.amount) || 0,
             commission: parseFloat(formData.commission) || 0,
             currency: formData.currency as Currency,
-            customerCode: formData.isCashPayment ? undefined : formData.customerCode,
-            partnerReference: undefined, // Explicitly undefined for outgoing
+            destination_province: formData.destinationProvince,
+            partner_sarraf: formData.partnerSarraf,
+            is_cash_payment: formData.isCashPayment,
+            customer_code: formData.isCashPayment ? undefined : formData.customerCode,
+            partner_reference: undefined, // Explicitly undefined for outgoing
             user: currentUser,
         };
 

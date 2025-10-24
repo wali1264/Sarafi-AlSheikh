@@ -91,37 +91,32 @@ const PartnerAccountDetailPage: React.FC = () => {
         if (partnerData) {
             setPartner(partnerData);
             
-            // 1. Filter cashbox requests related to this partner's settlements
             const settlementRequests = allCashboxRequests.filter(
-                req => req.linkedEntity?.type === 'PartnerSettlement' && req.linkedEntity.id === partnerId
+                req => req.linked_entity?.type === 'PartnerSettlement' && req.linked_entity.id === partnerId
             );
 
-            // 2. Map virtual transactions from cashbox requests
             const virtualTransactions = settlementRequests.map(req => {
-                const details = req.linkedEntity!.details as any;
+                const details = req.linked_entity!.details as any;
                 return {
                     id: req.id,
-                    timestamp: req.createdAt,
+                    timestamp: req.created_at,
                     description: req.reason,
                     type: details.type, // 'credit' or 'debit' for the PARTNER
                     amount: req.amount,
                     currency: req.currency,
                     status: req.status,
-                    partnerId: partnerId,
+                    partner_id: partnerId,
                 } as any;
             });
             
-            // 3. Map real transactions
             const realTransactions = txData.map(tx => ({
                 ...tx,
                 status: 'Completed' as const,
             }));
 
-            // 4. Combine and sort
             const allItems = [...virtualTransactions, ...realTransactions]
                 .sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-            // 5. Process for display with correct running balance
             const runningBalances: { [key in Currency]?: number } = {};
             const processed = allItems.map(item => {
                 const balance = runningBalances[item.currency] || 0;
@@ -139,7 +134,6 @@ const PartnerAccountDetailPage: React.FC = () => {
             setProcessedTransactions(processed.reverse());
 
         } else {
-            // If partner not found, redirect to the list page
             navigate('/partner-accounts');
         }
     }, [api, partnerId, navigate]);

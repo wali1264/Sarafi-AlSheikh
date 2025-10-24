@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
 import { ReportType, ProfitAndLossReportData, CashboxSummaryReportData, InternalLedgerReportData } from '../types';
-import { reportTypeTranslations } from '../utils/translations';
+import { reportTypeTranslations, foreignTransactionStatusTranslations } from '../utils/translations';
 import ReportPrintView from './ReportPrintView';
 
 interface ReportViewerProps {
@@ -92,17 +92,17 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ reportData, reportType }) =
             const rd = reportData as ProfitAndLossReportData;
             headers = ["Type", "Description", "Amount", "Date"];
             data = [
-                ...rd.revenueItems.map(item => ({ Type: "Revenue", ...item })),
-                ...rd.expenseItems.map(item => ({ Type: "Expense", ...item })),
+                ...(rd.revenueItems || []).map(item => ({ Type: "Revenue", ...item })),
+                ...(rd.expenseItems || []).map(item => ({ Type: "Expense", ...item })),
             ];
         } else if (reportType === ReportType.CashboxSummary) {
             const rd = reportData as CashboxSummaryReportData;
             headers = ["Timestamp", "Type", "Amount", "Currency", "Reason", "User"];
-            data = rd.transactions;
+            data = rd.transactions || [];
         } else if (reportType === ReportType.InternalLedger) {
             const rd = reportData as InternalLedgerReportData;
-            headers = ["timestamp", "description", "fromAssetName", "fromAmount", "fromCurrency", "toAssetName", "toAmount", "toCurrency"];
-            data = rd.transactions;
+            headers = ["timestamp", "description", "from_asset_name", "from_amount", "from_currency", "to_asset_name", "to_amount", "to_currency"];
+            data = rd.transactions || [];
         }
 
 
@@ -148,11 +148,11 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ reportData, reportType }) =
                     </tr>
                 </thead>
                 <tbody>
-                    {data.revenueItems.map((item, i) => (
-                        <tr key={`rev-${i}`} className="border-b border-cyan-400/10"><td className="px-6 py-3">{item.date.toLocaleDateString('fa-IR-u-nu-latn')}</td><td className="px-6 py-3">{item.description}</td><td className="px-6 py-3 text-green-400">درآمد</td><td className="px-6 py-3 font-mono text-left">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(item.amount)}</td></tr>
+                    {(data.revenueItems || []).map((item, i) => (
+                        <tr key={`rev-${i}`} className="border-b border-cyan-400/10"><td className="px-6 py-3">{new Date(item.date).toLocaleDateString('fa-IR-u-nu-latn')}</td><td className="px-6 py-3">{item.description}</td><td className="px-6 py-3 text-green-400">درآمد</td><td className="px-6 py-3 font-mono text-left">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(item.amount)}</td></tr>
                     ))}
-                    {data.expenseItems.map((item, i) => (
-                        <tr key={`exp-${i}`} className="border-b border-cyan-400/10"><td className="px-6 py-3">{item.date.toLocaleDateString('fa-IR-u-nu-latn')}</td><td className="px-6 py-3">{item.description}</td><td className="px-6 py-3 text-red-400">مصرف</td><td className="px-6 py-3 font-mono text-left">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(item.amount)}</td></tr>
+                    {(data.expenseItems || []).map((item, i) => (
+                        <tr key={`exp-${i}`} className="border-b border-cyan-400/10"><td className="px-6 py-3">{new Date(item.date).toLocaleDateString('fa-IR-u-nu-latn')}</td><td className="px-6 py-3">{item.description}</td><td className="px-6 py-3 text-red-400">مصرف</td><td className="px-6 py-3 font-mono text-left">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(item.amount)}</td></tr>
                     ))}
                 </tbody>
             </table>
@@ -185,7 +185,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ reportData, reportType }) =
                     </tr>
                 </thead>
                  <tbody>
-                    {data.transactions.map((tx) => (
+                    {(data.transactions || []).map((tx) => (
                         <tr key={tx.id} className="border-b border-cyan-400/10">
                             <td className="px-6 py-3">{new Date(tx.timestamp).toLocaleString('fa-IR-u-nu-latn')}</td>
                             <td className="px-6 py-3">{tx.reason}</td>
@@ -211,14 +211,14 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ reportData, reportType }) =
                 </tr>
             </thead>
             <tbody>
-                {data.transactions.map(tx => (
+                {(data.transactions || []).map(tx => (
                     <tr key={tx.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">{new Date(tx.timestamp).toLocaleString('fa-IR-u-nu-latn')}</td>
                         <td className="px-6 py-4 text-slate-100">{tx.description}</td>
-                        <td className="px-6 py-4 font-semibold text-cyan-300">{tx.fromAssetName}</td>
-                        <td className="px-6 py-4 font-mono text-left text-red-400">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.fromAmount)} {tx.fromCurrency}</td>
-                        <td className="px-6 py-4 font-semibold text-fuchsia-400">{tx.toAssetName}</td>
-                        <td className="px-6 py-4 font-mono text-left text-green-400">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.toAmount)} {tx.toCurrency}</td>
+                        <td className="px-6 py-4 font-semibold text-cyan-300">{tx.from_asset_name}</td>
+                        <td className="px-6 py-4 font-mono text-left text-red-400">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.from_amount)} {tx.from_currency}</td>
+                        <td className="px-6 py-4 font-semibold text-fuchsia-400">{tx.to_asset_name}</td>
+                        <td className="px-6 py-4 font-mono text-left text-green-400">{tx.to_amount ? `${new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.to_amount)} ${tx.to_currency}` : '-'}</td>
                     </tr>
                 ))}
             </tbody>

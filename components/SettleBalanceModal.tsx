@@ -85,22 +85,22 @@ const PartnerSettlementModal: React.FC<PartnerSettlementModalProps> = ({ isOpen,
         let result;
         if (isReceive) {
             const payload: ReceiveFromPartnerPayload = {
-                partnerId: partner.id,
+                partner_id: partner.id,
                 amount: numericAmount,
                 currency: currency,
                 user: currentUser,
-                bankAccountId: isBankTransaction ? bankAccountId : undefined,
-                sourceAccountNumber: isBankTransaction ? sourceAccountNumber : undefined,
+                bank_account_id: isBankTransaction ? bankAccountId : undefined,
+                source_account_number: isBankTransaction ? sourceAccountNumber : undefined,
             };
             result = await api.receiveFromPartner(payload);
         } else {
             const payload: PayToPartnerPayload = {
-                partnerId: partner.id,
+                partner_id: partner.id,
                 amount: numericAmount,
                 currency: currency,
                 user: currentUser,
-                bankAccountId: isBankTransaction ? bankAccountId : undefined,
-                destinationAccountNumber: isBankTransaction ? destinationAccountNumber : undefined,
+                bank_account_id: isBankTransaction ? bankAccountId : undefined,
+                destination_account_number: isBankTransaction ? destinationAccountNumber : undefined,
             };
             result = await api.payToPartner(payload);
         }
@@ -151,14 +151,14 @@ const PartnerSettlementModal: React.FC<PartnerSettlementModalProps> = ({ isOpen,
                                         <input name="sourceAccountNumber" value={sourceAccountNumber} onChange={handleChange} placeholder="شماره حساب/کارت مبدأ (همکار)" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md" />
                                         <select name="bankAccountId" value={bankAccountId} onChange={handleChange} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md">
                                             <option value="" disabled>-- واریز به حساب بانکی ما --</option>
-                                            {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.bankName} - {b.accountHolder}</option>)}
+                                            {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.bank_name} - {b.account_holder}</option>)}
                                         </select>
                                     </>
                                 ) : ( // Pay
                                     <>
                                         <select name="bankAccountId" value={bankAccountId} onChange={handleChange} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md">
                                             <option value="" disabled>-- برداشت از حساب بانکی ما --</option>
-                                            {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.bankName} - {b.accountHolder} (موجودی: {new Intl.NumberFormat().format(b.balance)})</option>)}
+                                            {bankAccounts.map(b => <option key={b.id} value={b.id}>{b.bank_name} - {b.account_holder} (موجودی: {new Intl.NumberFormat().format(b.balance)})</option>)}
                                         </select>
                                         <input name="destinationAccountNumber" value={destinationAccountNumber} onChange={handleChange} placeholder="شماره حساب/کارت مقصد (همکار)" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md" />
                                     </>

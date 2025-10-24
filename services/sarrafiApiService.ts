@@ -30,11 +30,12 @@ import {
 class SarrafiApiService {
 
     private async logActivity(user: string, action: string) {
-        await supabase.from('activityLogs').insert({ user, action });
+        await supabase.from('activity_logs').insert({ user, action });
     }
     
     // --- Auth ---
     async login(username: string, password?: string): Promise<AuthenticatedUser | { error: string }> {
+        // This RPC is assumed to exist and return snake_case keys which are handled by the AuthenticatedUser type
         const { data, error } = await supabase.rpc('login', {
             p_username: username,
             p_password: password
@@ -48,7 +49,6 @@ class SarrafiApiService {
              return { error: 'نام کاربری یا رمز عبور اشتباه است.' };
         }
         
-        // The RPC function is expected to return a JSON object that matches the AuthenticatedUser structure.
         return data as AuthenticatedUser;
     }
 
@@ -63,22 +63,22 @@ class SarrafiApiService {
     }
 
     async createExternalLogin(payload: CreateExternalLoginPayload): Promise<ExternalLogin | { error: string }> {
-        const { data, error } = await supabase.from('externalLogins').insert({
-            username: payload.username,
-            password: payload.password,
-            loginType: payload.loginType,
-            linkedEntityId: payload.linkedEntityId
-        }).select().single();
-
+        const { user, ...loginData } = payload;
+        const { data, error } = await supabase.rpc('create_external_login', {
+            p_username: loginData.username,
+            p_password: loginData.password,
+            p_login_type: loginData.login_type,
+            p_linked_entity_id: loginData.linked_entity_id
+        });
+        
         if (error) return { error: error.message };
-        await this.logActivity(payload.user.name, `دسترسی کاربری برای ${payload.loginType} با نام کاربری ${payload.username} ایجاد کرد.`);
-        return data;
+        await this.logActivity(user.name, `دسترسی کاربری برای ${payload.login_type} با نام کاربری ${payload.username} ایجاد کرد.`);
+        return data as ExternalLogin;
     }
     
     async deleteExternalLogin(payload: DeleteExternalLoginPayload): Promise<{ success: boolean }> {
-        const { error } = await supabase.from('externalLogins').delete().eq('id', payload.id);
+        const { error } = await supabase.from('external_logins').delete().eq('id', payload.id);
         if (error) return { success: false };
-        // We don't know the username after deletion, so log might be less specific
         await this.logActivity(payload.user.name, `دسترسی کاربر خارجی با شناسه ${payload.id} را حذف کرد.`);
         return { success: true };
     }
@@ -90,14 +90,23 @@ class SarrafiApiService {
         return data || [];
     }
     async createUser(payload: CreateUserPayload): Promise<User> {
-        const { data, error } = await supabase.from('users').insert(payload).select().single();
+        const { data, error } = await supabase.rpc('create_user', {
+            p_name: payload.name,
+            p_username: payload.username,
+            p_password: payload.password,
+            p_role_id: payload.role_id
+        });
         if (error) throw error;
         return data;
     }
     async updateUser(payload: UpdateUserPayload): Promise<User | undefined> {
-        const { id, ...updates } = payload;
-        if (!updates.password) delete updates.password;
-        const { data, error } = await supabase.from('users').update(updates).eq('id', id).select().single();
+        const { data, error } = await supabase.rpc('update_user', {
+            p_id: payload.id,
+            p_name: payload.name,
+            p_username: payload.username,
+            p_password: payload.password, // Pass null/empty string if not changing
+            p_role_id: payload.role_id,
+        });
         if (error) { console.error(error); return undefined; }
         return data;
     }
@@ -144,7 +153,11 @@ class SarrafiApiService {
     }
     async createCustomer(payload: CreateCustomerPayload): Promise<Customer | { error: string }> {
         const { user, ...customerData } = payload;
-        const { data, error } = await supabase.rpc('create_customer', customerData);
+        const { data, error } = await supabase.rpc('create_customer', {
+             p_name: customerData.name,
+             p_code: customerData.code,
+             p_whatsapp_number: customerData.whatsapp_number
+        });
         if (error) return { error: error.message };
         await this.logActivity(user.name, `مشتری جدید ${customerData.name} (کد: ${customerData.code}) را ثبت کرد.`);
         return data;
@@ -159,12 +172,12 @@ class SarrafiApiService {
     
     // --- Domestic Transfers ---
     async getDomesticTransfers(): Promise<DomesticTransfer[]> { 
-        const { data, error } = await supabase.from('domesticTransfers').select('*');
+        const { data, error } = await supabase.from('domestic_transfers').select('*');
         if (error) { console.error(error); return []; }
         return data || [];
     }
     async getDomesticTransferById(id: string): Promise<DomesticTransfer | undefined> { 
-        const { data, error } = await supabase.from('domesticTransfers').select('*').eq('id', id).single();
+        const { data, error } = await supabase.from('domestic_transfers').select('*').eq('id', id).single();
         if (error) { console.error(error); return undefined; }
         return data;
     }
@@ -179,7 +192,7 @@ class SarrafiApiService {
     async updateTransferStatus(payload: UpdateTransferStatusPayload): Promise<DomesticTransfer | { error: string }> {
         const { data, error } = await supabase.rpc('update_transfer_status', payload);
         if (error) return { error: error.message };
-        await this.logActivity(payload.user.name, `وضعیت حواله ${payload.transferId} را به ${payload.newStatus} تغییر داد.`);
+        await this.logActivity(payload.user.name, `وضعیت حواله ${payload.transfer_id} را به ${payload.new_status} تغییر داد.`);
         return data;
     }
     
@@ -197,29 +210,29 @@ class SarrafiApiService {
 
     // --- Partner Accounts ---
     async getPartnerAccounts(): Promise<PartnerAccount[]> { 
-        const { data, error } = await supabase.from('partnerAccounts').select('*');
+        const { data, error } = await supabase.from('partner_accounts').select('*');
         if (error) { console.error(error); return []; }
         return data || [];
     }
     async getPartnerAccountById(id: string): Promise<PartnerAccount | undefined> { 
-        const { data, error } = await supabase.from('partnerAccounts').select('*').eq('id', id).single();
+        const { data, error } = await supabase.from('partner_accounts').select('*').eq('id', id).single();
         if (error) { console.error(error); return undefined; }
         return data;
     }
     async getTransactionsForPartner(partnerId: string): Promise<PartnerTransaction[]> {
-        const { data, error } = await supabase.from('partnerTransactions').select('*').eq('partnerId', partnerId);
+        const { data, error } = await supabase.from('partner_transactions').select('*').eq('partner_id', partnerId);
         if (error) { console.error(error); return []; }
         return data || [];
     }
     
     // --- Cashbox ---
     async getCashboxRequests(): Promise<CashboxRequest[]> { 
-        const { data, error } = await supabase.from('cashboxRequests').select('*');
+        const { data, error } = await supabase.from('cashbox_requests').select('*');
         if (error) { console.error(error); return []; }
         return data || [];
     }
     async getCashboxRequestById(id: string): Promise<CashboxRequest | undefined> { 
-        const { data, error } = await supabase.from('cashboxRequests').select('*').eq('id', id).single();
+        const { data, error } = await supabase.from('cashbox_requests').select('*').eq('id', id).single();
         if (error) { console.error(error); return undefined; }
         return data;
     }
@@ -232,29 +245,28 @@ class SarrafiApiService {
     async createCashboxRequest(payload: CreateCashboxRequestPayload): Promise<CashboxRequest | { error: string }> {
        const { data, error } = await supabase.rpc('create_cashbox_request', payload);
        if (error) return { error: error.message };
-       await this.logActivity(payload.user.name, `یک درخواست ${payload.requestType} به مبلغ ${payload.amount} ${payload.currency} ثبت کرد.`);
+       await this.logActivity(payload.user.name, `یک درخواست ${payload.request_type} به مبلغ ${payload.amount} ${payload.currency} ثبت کرد.`);
        return data;
     }
     
     async resolveCashboxRequest(payload: ResolveCashboxRequestPayload): Promise<CashboxRequest | { error: string }> {
         const { data, error } = await supabase.rpc('resolve_cashbox_request', payload);
         if (error) return { error: error.message };
-        await this.logActivity(payload.user.name, `درخواست صندوق ${payload.requestId} را ${payload.resolution === 'approve' ? 'تایید' : 'رد'} کرد.`);
+        await this.logActivity(payload.user.name, `درخواست صندوق ${payload.request_id} را ${payload.resolution === 'approve' ? 'تایید' : 'رد'} کرد.`);
         return data;
     }
 
     async increaseCashboxBalance(payload: IncreaseCashboxBalancePayload): Promise<CashboxRequest | { error: string }> {
-        // This can be handled by the generic createCashboxRequest RPC
         const reason = `افزایش موجودی دستی توسط مدیر: ${payload.description || 'ثبت موجودی اولیه/جدید'}`;
         const requestPayload: CreateCashboxRequestPayload = {
-            requestType: 'deposit',
+            request_type: 'deposit',
             amount: payload.amount,
             currency: payload.currency,
             reason,
             user: payload.user,
-            linkedEntity: { type: 'Manual', id: 'BALANCE_ADJUST', description: reason },
-            bankAccountId: payload.bankAccountId,
-            sourceAccountNumber: payload.sourceAccountNumber,
+            linked_entity: { type: 'Manual', id: 'BALANCE_ADJUST', description: reason },
+            bank_account_id: payload.bank_account_id,
+            source_account_number: payload.source_account_number,
         };
         return this.createCashboxRequest(requestPayload);
     }
@@ -274,7 +286,7 @@ class SarrafiApiService {
     
     // --- Reports & Analytics ---
     async getActivityLogs(): Promise<ActivityLog[]> { 
-        const { data, error } = await supabase.from('activityLogs').select('*').order('timestamp', { ascending: false }).limit(50);
+        const { data, error } = await supabase.from('activity_logs').select('*').order('timestamp', { ascending: false }).limit(50);
         if (error) { console.error(error); return []; }
         return data || [];
     }
@@ -283,7 +295,6 @@ class SarrafiApiService {
         const { data, error } = await supabase.rpc('get_dashboard_analytics');
         if (error) {
             console.error('getDashboardAnalytics error', error);
-            // Return empty structure on error to prevent UI crash
             return {
                 weeklyActivity: { labels: [], domesticCounts: [], foreignCounts: [] },
                 partnerActivity: [],
@@ -295,17 +306,15 @@ class SarrafiApiService {
 
 
     async getSystemSettings(): Promise<SystemSettings> { 
-        const { data, error } = await supabase.from('systemSettings').select('*').single();
+        const { data, error } = await supabase.from('system_settings').select('*').single();
         if (error) {
             console.error(error);
-            // return default settings on error
-            return { approvalThresholds: {} };
+            return { approval_thresholds: {} };
         }
         return data;
     }
     async updateSystemSettings(payload: UpdateSystemSettingsPayload): Promise<SystemSettings> {
-        // Assuming there's only one row for settings with a known ID (e.g., 1)
-        const { data, error } = await supabase.from('systemSettings').update(payload.settings).eq('id', 1).select().single();
+        const { data, error } = await supabase.from('system_settings').update(payload.settings).eq('id', 1).select().single();
         if (error) throw error;
         return data;
     }
@@ -316,7 +325,6 @@ class SarrafiApiService {
         return JSON.stringify(data, null, 2);
     }
 
-    // FIX: Add missing getBackupState and restoreState methods to resolve errors in SettingsPage.
     async getBackupState(): Promise<any> {
         const { data, error } = await supabase.rpc('get_backup_state');
         if (error) {
@@ -336,23 +344,23 @@ class SarrafiApiService {
     }
 
     async getTransactionsForCustomer(customerId: string): Promise<CustomerTransaction[]> {
-        const { data, error } = await supabase.from('customerTransactions').select('*').eq('customerId', customerId);
+        const { data, error } = await supabase.from('customer_transactions').select('*').eq('customer_id', customerId);
         if (error) { console.error(error); return []; }
         return data || [];
     }
     async getPartnerAccountByName(payload: GetPartnerAccountByNamePayload): Promise<PartnerAccount | {error: string}> {
-        const { data, error } = await supabase.from('partnerAccounts').select('*').eq('name', payload.partnerName).single();
+        const { data, error } = await supabase.from('partner_accounts').select('*').eq('name', payload.partner_name).single();
         if (error) return { error: 'Partner not found' };
         return data;
     }
     
-    async settlePartnerBalanceByName(payload: { partnerName: string, amount: number, currency: Currency, type: 'pay' | 'receive', user: User }): Promise<{success: true} | { error: string }> {
+    async settlePartnerBalanceByName(payload: { partner_name: string, amount: number, currency: Currency, type: 'pay' | 'receive', user: User }): Promise<{success: true} | { error: string }> {
         const { data, error } = await supabase.rpc('settle_partner_balance_by_name', {
-            p_partner_name: payload.partnerName,
+            p_partner_name: payload.partner_name,
             p_amount: payload.amount,
             p_currency: payload.currency,
             p_type: payload.type,
-            p_user: payload.user, // Pass the whole user object
+            p_user: payload.user,
         });
         if (error) return { error: error.message };
         return { success: true };
@@ -377,35 +385,39 @@ class SarrafiApiService {
         return data;
     }
     async getAccountTransfers(): Promise<AccountTransfer[]> { 
-        const { data, error } = await supabase.from('accountTransfers').select('*');
+        const { data, error } = await supabase.from('account_transfers').select('*');
         if (error) { console.error(error); return []; }
         return data || [];
     }
     async reassignPendingTransfer(payload: ReassignTransferPayload): Promise<AccountTransfer | { error: string }> {
         const { data, error } = await supabase.rpc('reassign_pending_transfer', payload);
         if (error) return { error: error.message };
-        await this.logActivity(payload.user.name, `حواله معلق ${payload.transferId} را به مشتری ${payload.finalCustomerCode} تخصیص داد.`);
+        await this.logActivity(payload.user.name, `حواله معلق ${payload.transfer_id} را به مشتری ${payload.final_customer_code} تخصیص داد.`);
         return data;
     }
     
     async addBankAccount(payload: AddBankAccountPayload): Promise<BankAccount | { error: string }> {
         const { user, ...accountData } = payload;
-        const { data, error } = await supabase.from('bankAccounts').insert(accountData).select().single();
+        const { data, error } = await supabase.from('bank_accounts').insert(accountData).select().single();
         if (error) return { error: error.message };
-        await this.logActivity(user.name, `حساب بانکی جدیدی برای ${payload.accountHolder} در بانک ${payload.bankName} ثبت کرد.`);
+        await this.logActivity(user.name, `حساب بانکی جدیدی برای ${payload.account_holder} در بانک ${payload.bank_name} ثبت کرد.`);
         return data;
     }
 
 
     async getBankAccounts(): Promise<BankAccount[]> { 
-        const { data, error } = await supabase.from('bankAccounts').select('*');
+        const { data, error } = await supabase.from('bank_accounts').select('*');
         if (error) { console.error(error); return []; }
         return data || [];
     }
 
     async createPartner(payload: CreatePartnerPayload): Promise<PartnerAccount | { error: string }> {
         const { user, ...partnerData } = payload;
-        const { data, error } = await supabase.rpc('create_partner', partnerData);
+        const { data, error } = await supabase.rpc('create_partner', {
+            p_name: partnerData.name,
+            p_province: partnerData.province,
+            p_whatsapp_number: partnerData.whatsapp_number
+        });
         if (error) return { error: error.message };
         await this.logActivity(user.name, `همکار جدیدی با نام "${payload.name}" در ولایت ${payload.province} ثبت کرد.`);
         return data;
@@ -413,14 +425,14 @@ class SarrafiApiService {
 
     async updatePartner(payload: UpdatePartnerPayload): Promise<PartnerAccount | { error: string}> {
         const { id, user, ...partnerData } = payload;
-        const { data, error } = await supabase.from('partnerAccounts').update(partnerData).eq('id', id).select().single();
+        const { data, error } = await supabase.from('partner_accounts').update(partnerData).eq('id', id).select().single();
         if (error) return { error: error.message };
         await this.logActivity(user.name, `اطلاعات همکار "${data.name}" را ویرایش کرد.`);
         return data;
     }
 
     async deletePartner(payload: DeletePartnerPayload): Promise<PartnerAccount | { error: string }> {
-        const { data, error } = await supabase.from('partnerAccounts').update({ status: 'Inactive' }).eq('id', payload.id).select().single();
+        const { data, error } = await supabase.from('partner_accounts').update({ status: 'Inactive' }).eq('id', payload.id).select().single();
         if (error) return { error: error.message };
         await this.logActivity(payload.user.name, `همکار "${data.name}" را غیرفعال کرد.`);
         return data;
@@ -428,16 +440,16 @@ class SarrafiApiService {
 
     async updateBankAccount(payload: UpdateBankAccountPayload): Promise<BankAccount | { error: string }> {
         const { id, user, ...accountData } = payload;
-        const { data, error } = await supabase.from('bankAccounts').update(accountData).eq('id', id).select().single();
+        const { data, error } = await supabase.from('bank_accounts').update(accountData).eq('id', id).select().single();
         if (error) return { error: error.message };
-        await this.logActivity(user.name, `اطلاعات حساب بانکی "${data.accountHolder} - ${data.bankName}" را ویرایش کرد.`);
+        await this.logActivity(user.name, `اطلاعات حساب بانکی "${data.account_holder} - ${data.bank_name}" را ویرایش کرد.`);
         return data;
     }
 
     async deleteBankAccount(payload: DeleteBankAccountPayload): Promise<BankAccount | { error: string }> {
-        const { data, error } = await supabase.from('bankAccounts').update({ status: 'Inactive' }).eq('id', payload.id).select().single();
+        const { data, error } = await supabase.from('bank_accounts').update({ status: 'Inactive' }).eq('id', payload.id).select().single();
         if(error) return { error: error.message };
-        await this.logActivity(payload.user.name, `حساب بانکی "${data.accountHolder} - ${data.bankName}" را غیرفعال کرد.`);
+        await this.logActivity(payload.user.name, `حساب بانکی "${data.account_holder} - ${data.bank_name}" را غیرفعال کرد.`);
         return data;
     }
     
@@ -448,41 +460,53 @@ class SarrafiApiService {
     }
     
     async initiateForeignExchange(payload: InitiateForeignExchangePayload): Promise<ForeignTransaction | { error: string }> {
-        const { data, error } = await supabase.rpc('initiate_foreign_exchange', payload);
+        const rpcPayload = {
+            p_user: payload.user,
+            p_description: payload.description,
+            p_from_asset_id: payload.from_asset_id,
+            p_from_amount: payload.from_amount,
+        };
+        const { data, error } = await supabase.rpc('initiate_foreign_exchange', rpcPayload);
         if (error) return { error: error.message };
-        await this.logActivity(payload.user.name, `درخواست تبادله ${payload.fromAmount} از دارایی ${payload.fromAssetId} را ثبت کرد.`);
+        await this.logActivity(payload.user.name, `درخواست تبادله ${payload.from_amount} از دارایی ${payload.from_asset_id} را ثبت کرد.`);
         return data;
     }
 
     async completeForeignExchange(payload: CompleteForeignExchangePayload): Promise<ForeignTransaction | { error: string }> {
-        const { data, error } = await supabase.rpc('complete_foreign_exchange', payload);
+        const rpcPayload = {
+            p_user: payload.user,
+            p_transaction_id: payload.transaction_id,
+            p_to_asset_id: payload.to_asset_id,
+            p_to_amount: payload.to_amount,
+        };
+        const { data, error } = await supabase.rpc('complete_foreign_exchange', rpcPayload);
         if (error) return { error: error.message };
-        await this.logActivity(payload.user.name, `مرحله دوم تبادله ${payload.transactionId} را با واریز ${payload.toAmount} ثبت کرد.`);
+        await this.logActivity(payload.user.name, `مرحله دوم تبادله ${payload.transaction_id} را با واریز ${payload.to_amount} ثبت کرد.`);
         return data;
     }
 
     async performInternalCustomerExchange(payload: InternalCustomerExchangePayload): Promise<{success: true} | { error: string }> {
         const { error } = await supabase.rpc('perform_internal_customer_exchange', payload);
         if (error) return { error: error.message };
-        await this.logActivity(payload.user.name, `مبلغ ${payload.fromAmount} ${payload.fromCurrency} از حساب مشتری ${payload.customerId} را به ${payload.toAmount} ${payload.toCurrency} تبدیل کرد.`);
+        await this.logActivity(payload.user.name, `مبلغ ${payload.from_amount} ${payload.from_currency} از حساب مشتری ${payload.customer_id} را به ${payload.to_amount} ${payload.to_currency} تبدیل کرد.`);
         return { success: true };
     }
 
 
     async getForeignTransactions(): Promise<ForeignTransaction[]> { 
-        const { data, error } = await supabase.from('foreignTransactions').select('*');
+        const { data, error } = await supabase.from('foreign_transactions').select('*');
         if (error) { console.error(error); return []; }
         return data || [];
     }
     
     async getInternalExchangesForCustomer(customerId: string): Promise<InternalExchange[]> {
-        const { data, error } = await supabase.from('internalExchanges').select('*').eq('customerId', customerId);
+        const { data, error } = await supabase.from('internal_exchanges').select('*').eq('customer_id', customerId);
         if (error) { console.error(error); return []; }
         return data || [];
     }
 
     async getCommissionTransfers(): Promise<CommissionTransfer[]> {
-        const { data, error } = await supabase.from('commissionTransfers').select('*');
+        const { data, error } = await supabase.from('commission_transfers').select('*');
         if (error) { console.error(error); return []; }
         return data || [];
     }
@@ -490,14 +514,20 @@ class SarrafiApiService {
     async logCommissionTransfer(payload: LogCommissionTransferPayload): Promise<CommissionTransfer | { error: string }> {
         const { data, error } = await supabase.rpc('log_commission_transfer', payload);
         if (error) return { error: error.message };
-        await this.logActivity(payload.user.name, `درخواست ورود وجه کمیشن‌کاری به مبلغ ${payload.amount} ${payload.receivedIntoBankAccountId} را ثبت کرد.`);
+        await this.logActivity(payload.user.name, `درخواست ورود وجه کمیشن‌کاری به مبلغ ${payload.amount} ${payload.received_into_bank_account_id} را ثبت کرد.`);
         return data;
     }
 
     async executeCommissionTransfer(payload: ExecuteCommissionTransferPayload): Promise<CommissionTransfer | { error: string }> {
-        const { data, error } = await supabase.rpc('execute_commission_transfer', payload);
+        const rpcPayload = {
+            p_user: payload.user,
+            p_transfer_id: payload.transfer_id,
+            p_paid_from_bank_account_id: payload.paid_from_bank_account_id,
+            p_destination_account_number: payload.destination_account_number,
+        };
+        const { data, error } = await supabase.rpc('execute_commission_transfer', rpcPayload);
         if (error) return { error: error.message };
-        await this.logActivity(payload.user.name, `دستور پرداخت حواله کمیشن‌کاری ${payload.transferId} را صادر کرد.`);
+        await this.logActivity(payload.user.name, `دستور پرداخت حواله کمیشن‌کاری ${payload.transfer_id} را صادر کرد.`);
         return data;
     }
 
@@ -516,14 +546,14 @@ class SarrafiApiService {
     async createAmanat(payload: CreateAmanatPayload): Promise<Amanat | { error: string }> {
         const { data, error } = await supabase.rpc('create_amanat', payload);
         if (error) return { error: error.message };
-        await this.logActivity(payload.user.name, `امانتی به مبلغ ${payload.amount} ${payload.currency} برای ${payload.customerName} ثبت کرد.`);
+        await this.logActivity(payload.user.name, `امانتی به مبلغ ${payload.amount} ${payload.currency} برای ${payload.customer_name} ثبت کرد.`);
         return data;
     }
 
     async returnAmanat(payload: ReturnAmanatPayload): Promise<Amanat | { error: string }> {
         const { data, error } = await supabase.rpc('return_amanat', payload);
         if (error) return { error: error.message };
-        await this.logActivity(payload.user.name, `امانت ${payload.amanatId} را بازگشت داد.`);
+        await this.logActivity(payload.user.name, `امانت ${payload.amanat_id} را بازگشت داد.`);
         return data;
     }
 }

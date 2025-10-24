@@ -38,8 +38,8 @@ const UpdateTransferStatusModal: React.FC<UpdateTransferStatusModalProps> = ({ i
         setIsLoading(true);
 
         const payload: UpdateTransferStatusPayload = {
-            transferId: transfer.id,
-            newStatus: statusToUpdate,
+            transfer_id: transfer.id,
+            new_status: statusToUpdate,
             user: currentUser,
         };
 
@@ -66,14 +66,14 @@ const UpdateTransferStatusModal: React.FC<UpdateTransferStatusModalProps> = ({ i
     const handleCancelTransfer = () => {
         if (!canBeCancelled) return;
 
-        const isCashPaidOutgoing = !transfer.customerId && !transfer.partnerReference;
+        const isCashPaidOutgoing = !transfer.customer_id && !transfer.partner_reference;
         const totalAmount = transfer.amount + transfer.commission;
 
         let confirmMessage = "آیا از لغو این حواله اطمینان دارید؟ این عمل قابل بازگشت نیست.";
 
         if (isCashPaidOutgoing) {
             confirmMessage = `آیا از لغو این حواله اطمینان دارید؟\n\nدر صورت تایید، مبلغ ${new Intl.NumberFormat('fa-IR').format(totalAmount)} ${transfer.currency} به صورت خودکار از صندوق کسر خواهد شد تا به مشتری بازگردانده شود.`;
-        } else if (transfer.customerId) {
+        } else if (transfer.customer_id) {
              confirmMessage = `آیا از لغو این حواله اطمینان دارید؟\n\nدر صورت تایید، مبلغ ${new Intl.NumberFormat('fa-IR').format(totalAmount)} ${transfer.currency} به صورت خودکار به حساب مشتری بازگردانده خواهد شد.`;
         }
         

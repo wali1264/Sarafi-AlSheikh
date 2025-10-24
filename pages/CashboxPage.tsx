@@ -51,7 +51,7 @@ const StatCard: React.FC<{ title: string, value: string, currency: string }> = (
 
 const FilterIcon: React.FC = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293.707L3.293 7.293A1 1 0 013 6.586V4z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
     </svg>
 );
 
@@ -88,7 +88,7 @@ const CashboxPage: React.FC = () => {
             api.getCashboxRequests(),
             api.getCashboxBalances()
         ]);
-        setRequests(reqData.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+        setRequests(reqData.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
         setBalances(balData);
         setIsLoading(false);
     }, [api]);
@@ -116,7 +116,7 @@ const CashboxPage: React.FC = () => {
 
     const handleResolve = async (requestId: string, resolution: 'approve' | 'reject') => {
         if (!user || user.userType !== 'internal') return;
-        const payload: ResolveCashboxRequestPayload = { requestId, resolution, user };
+        const payload: ResolveCashboxRequestPayload = { request_id: requestId, resolution, user };
         const result = await api.resolveCashboxRequest(payload);
         if ('error' in result) {
             addToast(result.error, 'error');
@@ -157,12 +157,12 @@ const CashboxPage: React.FC = () => {
     const filteredRequests = useMemo(() => {
         return requests.filter(req => {
             const matchesReason = !filters.reason || req.reason.toLowerCase().includes(filters.reason.toLowerCase());
-            const matchesRequester = !filters.requestedBy || req.requestedBy.toLowerCase().includes(filters.requestedBy.toLowerCase());
-            const matchesRequestType = filters.requestType === 'all' || req.requestType === filters.requestType;
+            const matchesRequester = !filters.requestedBy || req.requested_by.toLowerCase().includes(filters.requestedBy.toLowerCase());
+            const matchesRequestType = filters.requestType === 'all' || req.request_type === filters.requestType;
             const matchesStatus = filters.status === 'all' || req.status === filters.status;
             const matchesCurrency = filters.currency === 'all' || req.currency === filters.currency;
             
-            const createdAt = new Date(req.createdAt);
+            const createdAt = new Date(req.created_at);
             
             const matchesStartDate = !filters.startDate || createdAt >= new Date(filters.startDate);
             
@@ -290,13 +290,13 @@ const CashboxPage: React.FC = () => {
                                 const isPrintable = !isResolvable; // Can print after it's resolved (approved, rejected, etc.)
                                 return (
                                 <tr key={req.id} className="border-b border-cyan-400/10 transition-colors hover:bg-cyan-400/5">
-                                    <td className="px-6 py-4 whitespace-nowrap">{new Date(req.createdAt).toLocaleString('fa-IR-u-nu-latn')}</td>
-                                    <td className={`px-6 py-4 font-bold ${req.requestType === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>
-                                        {req.requestType === 'deposit' ? 'رسید' : 'برد'}
+                                    <td className="px-6 py-4 whitespace-nowrap">{new Date(req.created_at).toLocaleString('fa-IR-u-nu-latn')}</td>
+                                    <td className={`px-6 py-4 font-bold ${req.request_type === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>
+                                        {req.request_type === 'deposit' ? 'رسید' : 'برد'}
                                     </td>
                                     <td className="px-6 py-4 font-mono text-left">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(req.amount)} {req.currency}</td>
                                     <td className="px-6 py-4">{req.reason}</td>
-                                    <td className="px-6 py-4">{req.requestedBy}</td>
+                                    <td className="px-6 py-4">{req.requested_by}</td>
                                     <td className="px-6 py-4">
                                         <span className={`px-3 py-1 text-base font-semibold rounded-full ${getStatusStyle(req.status)}`}>
                                             {cashboxRequestStatusTranslations[req.status]}

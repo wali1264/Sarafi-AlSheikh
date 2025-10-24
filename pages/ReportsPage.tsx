@@ -7,7 +7,7 @@ import ReportViewer from '../components/ReportViewer';
 
 type ReportData = ProfitAndLossReportData | CashboxSummaryReportData | InternalLedgerReportData;
 
-const ReportsPage: React.FC = () => {
+export const ReportsPage: React.FC = () => {
     const api = useApi();
     const [reportType, setReportType] = useState<ReportType>(ReportType.ProfitAndLoss);
     const [currency, setCurrency] = useState<Currency>(Currency.USD);
@@ -23,9 +23,9 @@ const ReportsPage: React.FC = () => {
         setReportData(null);
 
         const payload: GenerateReportPayload = {
-            reportType,
-            startDate,
-            endDate,
+            report_type: reportType,
+            start_date: startDate,
+            end_date: endDate,
             currency,
         };
 
@@ -53,8 +53,7 @@ const ReportsPage: React.FC = () => {
                         <label htmlFor="reportType" className="block text-lg font-medium text-cyan-300 mb-2">نوع گزارش</label>
                         <select id="reportType" value={reportType} onChange={e => setReportType(e.target.value as ReportType)} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400">
                             {Object.values(ReportType).map(rt => (
-                                // FIX: Cast enum value to its type for safe indexing.
-                                <option key={rt} value={rt}>{reportTypeTranslations[rt as ReportType]}</option>
+                                <option key={rt} value={rt}>{reportTypeTranslations[rt]}</option>
                             ))}
                         </select>
                     </div>
@@ -85,18 +84,15 @@ const ReportsPage: React.FC = () => {
                         style={{
                             clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)',
                             boxShadow: '0 0 25px rgba(0, 255, 255, 0.5)'
-                        }}
-                    >
-                        {isLoading ? 'در حال پردازش...' : 'ایجاد گزارش'}
+                        }}>
+                        {isLoading ? 'در حال تولید...' : 'تولید گزارش'}
                     </button>
                 </div>
-                 {error && <div className="mt-4 text-center border-2 border-red-500/50 bg-red-500/10 text-red-300 px-4 py-3 rounded-md text-lg">{error}</div>}
             </div>
 
+            {isLoading && <div className="text-center text-2xl text-slate-400 p-10">در حال تولید گزارش...</div>}
+            {error && <div className="text-center text-2xl text-red-400 p-10">{error}</div>}
             {reportData && <ReportViewer reportData={reportData} reportType={reportType} />}
-
         </div>
     );
 };
-
-export default ReportsPage;

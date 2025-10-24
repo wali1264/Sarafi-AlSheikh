@@ -102,7 +102,7 @@ const CommissionIncomeView: React.FC<{
     const completedTransfers = useMemo(() => transfers.filter(t => t.status === 'Completed'), [transfers]);
 
     const totalCommission = useMemo(() => 
-        completedTransfers.reduce((sum, t) => sum + (t.commissionAmount || 0), 0),
+        completedTransfers.reduce((sum, t) => sum + (t.commission_amount || 0), 0),
         [completedTransfers]
     );
 
@@ -133,11 +133,11 @@ const CommissionIncomeView: React.FC<{
                         <tbody>
                             {completedTransfers.map(t => (
                                 <tr key={t.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5">
-                                    <td className="px-6 py-4 whitespace-nowrap">{t.completedAt ? new Date(t.completedAt).toLocaleString('fa-IR-u-nu-latn') : '-'}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap">{t.completed_at ? new Date(t.completed_at).toLocaleString('fa-IR-u-nu-latn') : '-'}</td>
                                     <td className="px-6 py-4 font-mono text-cyan-300">{t.id}</td>
-                                    <td className="px-6 py-4 font-semibold">{initiatorsMap.get(t.initiatorId)?.name || 'ناشناس'}</td>
+                                    <td className="px-6 py-4 font-semibold">{initiatorsMap.get(t.initiator_id)?.name || 'ناشناس'}</td>
                                     <td className="px-6 py-4 font-mono text-left">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(t.amount)} {t.currency}</td>
-                                    <td className="px-6 py-4 font-mono text-left text-green-400 font-bold">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(t.commissionAmount || 0)} {t.currency}</td>
+                                    <td className="px-6 py-4 font-mono text-left text-green-400 font-bold">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(t.commission_amount || 0)} {t.currency}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -189,7 +189,8 @@ const CommissionTransfersPage: React.FC = () => {
         customersData.forEach(c => newInitiatorsMap.set(c.id, { name: c.name }));
         partnersData.forEach(p => newInitiatorsMap.set(p.id, { name: p.name }));
         
-        setTransfers(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+        // FIX: Changed 'createdAt' to 'created_at' to match the 'CommissionTransfer' type.
+        setTransfers(data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
         setInitiatorsMap(newInitiatorsMap);
         setBankAccountsMap(new Map(bankAccountsData.map(b => [b.id, b])));
         setIsLoading(false);
@@ -240,14 +241,14 @@ const CommissionTransfersPage: React.FC = () => {
 
         return transfers.filter(t => {
             const matchesStatus = targetStatuses.includes(t.status);
-            const initiatorName = initiatorsMap.get(t.initiatorId)?.name || '';
+            const initiatorName = initiatorsMap.get(t.initiator_id)?.name || '';
             const matchesInitiator = !filters.initiatorName || initiatorName.toLowerCase().includes(filters.initiatorName.toLowerCase());
-            const matchesSource = !filters.sourceAccount || t.sourceAccountNumber.includes(filters.sourceAccount);
-            const matchesDestination = !filters.destinationAccount || (t.destinationAccountNumber && t.destinationAccountNumber.includes(filters.destinationAccount));
+            const matchesSource = !filters.sourceAccount || t.source_account_number.includes(filters.sourceAccount);
+            const matchesDestination = !filters.destinationAccount || (t.destination_account_number && t.destination_account_number.includes(filters.destinationAccount));
             const matchesMinAmount = !filters.minAmount || t.amount >= parseFloat(filters.minAmount);
             const matchesMaxAmount = !filters.maxAmount || t.amount <= parseFloat(filters.maxAmount);
 
-            const txDate = new Date(t.createdAt);
+            const txDate = new Date(t.created_at);
             const matchesStartDate = !filters.startDate || txDate >= new Date(filters.startDate);
             let matchesEndDate = true;
             if (filters.endDate) {
@@ -336,20 +337,20 @@ const CommissionTransfersPage: React.FC = () => {
                                     const isPrintable = t.status === 'Completed' || t.status === 'Rejected';
                                     return (
                                     <tr key={t.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5 transition-colors">
-                                        <td className="px-6 py-4 whitespace-nowrap">{new Date(t.createdAt).toLocaleString('fa-IR-u-nu-latn')}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap">{new Date(t.created_at).toLocaleString('fa-IR-u-nu-latn')}</td>
                                         <td className="px-6 py-4 font-semibold text-slate-100">
-                                            <div>{initiatorsMap.get(t.initiatorId)?.name || 'ناشناس'}</div>
-                                            <div className="text-sm text-slate-400">{t.initiatorType === 'Customer' ? 'مشتری' : 'همکار'}</div>
+                                            <div>{initiatorsMap.get(t.initiator_id)?.name || 'ناشناس'}</div>
+                                            <div className="text-sm text-slate-400">{t.initiator_type === 'Customer' ? 'مشتری' : 'همکار'}</div>
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="font-mono text-left text-green-400">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(t.amount)} {t.currency}</div>
-                                            <div className="text-sm text-slate-400 text-left">از: {t.sourceAccountNumber}</div>
+                                            <div className="text-sm text-slate-400 text-left">از: {t.source_account_number}</div>
                                         </td>
                                         <td className="px-6 py-4">
                                             {t.status === 'Completed' || t.status === 'PendingWithdrawalApproval' || t.status === 'Rejected' ? (
                                                 <>
-                                                    <div className="font-mono text-left text-red-400">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(t.finalAmountPaid || 0)} {t.currency}</div>
-                                                    <div className="text-sm text-slate-400 text-left">به: {t.destinationAccountNumber}</div>
+                                                    <div className="font-mono text-left text-red-400">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(t.final_amount_paid || 0)} {t.currency}</div>
+                                                    <div className="text-sm text-slate-400 text-left">به: {t.destination_account_number}</div>
                                                 </>
                                             ) : '-'}
                                         </td>
@@ -400,7 +401,7 @@ const CommissionTransfersPage: React.FC = () => {
                 isOpen={isPrintModalOpen}
                 onClose={() => setPrintModalOpen(false)}
                 transfer={selectedTransfer}
-                initiatorName={selectedTransfer ? (initiatorsMap.get(selectedTransfer.initiatorId)?.name || 'ناشناس') : ''}
+                initiatorName={selectedTransfer ? (initiatorsMap.get(selectedTransfer.initiator_id)?.name || 'ناشناس') : ''}
                 bankAccountsMap={bankAccountsMap}
             />
         </div>
