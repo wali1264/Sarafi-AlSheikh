@@ -40,16 +40,12 @@
 
     <script>
         // This script redirects to the demo page within the main application.
-        // It uses a relative path to ensure it works correctly whether opened
-        // locally or on a server. The hash routing (`/#/`) is targeted.
+        // It uses a simple relative path to ensure it works correctly when
+        // the project is served via a web server (http:// or https://).
+        // NOTE: Opening files directly from the local filesystem (file://) is not
+        // supported by modern browsers for apps using ES modules due to security restrictions.
         window.onload = function() {
-            // Get the current path and replace this filename with the main index.html path + demo route
-            const currentPath = window.location.pathname;
-            const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
-            const demoUrl = basePath + 'index.html#/demo';
-            
-            // Redirect to the demo page
-            window.location.href = demoUrl;
+            window.location.href = 'index.html#/demo';
         };
     </script>
 </body>
