@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { MemoryRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 
 // Import necessary components and types for the demo
 import Sidebar from '../components/Sidebar';
@@ -148,7 +148,7 @@ const demoScript: DemoAction[] = [
     { type: 'speak', text: "این داشبورد مدیریتی است که نمای کلی از فعالیت‌های روزانه و هفتگی صرافی را به شما نشان می‌دهد." },
     { type: 'wait', duration: 5000 },
     { type: 'speak', text: "بیایید با هم یک کاربر جدید برای سیستم تعریف کنیم. به بخش تنظیمات می‌رویم." },
-    { type: 'navigate', path: '/settings' },
+    { type: 'navigate', path: 'settings' },
     { type: 'wait', duration: 2000 },
     { type: 'click', selector: "button:contains('افزودن کاربر جدید')" },
     { type: 'wait', duration: 1000 },
@@ -164,7 +164,7 @@ const demoScript: DemoAction[] = [
     { type: 'speak', text: "به همین سادگی، کاربر جدید با دسترسی‌های مشخص شده، به سیستم اضافه شد." },
     { type: 'wait', duration: 4000 },
     { type: 'speak', text: "حالا، یک حواله خروجی برای یک مشتری ثبت می‌کنیم." },
-    { type: 'navigate', path: '/domestic-transfers' },
+    { type: 'navigate', path: 'domestic-transfers' },
     { type: 'wait', duration: 2000 },
     { type: 'click', selector: "button:contains('+ ثبت حواله خروجی')" },
     { type: 'wait', duration: 1000 },
@@ -184,7 +184,7 @@ const demoScript: DemoAction[] = [
     { type: 'click', selector: "button:contains('ثبت حواله خروجی')" },
     { type: 'wait', duration: 2000 },
     { type: 'speak', text: "چون پرداخت نقدی بود، یک درخواست به صورت خودکار به صندوق ارسال شد. برویم و آن را تایید کنیم." },
-    { type: 'navigate', path: '/cashbox' },
+    { type: 'navigate', path: 'cashbox' },
     { type: 'wait', duration: 3000 },
     { type: 'click', selector: "button:contains('تایید')" },
     { type: 'wait', duration: 2000 },
@@ -332,49 +332,47 @@ const LiveDemoPage: React.FC = () => {
     return (
         <AuthContext.Provider value={{ user: mockUser, login: () => {}, logout: () => {}, hasPermission: () => true }}>
             <ApiContext.Provider value={mockApi as SarrafiApiService}>
-                <MemoryRouter initialEntries={['/dashboard']}>
-                    <NavigationManager />
-                    <div className="fixed top-0 left-0 right-0 h-10 bg-yellow-400 text-black text-center font-bold text-xl flex items-center justify-center z-50">
-                         حالت دموی زنده
+                <NavigationManager />
+                <div className="fixed top-0 left-0 right-0 h-10 bg-yellow-400 text-black text-center font-bold text-xl flex items-center justify-center z-50">
+                     حالت دموی زنده
+                </div>
+                 <div className="flex h-screen bg-[#0D0C22] text-slate-100 font-sans pt-10" style={{ direction: 'rtl' }}>
+                    <Sidebar />
+                    <div className="flex-1 flex flex-col overflow-hidden">
+                        <main className="flex-1 overflow-x-hidden overflow-y-auto p-8">
+                            <Routes>
+                                <Route index element={<DashboardPage />} />
+                                <Route path="dashboard" element={<DashboardPage />} />
+                                <Route path="settings" element={<SettingsPage />} />
+                                <Route path="domestic-transfers" element={<DomesticTransfersPage />} />
+                                <Route path="cashbox" element={<CashboxPage />} />
+                                <Route path="expenses" element={<ExpensesPage />} />
+                            </Routes>
+                        </main>
                     </div>
-                     <div className="flex h-screen bg-[#0D0C22] text-slate-100 font-sans pt-10" style={{ direction: 'rtl' }}>
-                        <Sidebar />
-                        <div className="flex-1 flex flex-col overflow-hidden">
-                            <main className="flex-1 overflow-x-hidden overflow-y-auto p-8">
-                                <Routes>
-                                    <Route path="/dashboard" element={<DashboardPage />} />
-                                    <Route path="/settings" element={<SettingsPage />} />
-                                    <Route path="/domestic-transfers" element={<DomesticTransfersPage />} />
-                                    <Route path="/cashbox" element={<CashboxPage />} />
-                                    <Route path="/expenses" element={<ExpensesPage />} />
-                                </Routes>
-                            </main>
+                </div>
+                 {/* Demo UI Overlays */}
+                <div 
+                    className="fixed w-8 h-8 transition-all duration-500 ease-out transform -translate-x-1/2 -translate-y-1/2 pointer-events-none z-[9999]"
+                    style={{ left: cursorPos.x, top: cursorPos.y, opacity: cursorPos.visible ? 1 : 0 }}
+                >
+                     <svg viewBox="0 0 24 24" fill="rgba(0, 255, 255, 0.8)" style={{ filter: 'drop-shadow(0 0 5px cyan)'}}><path d="M6.2,2.3L20.3,16.4c0.2,0.2,0.2,0.5,0,0.7l-2.3,2.3c-0.2,0.2-0.5,0.2-0.7,0L3.2,5.3c-0.2-0.2-0.2-0.5,0-0.7L5.5,2.3 C5.7,2.1,6,2.1,6.2,2.3z"/></svg>
+                </div>
+                {!isDemoFinished && (
+                    <div className="fixed bottom-8 right-8 w-1/3 max-w-lg p-4 bg-black/70 backdrop-blur-sm border border-cyan-400/50 rounded-lg text-xl text-cyan-200 z-[9998]">
+                        {narratorText}
+                    </div>
+                )}
+                {isDemoFinished && (
+                    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] text-center p-8 animate-fadeIn">
+                         <div>
+                            <h2 className="text-6xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 to-fuchsia-500 mb-6">دمو به پایان رسید</h2>
+                            <p className="text-2xl text-slate-300 mb-8">از تماشای پیش‌نمایش زنده "صرافی الشیخ" سپاسگزاریم.</p>
+                            <p className="text-xl text-slate-400">برای دریافت اطلاعات بیشتر و مشاوره رایگان، با ما به تماس شوید.</p>
+                            <button onClick={() => window.location.reload()} className="mt-8 px-8 py-4 text-2xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300">شروع مجدد دمو</button>
                         </div>
                     </div>
-                     {/* Demo UI Overlays */}
-                    <div 
-                        className="fixed w-8 h-8 transition-all duration-500 ease-out transform -translate-x-1/2 -translate-y-1/2 pointer-events-none z-[9999]"
-                        style={{ left: cursorPos.x, top: cursorPos.y, opacity: cursorPos.visible ? 1 : 0 }}
-                    >
-                         <svg viewBox="0 0 24 24" fill="rgba(0, 255, 255, 0.8)" style={{ filter: 'drop-shadow(0 0 5px cyan)'}}><path d="M6.2,2.3L20.3,16.4c0.2,0.2,0.2,0.5,0,0.7l-2.3,2.3c-0.2,0.2-0.5,0.2-0.7,0L3.2,5.3c-0.2-0.2-0.2-0.5,0-0.7L5.5,2.3 C5.7,2.1,6,2.1,6.2,2.3z"/></svg>
-                    </div>
-                    {!isDemoFinished && (
-                        <div className="fixed bottom-8 right-8 w-1/3 max-w-lg p-4 bg-black/70 backdrop-blur-sm border border-cyan-400/50 rounded-lg text-xl text-cyan-200 z-[9998]">
-                            {narratorText}
-                        </div>
-                    )}
-                    {isDemoFinished && (
-                        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] text-center p-8 animate-fadeIn">
-                             <div>
-                                <h2 className="text-6xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 to-fuchsia-500 mb-6">دمو به پایان رسید</h2>
-                                <p className="text-2xl text-slate-300 mb-8">از تماشای پیش‌نمایش زنده "صرافی الشیخ" سپاسگزاریم.</p>
-                                <p className="text-xl text-slate-400">برای دریافت اطلاعات بیشتر و مشاوره رایگان، با ما به تماس شوید.</p>
-                                <button onClick={() => window.location.reload()} className="mt-8 px-8 py-4 text-2xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300">شروع مجدد دمو</button>
-                            </div>
-                        </div>
-                    )}
-
-                </MemoryRouter>
+                )}
             </ApiContext.Provider>
         </AuthContext.Provider>
     );

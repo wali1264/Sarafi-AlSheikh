@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate, Outlet, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -113,7 +112,7 @@ const SarrafAIApp: React.FC = () => {
             <HashRouter>
                  <Routes>
                     {/* Public Demo Route */}
-                    <Route path="/demo" element={<LiveDemoPage />} />
+                    <Route path="/demo/*" element={<LiveDemoPage />} />
 
                     {/* Main App Routes */}
                     <Route path="/*" element={user ? <MainAppRoutes /> : <Login />} />
