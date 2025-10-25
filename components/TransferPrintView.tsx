@@ -4,9 +4,10 @@ import { statusTranslations } from '../utils/translations';
 
 interface TransferPrintViewProps {
     transfer: DomesticTransfer | null;
+    partnerProvince?: string;
 }
 
-const TransferPrintView: React.FC<TransferPrintViewProps> = ({ transfer }) => {
+const TransferPrintView: React.FC<TransferPrintViewProps> = ({ transfer, partnerProvince }) => {
     
     if (!transfer) {
         return <div className="text-center p-10 text-gray-700">سند یافت نشد.</div>;
@@ -62,7 +63,9 @@ const TransferPrintView: React.FC<TransferPrintViewProps> = ({ transfer }) => {
                             </>
                         )}
                         
-                         <p className="col-span-2 pt-2 mt-2 border-t"><strong>مقصد / مبدا:</strong> {transfer.destinationProvince} (همکار: {transfer.partnerSarraf})</p>
+                         <p className="col-span-2 pt-2 mt-2 border-t">
+                             <strong>مقصد / مبدا:</strong> {transfer.destination_province} (همکار: {transfer.partnerSarraf} {partnerProvince ? ` - ${partnerProvince}` : ''})
+                         </p>
                          <p className="col-span-2"><strong>وضعیت فعلی:</strong> {statusTranslations[transfer.status]}</p>
                     </div>
                 </div>

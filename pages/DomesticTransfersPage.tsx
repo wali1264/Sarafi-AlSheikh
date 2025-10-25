@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import ReactDOM from 'react-dom';
+import { createRoot } from 'react-dom/client';
 import { useApi } from '../hooks/useApi';
-import { DomesticTransfer, TransferStatus, User, Currency } from '../types';
+import { DomesticTransfer, TransferStatus, User, Currency, PartnerAccount } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import CreateOutgoingTransferModal from '../components/CreateOutgoingTransferModal';
 import CreateIncomingTransferModal from '../components/CreateIncomingTransferModal';
@@ -17,24 +18,23 @@ interface TransferPrintPreviewModalProps {
     isOpen: boolean;
     onClose: () => void;
     transfer: DomesticTransfer | null;
+    partnerProvince?: string;
 }
 
-const TransferPrintPreviewModal: React.FC<TransferPrintPreviewModalProps> = ({ isOpen, onClose, transfer }) => {
+const TransferPrintPreviewModal: React.FC<TransferPrintPreviewModalProps> = ({ isOpen, onClose, transfer, partnerProvince }) => {
     if (!isOpen || !transfer) return null;
 
     const handlePrint = () => {
         const container = document.getElementById('printable-area-container');
         if (container) {
-            ReactDOM.render(
-                <TransferPrintView transfer={transfer} />,
-                container,
-                () => {
-                    setTimeout(() => {
-                        window.print();
-                        ReactDOM.unmountComponentAtNode(container);
-                    }, 100);
-                }
+            const root = createRoot(container);
+            root.render(
+                <TransferPrintView transfer={transfer} partnerProvince={partnerProvince} />
             );
+            setTimeout(() => {
+                window.print();
+                root.unmount();
+            }, 100);
         }
         onClose();
     };
@@ -48,7 +48,7 @@ const TransferPrintPreviewModal: React.FC<TransferPrintPreviewModalProps> = ({ i
                 </div>
                 <div className="p-8 flex-grow overflow-y-auto bg-gray-600/20">
                     <div className="bg-white rounded shadow-lg mx-auto">
-                         <TransferPrintView transfer={transfer} />
+                         <TransferPrintView transfer={transfer} partnerProvince={partnerProvince} />
                     </div>
                 </div>
                 <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end space-x-4 space-x-reverse">
@@ -88,6 +88,7 @@ const DomesticTransfersPage: React.FC = () => {
     const api = useApi();
     const { user, hasPermission } = useAuth();
     const [transfers, setTransfers] = useState<DomesticTransfer[]>([]);
+    const [partners, setPartners] = useState<PartnerAccount[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     
     const initialFilters = {
@@ -114,11 +115,18 @@ const DomesticTransfersPage: React.FC = () => {
     const [isPayoutModalOpen, setPayoutModalOpen] = useState(false);
     const [isPrintModalOpen, setPrintModalOpen] = useState(false);
     const [selectedTransfer, setSelectedTransfer] = useState<DomesticTransfer | null>(null);
+    
+    const partnersMap = useMemo(() => new Map(partners.map(p => [p.name, p])), [partners]);
+
 
     const fetchData = useCallback(async () => {
         setIsLoading(true);
-        const data = await api.getDomesticTransfers();
-        setTransfers(data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+        const [transferData, partnerData] = await Promise.all([
+            api.getDomesticTransfers(),
+            api.getPartnerAccounts(),
+        ]);
+        setTransfers(transferData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+        setPartners(partnerData);
         setIsLoading(false);
     }, [api]);
 
@@ -319,7 +327,9 @@ const DomesticTransfersPage: React.FC = () => {
                                     <td className="px-6 py-4 text-slate-100 font-semibold">{t.receiver.name}</td>
                                     <td className="px-6 py-4">
                                         <div>{t.destination_province}</div>
-                                        <div className="text-sm text-slate-400">{t.partner_sarraf}</div>
+                                        <div className="text-sm text-slate-400">
+                                            {t.partner_sarraf} {partnersMap.get(t.partner_sarraf) ? `(${partnersMap.get(t.partner_sarraf)?.province})` : ''}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4 font-mono text-left">{new Intl.NumberFormat('fa-IR-u-nu-latn').format(t.amount)} {t.currency}</td>
                                     <td className="px-6 py-4">
@@ -381,6 +391,7 @@ const DomesticTransfersPage: React.FC = () => {
                 isOpen={isPrintModalOpen}
                 onClose={() => setPrintModalOpen(false)}
                 transfer={selectedTransfer}
+                partnerProvince={selectedTransfer ? partnersMap.get(selectedTransfer.partner_sarraf)?.province : undefined}
             />
         </div>
     );

@@ -333,6 +333,44 @@ class SarrafiApiService {
         }
         return data;
     }
+    
+    async getComprehensiveActivityData(): Promise<{
+        cashboxRequests: CashboxRequest[];
+        domesticTransfers: DomesticTransfer[];
+        foreignTransactions: ForeignTransaction[];
+        commissionTransfers: CommissionTransfer[];
+        accountTransfers: AccountTransfer[];
+        expenses: Expense[];
+        amanat: Amanat[];
+    }> {
+        const [
+            cashboxRequests,
+            domesticTransfers,
+            foreignTransactions,
+            commissionTransfers,
+            accountTransfers,
+            expenses,
+            amanat
+        ] = await Promise.all([
+            this.getCashboxRequests(),
+            this.getDomesticTransfers(),
+            this.getForeignTransactions(),
+            this.getCommissionTransfers(),
+            this.getAccountTransfers(),
+            this.getExpenses(),
+            this.getAmanat()
+        ]);
+
+        return {
+            cashboxRequests,
+            domesticTransfers,
+            foreignTransactions,
+            commissionTransfers,
+            accountTransfers,
+            expenses,
+            amanat
+        };
+    }
 
     async restoreState(backupData: any): Promise<{ success: boolean; error?: string }> {
         const { error } = await supabase.rpc('restore_state', { p_state_data: backupData });

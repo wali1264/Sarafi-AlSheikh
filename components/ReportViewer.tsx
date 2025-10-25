@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
+import { createRoot } from 'react-dom/client';
 import { ReportType, ProfitAndLossReportData, CashboxSummaryReportData, InternalLedgerReportData } from '../types';
 import { reportTypeTranslations, foreignTransactionStatusTranslations } from '../utils/translations';
 import ReportPrintView from './ReportPrintView';
@@ -22,16 +23,14 @@ const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = ({ isOpe
     const handlePrint = () => {
         const container = document.getElementById('printable-area-container');
         if (container) {
-            ReactDOM.render(
-                <ReportPrintView reportData={reportData} reportType={reportType} />,
-                container,
-                () => {
-                    setTimeout(() => {
-                        window.print();
-                        ReactDOM.unmountComponentAtNode(container);
-                    }, 100);
-                }
+            const root = createRoot(container);
+            root.render(
+                <ReportPrintView reportData={reportData} reportType={reportType} />
             );
+            setTimeout(() => {
+                window.print();
+                root.unmount();
+            }, 100);
         }
         onClose();
     };

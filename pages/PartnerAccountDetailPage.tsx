@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactDOM from 'react-dom';
+import { createRoot } from 'react-dom/client';
 import { useApi } from '../hooks/useApi';
 import { PartnerAccount, PartnerTransaction, User, Currency, CashboxRequest, CashboxRequestStatus } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -22,16 +23,14 @@ const StatementPrintPreviewModal: React.FC<StatementPrintPreviewModalProps> = ({
     const handlePrint = () => {
         const container = document.getElementById('printable-area-container');
         if (container) {
-            ReactDOM.render(
-                <StatementPrintView entityId={partnerId} type="partner" />,
-                container,
-                () => {
-                    setTimeout(() => {
-                        window.print();
-                        ReactDOM.unmountComponentAtNode(container);
-                    }, 100);
-                }
+            const root = createRoot(container);
+            root.render(
+                <StatementPrintView entityId={partnerId} type="partner" />
             );
+            setTimeout(() => {
+                window.print();
+                root.unmount();
+            }, 100);
         }
         onClose();
     };
