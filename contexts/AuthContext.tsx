@@ -13,7 +13,8 @@ interface AuthContextType {
     hasPermission: (module: PermissionModule, action: PermissionAction) => boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// FIX: Export AuthContext to be used in other components, like the LiveDemoPage.
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<AuthenticatedUser | null>(null);
