@@ -104,6 +104,7 @@ const CashboxPage: React.FC = () => {
             .channel('cashbox-page-updates')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'cashbox_requests' }, () => fetchData())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'cashbox_balances' }, () => fetchData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'bank_accounts' }, () => fetchData())
             .subscribe();
         
         return () => {
