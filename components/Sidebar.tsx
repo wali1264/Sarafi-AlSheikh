@@ -18,6 +18,7 @@ const allNavLinks: NavLinkConfig[] = [
     { to: '/domestic-transfers', label: permissionModuleTranslations.domesticTransfers, module: 'domesticTransfers' },
     { to: '/foreign-transfers', label: permissionModuleTranslations.foreignTransfers, module: 'foreignTransfers' },
     { to: '/commission-transfers', label: permissionModuleTranslations.commissionTransfers, module: 'commissionTransfers' },
+    { to: '/dedicated-accounts', label: permissionModuleTranslations.dedicatedAccounts, module: 'dedicatedAccounts' },
     { to: '/account-transfers', label: permissionModuleTranslations.accountTransfers, module: 'accountTransfers' },
     { to: '/customers', label: permissionModuleTranslations.customers, module: 'customers' },
     { to: '/partner-accounts', label: permissionModuleTranslations.partnerAccounts, module: 'partnerAccounts' },

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate, Outlet, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -30,6 +29,9 @@ import PortalLayout from './components/PortalLayout';
 import PortalStatementPage from './pages/PortalStatementPage';
 import { useApi } from './hooks/useApi';
 import AccountingPage from './pages/AccountingPage';
+import { DedicatedAccountProvider } from './contexts/DedicatedAccountContext';
+import DedicatedAccountsPage from './pages/DedicatedAccountsPage';
+import DedicatedAccountDetailPage from './pages/DedicatedAccountDetailPage';
 
 const App: React.FC = () => {
     return (
@@ -142,6 +144,14 @@ const SarrafAIApp: React.FC = () => {
                             <Route element={<PermissionRoute module="commissionTransfers" action="view" />}>
                                 <Route path="/commission-transfers" element={<CommissionTransfersPage />} />
                             </Route>
+
+                            <Route element={<DedicatedAccountProvider><Outlet /></DedicatedAccountProvider>}>
+                                <Route element={<PermissionRoute module="dedicatedAccounts" action="view" />}>
+                                    <Route path="/dedicated-accounts" element={<DedicatedAccountsPage />} />
+                                    <Route path="/dedicated-accounts/:accountId" element={<DedicatedAccountDetailPage />} />
+                                </Route>
+                            </Route>
+                            
                             <Route element={<PermissionRoute module="partnerAccounts" action="view" />}>
                                  <Route path="/partner-accounts" element={<PartnerAccountsPage />} />
                                 <Route path="/partner-accounts/:partnerId" element={<PartnerAccountDetailPage />} />

@@ -1,3 +1,4 @@
+
 import { TransferStatus, ExpenseCategory, ReportType, CashboxRequestStatus, PermissionModule, AmanatStatus, ForeignTransactionStatus, CommissionTransferStatus, ExpenseStatus } from '../types';
 
 export const permissionModuleTranslations: Record<PermissionModule, string> = {
@@ -6,6 +7,7 @@ export const permissionModuleTranslations: Record<PermissionModule, string> = {
     domesticTransfers: 'حواله جات داخلی',
     foreignTransfers: 'تبادلات',
     commissionTransfers: 'حواله جات کمیشن‌کاری',
+    dedicatedAccounts: 'حسابات اختصاصی',
     accountTransfers: 'انتقال داخلی بین مشتریان',
     customers: 'مشتریان',
     partnerAccounts: 'حساب همکاران',
