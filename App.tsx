@@ -29,9 +29,10 @@ import PortalLayout from './components/PortalLayout';
 import PortalStatementPage from './pages/PortalStatementPage';
 import { useApi } from './hooks/useApi';
 import AccountingPage from './pages/AccountingPage';
-import { DedicatedAccountProvider } from './contexts/DedicatedAccountContext';
-import DedicatedAccountsPage from './pages/DedicatedAccountsPage';
-import DedicatedAccountDetailPage from './pages/DedicatedAccountDetailPage';
+import { RentedAccountProvider } from './contexts/RentedAccountContext';
+import RentedAccountsPage from './pages/RentedAccountsPage';
+import RentedAccountDetailPage from './pages/RentedAccountDetailPage';
+import RentedAccountUserPage from './pages/RentedAccountUserPage';
 
 const App: React.FC = () => {
     return (
@@ -145,10 +146,11 @@ const SarrafAIApp: React.FC = () => {
                                 <Route path="/commission-transfers" element={<CommissionTransfersPage />} />
                             </Route>
 
-                            <Route element={<DedicatedAccountProvider><Outlet /></DedicatedAccountProvider>}>
-                                <Route element={<PermissionRoute module="dedicatedAccounts" action="view" />}>
-                                    <Route path="/dedicated-accounts" element={<DedicatedAccountsPage />} />
-                                    <Route path="/dedicated-accounts/:accountId" element={<DedicatedAccountDetailPage />} />
+                            <Route element={<RentedAccountProvider><Outlet /></RentedAccountProvider>}>
+                                <Route element={<PermissionRoute module="rentedAccounts" action="view" />}>
+                                    <Route path="/rented-accounts" element={<RentedAccountsPage />} />
+                                    <Route path="/rented-accounts/:accountId" element={<RentedAccountDetailPage />} />
+                                    <Route path="/rented-accounts/user/:userIdentifier" element={<RentedAccountUserPage />} />
                                 </Route>
                             </Route>
                             
