@@ -9,6 +9,7 @@ import { CURRENCIES } from '../constants';
 import { cashboxRequestStatusTranslations } from '../utils/translations';
 import StatementPrintView from '../components/StatementPrintView';
 import { supabase } from '../services/supabaseClient';
+import { useRentedAccounts } from '../contexts/RentedAccountContext';
 
 interface StatementPrintPreviewModalProps {
     isOpen: boolean;
@@ -73,11 +74,14 @@ const PartnerAccountDetailPage: React.FC = () => {
     const navigate = useNavigate();
     const api = useApi();
     const { user, hasPermission } = useAuth();
+    const { users: rentedUsers } = useRentedAccounts();
 
     const [partner, setPartner] = useState<PartnerAccount | null>(null);
     const [processedTransactions, setProcessedTransactions] = useState<(PartnerTransaction & { balanceAfter: number; status?: CashboxRequestStatus | 'Completed' })[]>([]);
     const [settlementModal, setSettlementModal] = useState<{isOpen: boolean, type: 'receive' | 'pay' | null}>({isOpen: false, type: null});
     const [isPrintModalOpen, setPrintModalOpen] = useState(false);
+
+    const rentedUser = rentedUsers.find(u => u.type === 'Partner' && u.entityId === partnerId);
 
     const fetchData = useCallback(async () => {
         if (!partnerId) return;
@@ -150,6 +154,8 @@ const PartnerAccountDetailPage: React.FC = () => {
             .channel(`partner-detail-updates-${partnerId}`)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'partner_transactions', filter: `partner_id=eq.${partnerId}` }, () => fetchData())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'cashbox_requests' }, () => fetchData())
+             // Listen to rented transactions as well to update unified balance
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'rented_account_transactions' }, () => fetchData())
             .subscribe();
 
         return () => {
@@ -202,6 +208,11 @@ const PartnerAccountDetailPage: React.FC = () => {
                             </div>
                         )
                     })}
+                    {rentedUser && rentedUser.balance !== 0 && (
+                        <div key="IRT_BANK_RENTED" className={`text-3xl font-mono font-bold ${getBalanceStyle(rentedUser.balance)}`}>
+                            {new Intl.NumberFormat('en-US').format(rentedUser.balance)} IRT_BANK (کرایی)
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -259,10 +270,10 @@ const PartnerAccountDetailPage: React.FC = () => {
                                     <td className="px-6 py-4">{new Date(tx.timestamp).toLocaleString('fa-IR-u-nu-latn')}</td>
                                     <td className="px-6 py-4 text-slate-100">{tx.description}</td>
                                     <td className="px-6 py-4 font-mono text-left text-red-400">
-                                        {tx.type === 'credit' ? `${new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.amount)} ${tx.currency}` : '-'}
+                                        {tx.type === 'credit' ? `${new Intl.NumberFormat('en-US').format(tx.amount)} ${tx.currency}` : '-'}
                                     </td>
                                      <td className="px-6 py-4 font-mono text-left text-green-400">
-                                        {tx.type === 'debit' ? `${new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.amount)} ${tx.currency}` : '-'}
+                                        {tx.type === 'debit' ? `${new Intl.NumberFormat('en-US').format(tx.amount)} ${tx.currency}` : '-'}
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className={`px-3 py-1 text-base font-semibold rounded-full whitespace-nowrap ${getStatusBadgeStyle(tx.status!)}`}>
@@ -270,7 +281,7 @@ const PartnerAccountDetailPage: React.FC = () => {
                                         </span>
                                     </td>
                                     <td className={`px-6 py-4 font-mono text-left whitespace-nowrap ${isCompleted ? getBalanceStyle(tx.balanceAfter) : 'text-slate-500'}`}>
-                                        {new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.balanceAfter)} {tx.currency}
+                                        {new Intl.NumberFormat('en-US').format(tx.balanceAfter)} {tx.currency}
                                     </td>
                                 </tr>
                             )})}

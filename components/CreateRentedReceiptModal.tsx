@@ -1,3 +1,4 @@
+
 import React, { useState, FormEvent, useCallback, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useRentedAccounts } from '../contexts/RentedAccountContext';
@@ -49,7 +50,7 @@ const CreateRentedReceiptModal: React.FC<CreateRentedReceiptModalProps> = ({ isO
         checkCustomer(query);
     };
 
-    const handleSubmit = (e: FormEvent) => {
+    const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         
         let finalUserId = '';
@@ -72,7 +73,7 @@ const CreateRentedReceiptModal: React.FC<CreateRentedReceiptModalProps> = ({ isO
             return;
         }
 
-        addTransaction({
+        const success = await addTransaction({
             rented_account_id: accountId,
             user_id: finalUserId,
             user_type: initiatorType,
@@ -88,8 +89,9 @@ const CreateRentedReceiptModal: React.FC<CreateRentedReceiptModalProps> = ({ isO
         });
 
         setIsLoading(false);
-        addToast('رسید با موفقیت ثبت شد.', 'success');
-        onSuccess();
+        if (success) {
+            onSuccess();
+        }
     };
     
     if (!isOpen) return null;
@@ -99,7 +101,7 @@ const CreateRentedReceiptModal: React.FC<CreateRentedReceiptModalProps> = ({ isO
 
     return ReactDOM.createPortal(
         <div className="fixed inset-0 bg-[#0D0C22]/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity animate-fadeIn" style={{ direction: 'rtl' }}>
-            <div className="bg-[#12122E]/90 w-full max-w-2xl border-2 border-green-500/30 shadow-[0_0_40px_rgba(74,222,128,0.2)]" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 30px), calc(100% - 30px) 100%, 0 100%)' }}>
+            <div className="bg-[#1A1932] w-full max-w-2xl border-2 border-green-500/30 shadow-[0_0_40px_rgba(74,222,128,0.2)]" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 30px), calc(100% - 30px) 100%, 0 100%)' }}>
                 <form onSubmit={handleSubmit}>
                     <div className="px-8 py-5 border-b-2 border-green-500/20"><h2 className="text-4xl font-bold text-green-300 tracking-wider">ثبت رسید جدید</h2></div>
                     <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
@@ -119,13 +121,13 @@ const CreateRentedReceiptModal: React.FC<CreateRentedReceiptModalProps> = ({ isO
                             <div className="mt-4">
                                 {initiatorType === 'Customer' ? (
                                     <div>
-                                        <input value={customerQuery} onChange={e => handleCustomerQueryChange(e.target.value)} placeholder="کد یا نام مشتری" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50" />
+                                        <input value={customerQuery} onChange={e => handleCustomerQueryChange(e.target.value)} placeholder="کد یا نام مشتری" required className="w-full text-xl px-4 py-3 bg-[#292841] border-2 border-slate-500 rounded-md text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400" />
                                         {isCheckingCustomer && <p className="text-sm text-slate-400 mt-1">...</p>}
                                         {foundCustomer && <p className="text-sm text-green-400 mt-1">✓ {foundCustomer.name}</p>}
                                         {foundCustomer === null && customerQuery && !isCheckingCustomer && <p className="text-sm text-red-400 mt-1">یافت نشد.</p>}
                                     </div>
                                 ) : (
-                                    <select value={partnerId} onChange={e => setPartnerId(e.target.value)} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50">
+                                    <select value={partnerId} onChange={e => setPartnerId(e.target.value)} required className="w-full text-xl px-4 py-3 bg-[#292841] border-2 border-slate-500 rounded-md text-white focus:outline-none focus:border-cyan-400">
                                         <option value="" disabled>-- انتخاب همکار --</option>
                                         {activePartners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                     </select>
@@ -133,15 +135,15 @@ const CreateRentedReceiptModal: React.FC<CreateRentedReceiptModalProps> = ({ isO
                             </div>
                         </div>
 
-                        <select value={accountId} onChange={e => setAccountId(e.target.value)} required disabled={!!fixedAccountId} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md">
+                        <select value={accountId} onChange={e => setAccountId(e.target.value)} required disabled={!!fixedAccountId} className="w-full text-xl px-4 py-3 bg-[#292841] border-2 border-slate-500 rounded-md text-white focus:outline-none focus:border-cyan-400">
                              <option value="" disabled>-- برد به حساب کرایی (گیرنده پول) --</option>
                             {activeAccounts.map(a => <option key={a.id} value={a.id}>{a.bank_name} ({a.partner_name})</option>)}
                         </select>
-                        <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="مبلغ" required type="text" inputMode="decimal" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md" />
-                        <input value={sourceBank} onChange={e => setSourceBank(e.target.value)} placeholder="نام بانک مبدأ" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md" />
+                        <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="مبلغ" required type="text" inputMode="decimal" className="w-full text-xl px-4 py-3 bg-[#292841] border-2 border-slate-500 rounded-md text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400" />
+                        <input value={sourceBank} onChange={e => setSourceBank(e.target.value)} placeholder="نام بانک مبدأ" required className="w-full text-xl px-4 py-3 bg-[#292841] border-2 border-slate-500 rounded-md text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400" />
                         <div className="grid grid-cols-2 gap-4">
-                            <input value={sourceCardDigits} onChange={e => setSourceCardDigits(e.target.value)} placeholder="۴ رقم آخر کارت" required maxLength={4} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md" />
-                            <input value={receiptSerial} onChange={e => setReceiptSerial(e.target.value)} placeholder="شماره سریال رسید" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md" />
+                            <input value={sourceCardDigits} onChange={e => setSourceCardDigits(e.target.value)} placeholder="۴ رقم آخر کارت" required maxLength={4} className="w-full text-xl px-4 py-3 bg-[#292841] border-2 border-slate-500 rounded-md text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400" />
+                            <input value={receiptSerial} onChange={e => setReceiptSerial(e.target.value)} placeholder="شماره سریال رسید" required className="w-full text-xl px-4 py-3 bg-[#292841] border-2 border-slate-500 rounded-md text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400" />
                         </div>
                     </div>
                      <div className="px-8 py-5 bg-black/30 border-t-2 border-green-500/20 flex justify-end space-x-4 space-x-reverse">
@@ -158,3 +160,4 @@ const CreateRentedReceiptModal: React.FC<CreateRentedReceiptModalProps> = ({ isO
 };
 
 export default CreateRentedReceiptModal;
+      

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
@@ -90,6 +91,8 @@ const CreateDedicatedAccountModal: React.FC<CreateDedicatedAccountModalProps> = 
             owner_name = selectedPartner.name;
         }
 
+        // FIX: Add the 'status' property, as it is required by the 'DedicatedAccount' type.
+        // New accounts should default to 'Active'.
         addAccount({
             owner_id,
             owner_type: ownerType,
@@ -98,6 +101,7 @@ const CreateDedicatedAccountModal: React.FC<CreateDedicatedAccountModalProps> = 
             account_holder: accountHolder,
             account_number: accountNumber,
             card_number: cardNumber || undefined,
+            status: 'Active',
         });
 
         setIsLoading(false);

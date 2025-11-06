@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import StatementPrintView from '../components/StatementPrintView';
 import { supabase } from '../services/supabaseClient';
 import CommissionLedgerModal from '../components/CommissionLedgerModal';
+import { useUnifiedBalance } from '../contexts/UnifiedBalanceContext';
 
 interface StatementPrintPreviewModalProps {
     isOpen: boolean;
@@ -73,6 +74,7 @@ const CustomerDetailPage: React.FC = () => {
     const navigate = useNavigate();
     const api = useApi();
     const { user } = useAuth();
+    const { getUnifiedCustomerById } = useUnifiedBalance();
 
     const [customer, setCustomer] = useState<Customer | null>(null);
     const [processedTransactions, setProcessedTransactions] = useState<(CustomerTransaction & { balanceAfter: number })[]>([]);
@@ -84,14 +86,16 @@ const CustomerDetailPage: React.FC = () => {
 
     const fetchData = useCallback(async () => {
         if (!customerId) return;
-        const [customerData, txData, exchangeData] = await Promise.all([
-            api.getCustomerById(customerId),
-            api.getTransactionsForCustomer(customerId),
-            api.getInternalExchangesForCustomer(customerId)
-        ]);
+
+        const customerData = getUnifiedCustomerById(customerId);
         
         if (customerData) {
             setCustomer(customerData);
+            
+            const [txData, exchangeData] = await Promise.all([
+                api.getTransactionsForCustomer(customerId),
+                api.getInternalExchangesForCustomer(customerId)
+            ]);
             setExchangeHistory(exchangeData.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
             
             const runningBalances: { [key in Currency]?: number } = {};
@@ -105,9 +109,11 @@ const CustomerDetailPage: React.FC = () => {
                 });
             setProcessedTransactions(processed.reverse()); // Newest first for display
         } else {
-            navigate('/customers');
+            // Data might not be ready yet, or invalid ID. For now, navigate back.
+            // A better solution might be a loading state in the unified context.
+            // navigate('/customers');
         }
-    }, [api, customerId, navigate]);
+    }, [api, customerId, navigate, getUnifiedCustomerById]);
 
     useEffect(() => {
         fetchData();
@@ -121,6 +127,8 @@ const CustomerDetailPage: React.FC = () => {
             .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_transactions', filter: `customer_id=eq.${customerId}` }, () => fetchData())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'internal_exchanges', filter: `customer_id=eq.${customerId}` }, () => fetchData())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'commission_transfers', filter: `initiator_id=eq.${customerId}` }, () => fetchData())
+             // Listen to rented transactions as well to update unified balance
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'rented_account_transactions' }, () => fetchData())
             .subscribe();
 
         return () => {
@@ -163,7 +171,7 @@ const CustomerDetailPage: React.FC = () => {
                         if (balance === 0 && !processedTransactions.some(tx => tx.currency === currency)) return null; 
                         return (
                             <div key={currency} className={`text-3xl font-mono font-bold ${getBalanceStyle(balance)}`}>
-                                {new Intl.NumberFormat('fa-IR-u-nu-latn').format(balance)} {currency}
+                                {new Intl.NumberFormat('en-US').format(balance)} {currency}
                             </div>
                         )
                     })}
@@ -211,13 +219,13 @@ const CustomerDetailPage: React.FC = () => {
                                     <td className="px-6 py-4">{new Date(tx.timestamp).toLocaleString('fa-IR-u-nu-latn')}</td>
                                     <td className="px-6 py-4 text-slate-100">{tx.description}</td>
                                     <td className="px-6 py-4 font-mono text-left text-red-400">
-                                        {tx.type === 'credit' ? `${new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.amount)} ${tx.currency}` : '-'}
+                                        {tx.type === 'credit' ? `${new Intl.NumberFormat('en-US').format(tx.amount)} ${tx.currency}` : '-'}
                                     </td>
                                      <td className="px-6 py-4 font-mono text-left text-green-400">
-                                        {tx.type === 'debit' ? `${new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.amount)} ${tx.currency}` : '-'}
+                                        {tx.type === 'debit' ? `${new Intl.NumberFormat('en-US').format(tx.amount)} ${tx.currency}` : '-'}
                                     </td>
                                     <td className={`px-6 py-4 font-mono text-left whitespace-nowrap ${getBalanceStyle(tx.balanceAfter)}`}>
-                                        {new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.balanceAfter)} {tx.currency}
+                                        {new Intl.NumberFormat('en-US').format(tx.balanceAfter)} {tx.currency}
                                     </td>
                                 </tr>
                             ))}
@@ -247,10 +255,10 @@ const CustomerDetailPage: React.FC = () => {
                                     <tr key={ex.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5 transition-colors">
                                         <td className="px-6 py-4">{new Date(ex.timestamp).toLocaleString('fa-IR-u-nu-latn')}</td>
                                         <td className="px-6 py-4 font-mono text-left text-red-400">
-                                            {new Intl.NumberFormat('fa-IR-u-nu-latn').format(ex.fromAmount)} {ex.fromCurrency}
+                                            {new Intl.NumberFormat('en-US').format(ex.fromAmount)} {ex.fromCurrency}
                                         </td>
                                         <td className="px-6 py-4 font-mono text-left text-green-400">
-                                            {new Intl.NumberFormat('fa-IR-u-nu-latn').format(ex.toAmount)} {ex.toCurrency}
+                                            {new Intl.NumberFormat('en-US').format(ex.toAmount)} {ex.toCurrency}
                                         </td>
                                         <td className="px-6 py-4 font-mono">{ex.rate}</td>
                                         <td className="px-6 py-4">{ex.user}</td>

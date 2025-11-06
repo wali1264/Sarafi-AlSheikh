@@ -1,36 +1,21 @@
 import React, { createContext, useState, useContext, ReactNode, useCallback, useMemo, useEffect } from 'react';
-import { RentedAccount, RentedAccountTransaction, RentedAccountUser, Currency, Customer, PartnerAccount } from '../types';
+import { RentedAccount, RentedAccountTransaction, RentedAccountUser, Currency, Customer, PartnerAccount, User } from '../types';
 import { useAuth } from './AuthContext';
 import { useApi } from '../hooks/useApi';
-
-// --- MOCK DATA (will be kept for development until replaced by DB) ---
-const now = new Date();
-const mockAccountsData: RentedAccount[] = [
-    { id: 'rented_acc_1', partner_name: 'محمود احمدی', bank_name: 'ملت', account_holder: 'صرافی الشیخ', account_number: '1111-1111', balance: 0, currency: Currency.IRT_BANK, created_at: now, status: 'Active' },
-    { id: 'rented_acc_2', partner_name: 'حسین رضایی', bank_name: 'صادرات', account_holder: 'صرافی الشیخ', account_number: '2222-2222', balance: 0, currency: Currency.IRT_BANK, created_at: now, status: 'Active' },
-    { id: 'rented_acc_3', partner_name: 'علی کریمی', bank_name: 'تجارت', account_holder: 'صرافی الشیخ', account_number: '3333-3333', balance: 0, currency: Currency.IRT_BANK, created_at: now, status: 'Inactive' },
-];
-
-const mockTransactionsData: RentedAccountTransaction[] = [
-    // Mock transactions link to real customer/partner IDs if possible, or use placeholders
-    // This mock customer ID is a real one from the other mock data, making the link possible.
-    { id: 'tx_rent_1', rented_account_id: 'rented_acc_1', user_id: 'c915b1e6-343d-4a37-b08e-e2b855a5b51a', user_type: 'Customer', type: 'deposit', amount: 1000000, commission_percentage: 0, commission_amount: 0, total_transaction_amount: 1000000, timestamp: new Date(now.getTime() - 1000 * 60 * 120), created_by: 'مدیر کل', receipt_serial: 'ABC-123', source_bank_name: 'ملی', source_card_last_digits: '1111' },
-    // This mock partner ID should exist in the partner's mock data. Let's use a placeholder.
-    { id: 'tx_rent_2', rented_account_id: 'rented_acc_2', user_id: 'partner-uuid-placeholder-1', user_type: 'Partner', type: 'deposit', amount: 5000000, commission_percentage: 0, commission_amount: 0, total_transaction_amount: 5000000, timestamp: new Date(now.getTime() - 1000 * 60 * 90), created_by: 'مدیر کل', receipt_serial: 'DEF-456', source_bank_name: 'تجارت', source_card_last_digits: '2222' },
-    { id: 'tx_rent_3', rented_account_id: 'rented_acc_1', user_id: 'c915b1e6-343d-4a37-b08e-e2b855a5b51a', user_type: 'Customer', type: 'withdrawal', amount: 200000, commission_percentage: 2, commission_amount: 4000, total_transaction_amount: 204000, timestamp: new Date(now.getTime() - 1000 * 60 * 30), created_by: 'ادمین سیستم', destination_bank_name: 'پاسارگاد', destination_account: '3333-3333' },
-];
-
+import { supabase } from '../services/supabaseClient';
+import { useToast } from './ToastContext';
 
 // --- CONTEXT INTERFACE ---
 interface RentedAccountContextType {
     accounts: RentedAccount[];
     transactions: RentedAccountTransaction[];
     users: RentedAccountUser[];
-    addAccount: (details: Omit<RentedAccount, 'id' | 'balance' | 'created_at' | 'currency'>) => void;
-    addTransaction: (details: Omit<RentedAccountTransaction, 'id' | 'created_by'>) => void;
-    toggleAccountStatus: (accountId: string) => void;
+    addAccount: (details: Omit<RentedAccount, 'id' | 'balance' | 'created_at' | 'currency'>) => Promise<void>;
+    addTransaction: (details: Omit<RentedAccountTransaction, 'id' | 'created_by'>) => Promise<boolean>;
+    toggleAccountStatus: (accountId: string) => Promise<void>;
     customers: Customer[];
     partners: PartnerAccount[];
+    isLoading: boolean;
 }
 
 const RentedAccountContext = createContext<RentedAccountContextType | undefined>(undefined);
@@ -38,60 +23,97 @@ const RentedAccountContext = createContext<RentedAccountContextType | undefined>
 export const RentedAccountProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { user } = useAuth();
     const api = useApi();
+    const { addToast } = useToast();
     
-    // State for mock data (can be replaced by API calls later)
-    const [accounts, setAccounts] = useState<RentedAccount[]>(mockAccountsData);
-    const [transactions, setTransactions] = useState<RentedAccountTransaction[]>(mockTransactionsData);
-    
-    // State for real data fetched from API
+    const [accounts, setAccounts] = useState<RentedAccount[]>([]);
+    const [transactions, setTransactions] = useState<RentedAccountTransaction[]>([]);
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [partners, setPartners] = useState<PartnerAccount[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-    useEffect(() => {
-        api.getCustomers().then(setCustomers);
-        api.getPartnerAccounts().then(setPartners);
+    const fetchData = useCallback(async () => {
+        setIsLoading(true);
+        const [rentedData, customersData, partnersData] = await Promise.all([
+            api.getRentedAccountsData(),
+            api.getCustomers(),
+            api.getPartnerAccounts(),
+        ]);
+        
+        setAccounts(rentedData.accounts || []);
+        
+        // FIX: Convert timestamp strings to Date objects upon fetching.
+        const processedTransactions = (rentedData.transactions || []).map(tx => ({
+            ...tx,
+            timestamp: new Date(tx.timestamp),
+        }));
+        setTransactions(processedTransactions);
+
+        setCustomers(customersData || []);
+        setPartners(partnersData || []);
+
+        setIsLoading(false);
     }, [api]);
 
-    const addAccount = useCallback((details: Omit<RentedAccount, 'id' | 'balance' | 'created_at' | 'currency'>) => {
-        const newAccount: RentedAccount = {
-            ...details,
-            id: `rented_acc_${Date.now()}`,
-            balance: 0,
-            currency: Currency.IRT_BANK,
-            created_at: new Date(),
-        };
-        setAccounts(prev => [...prev, newAccount]);
-    }, []);
-    
-    const toggleAccountStatus = useCallback((accountId: string) => {
-        setAccounts(prev => prev.map(acc => 
-            acc.id === accountId 
-                ? { ...acc, status: acc.status === 'Active' ? 'Inactive' : 'Active' } 
-                : acc
-        ));
-    }, []);
+    useEffect(() => {
+        fetchData();
 
-    const addTransaction = useCallback((details: Omit<RentedAccountTransaction, 'id' | 'created_by'>) => {
-        if (!user || user.userType !== 'internal') return;
-        const newTransaction: RentedAccountTransaction = {
-            ...details,
-            id: `tx_rent_${Date.now()}`,
-            created_by: user.name,
+        const channel = supabase
+            .channel('rented-accounts-realtime')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'rented_accounts' }, fetchData)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'rented_account_transactions' }, fetchData)
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
         };
-        setTransactions(prev => [newTransaction, ...prev]);
-    }, [user]);
+    }, [fetchData]);
+
+    const addAccount = useCallback(async (details: Omit<RentedAccount, 'id' | 'balance' | 'created_at' | 'currency'>) => {
+        if (!user || user.userType !== 'internal') return;
+        const result = await api.createRentedAccount({ ...details, user });
+        if ('error' in result) {
+            addToast(result.error, 'error');
+        } else {
+            addToast('حساب کرایی با موفقیت ایجاد شد.', 'success');
+            // Realtime will handle the update
+        }
+    }, [user, api, addToast]);
+    
+    const toggleAccountStatus = useCallback(async (accountId: string) => {
+        if (!user || user.userType !== 'internal') return;
+        const result = await api.toggleRentedAccountStatus({ accountId, user });
+        if (result.error) {
+            addToast(result.error, 'error');
+        } else {
+            addToast('وضعیت حساب با موفقیت تغییر کرد.', 'success');
+            // Realtime will handle the update
+        }
+    }, [user, api, addToast]);
+
+    const addTransaction = useCallback(async (details: Omit<RentedAccountTransaction, 'id' | 'created_by'>): Promise<boolean> => {
+        if (!user || user.userType !== 'internal') return false;
+        
+        const result = await api.createRentedTransaction({ ...details, user });
+
+        if ('error' in result) {
+            addToast(result.error, 'error');
+            return false;
+        } else {
+            addToast('تراکنش با موفقیت ثبت شد.', 'success');
+            // Realtime will handle the update
+            return true;
+        }
+    }, [user, api, addToast]);
 
     const processedData = useMemo(() => {
-        // --- 1. Create a combined map of all possible users (customers and partners) ---
         const allUsersMap = new Map<string, { name: string; type: 'Customer' | 'Partner' }>();
         customers.forEach(c => allUsersMap.set(`customer-${c.id}`, { name: c.name, type: 'Customer' }));
         partners.forEach(p => allUsersMap.set(`partner-${p.id}`, { name: p.name, type: 'Partner' }));
 
-        // --- 2. Calculate user balances and last activity from transactions ---
         const userAggregates = new Map<string, { balance: number; lastActivity: Date; entityId: string }>();
-        
-        // Sort oldest to newest to calculate running balance correctly
-        const sortedTransactions = [...transactions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        const accountBalances = new Map<string, number>();
+
+        const sortedTransactions = [...transactions].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
         sortedTransactions.forEach(tx => {
             const userIdentifier = `${tx.user_type.toLowerCase()}-${tx.user_id}`;
@@ -99,12 +121,13 @@ export const RentedAccountProvider: React.FC<{ children: ReactNode }> = ({ child
             
             const amountChange = tx.type === 'deposit' ? tx.amount : -tx.total_transaction_amount;
             currentUserData.balance += amountChange;
-            currentUserData.lastActivity = new Date(tx.timestamp); // Keep updating to get the latest
-            
+            currentUserData.lastActivity = tx.timestamp;
             userAggregates.set(userIdentifier, currentUserData);
+            
+            const currentAccountBalance = accountBalances.get(tx.rented_account_id) || 0;
+            accountBalances.set(tx.rented_account_id, currentAccountBalance + amountChange);
         });
         
-        // --- 3. Create the final RentedAccountUser[] array ---
         const finalUsers: RentedAccountUser[] = Array.from(userAggregates.entries()).map(([id, data]) => {
             const userInfo = allUsersMap.get(id);
             return {
@@ -115,14 +138,6 @@ export const RentedAccountProvider: React.FC<{ children: ReactNode }> = ({ child
                 lastActivity: data.lastActivity,
                 entityId: data.entityId,
             };
-        });
-
-        // --- 4. Calculate final account balances ---
-        const accountBalances = new Map<string, number>();
-        sortedTransactions.forEach(tx => {
-            const currentBalance = accountBalances.get(tx.rented_account_id) || 0;
-            const amountChange = tx.type === 'deposit' ? tx.amount : -tx.total_transaction_amount;
-            accountBalances.set(tx.rented_account_id, currentBalance + amountChange);
         });
 
         const finalAccounts = accounts.map(acc => ({
@@ -142,8 +157,9 @@ export const RentedAccountProvider: React.FC<{ children: ReactNode }> = ({ child
         addTransaction,
         toggleAccountStatus,
         customers,
-        partners
-    }), [processedData, transactions, addAccount, addTransaction, toggleAccountStatus, customers, partners]);
+        partners,
+        isLoading
+    }), [processedData, transactions, addAccount, addTransaction, toggleAccountStatus, customers, partners, isLoading]);
 
     return (
         <RentedAccountContext.Provider value={value}>

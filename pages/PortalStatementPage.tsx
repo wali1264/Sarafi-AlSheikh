@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
@@ -31,7 +32,9 @@ const PortalStatementPage: React.FC = () => {
     const [exchangeHistory, setExchangeHistory] = useState<InternalExchange[]>([]);
     const [commissionTransfers, setCommissionTransfers] = useState<CommissionTransfer[]>([]);
     const [isCommissionLoading, setIsCommissionLoading] = useState(true);
-
+    
+    const [entity, setEntity] = useState<Customer | PartnerAccount | null>(null);
+    const [unifiedBalances, setUnifiedBalances] = useState<{[key in Currency]?: number}>({});
 
     const fetchData = useCallback(async () => {
         if (!user || user.userType === 'internal') {
@@ -39,10 +42,16 @@ const PortalStatementPage: React.FC = () => {
             return;
         }
         
+        setEntity(user.entity);
         setIsCommissionLoading(true);
 
+        const [unifiedBalancesData, commissionDataPromise] = await Promise.all([
+            api.getUnifiedPortalBalance({ userId: user.entity.id, userType: user.userType === 'customer' ? 'Customer' : 'Partner' }),
+            api.getCommissionTransfersForInitiator(user.entity.id)
+        ]);
+        setUnifiedBalances(unifiedBalancesData);
+
         let txData: Transaction[] = [];
-        const commissionDataPromise = api.getCommissionTransfersForInitiator(user.entity.id);
 
         if (user.userType === 'customer') {
             const [customerTxData, customerExchangeData] = await Promise.all([
@@ -54,25 +63,23 @@ const PortalStatementPage: React.FC = () => {
 
         } else if (user.userType === 'partner') {
             txData = await api.getTransactionsForPartner(user.entity.id);
-            setExchangeHistory([]); // Partners don't have exchanges
+            setExchangeHistory([]); 
         }
         
-        // Resolve commission data for both customers and partners
         const commissionData = await commissionDataPromise;
         setCommissionTransfers(commissionData);
         setIsCommissionLoading(false);
 
-        // Process main ledger transactions
         const runningBalances: { [key in Currency]?: number } = {};
         const processed = txData
-            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()) // Oldest first
+            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
             .map(tx => {
                 const balance = runningBalances[tx.currency] || 0;
                 const newBalance = balance + (tx.type === 'credit' ? tx.amount : -tx.amount);
                 runningBalances[tx.currency] = newBalance;
                 return { ...tx, balanceAfter: newBalance };
             });
-        setProcessedTransactions(processed.reverse()); // Newest first for display
+        setProcessedTransactions(processed.reverse());
         
     }, [api, user, navigate]);
 
@@ -80,17 +87,17 @@ const PortalStatementPage: React.FC = () => {
         fetchData();
     }, [fetchData]);
 
-    if (!user || user.userType === 'internal') {
-        return null; // or a loading spinner, redirect is handled in fetchData
+    if (!user || user.userType === 'internal' || !entity) {
+        return null; 
     }
-    
-    const entity = user.entity;
 
     const getBalanceStyle = (balance: number) => {
         if (balance < 0) return 'text-red-400';
         if (balance > 0) return 'text-green-400';
         return 'text-slate-300';
     };
+    
+    const displayBalances = { ...entity.balances, ...unifiedBalances };
 
     return (
         <div style={{ direction: 'rtl' }} className="space-y-12">
@@ -98,17 +105,17 @@ const PortalStatementPage: React.FC = () => {
                 <div>
                     <h1 className="text-5xl font-bold text-slate-100 tracking-wider">صورتحساب شما</h1>
                     <div className="mt-2 text-3xl font-mono text-cyan-300">
-                        {user.userType === 'customer' ? `کد: ${user.entity.code}` : `ولایت: ${user.entity.province}`}
+                        {user.userType === 'customer' ? `کد: ${(entity as Customer).code}` : `ولایت: ${(entity as PartnerAccount).province}`}
                     </div>
                 </div>
                  <div className="text-left space-y-2">
                     <h3 className="text-2xl text-slate-400">موجودی حسابات</h3>
                     {CURRENCIES.map(currency => {
-                        const balance = entity.balances[currency] || 0;
+                        const balance = displayBalances[currency] || 0;
                         if (balance === 0 && !processedTransactions.some(tx => tx.currency === currency)) return null; 
                         return (
                             <div key={currency} className={`text-3xl font-mono font-bold ${getBalanceStyle(balance)}`}>
-                                {new Intl.NumberFormat('fa-IR-u-nu-latn').format(balance)} {currency}
+                                {new Intl.NumberFormat('en-US').format(balance)} {currency}
                             </div>
                         )
                     })}
@@ -143,13 +150,13 @@ const PortalStatementPage: React.FC = () => {
                                             <td className="px-6 py-4">{new Date(tx.timestamp).toLocaleString('fa-IR-u-nu-latn')}</td>
                                             <td className="px-6 py-4 text-slate-100">{tx.description}</td>
                                             <td className="px-6 py-4 font-mono text-left text-green-400">
-                                                {tx.type === 'credit' ? `${new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.amount)} ${tx.currency}` : '-'}
+                                                {tx.type === 'credit' ? `${new Intl.NumberFormat('en-US').format(tx.amount)} ${tx.currency}` : '-'}
                                             </td>
                                             <td className="px-6 py-4 font-mono text-left text-red-400">
-                                                {tx.type === 'debit' ? `${new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.amount)} ${tx.currency}` : '-'}
+                                                {tx.type === 'debit' ? `${new Intl.NumberFormat('en-US').format(tx.amount)} ${tx.currency}` : '-'}
                                             </td>
                                             <td className={`px-6 py-4 font-mono text-left whitespace-nowrap ${getBalanceStyle(tx.balanceAfter)}`}>
-                                                {new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.balanceAfter)} {tx.currency}
+                                                {new Intl.NumberFormat('en-US').format(tx.balanceAfter)} {tx.currency}
                                             </td>
                                         </tr>
                                     ))}
@@ -178,10 +185,10 @@ const PortalStatementPage: React.FC = () => {
                                             <tr key={ex.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5 transition-colors">
                                                 <td className="px-6 py-4">{new Date(ex.timestamp).toLocaleString('fa-IR-u-nu-latn')}</td>
                                                 <td className="px-6 py-4 font-mono text-left text-red-400">
-                                                    {new Intl.NumberFormat('fa-IR-u-nu-latn').format(ex.fromAmount)} {ex.fromCurrency}
+                                                    {new Intl.NumberFormat('en-US').format(ex.fromAmount)} {ex.fromCurrency}
                                                 </td>
                                                 <td className="px-6 py-4 font-mono text-left text-green-400">
-                                                    {new Intl.NumberFormat('fa-IR-u-nu-latn').format(ex.toAmount)} {ex.toCurrency}
+                                                    {new Intl.NumberFormat('en-US').format(ex.toAmount)} {ex.toCurrency}
                                                 </td>
                                                 <td className="px-6 py-4 font-mono">{ex.rate}</td>
                                             </tr>
@@ -205,3 +212,4 @@ const PortalStatementPage: React.FC = () => {
 };
 
 export default PortalStatementPage;
+      

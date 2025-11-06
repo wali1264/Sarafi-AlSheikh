@@ -23,6 +23,8 @@ import {
     CreateExternalLoginPayload,
     DeleteExternalLoginPayload,
     InternalExchange,
+    RentedAccount,
+    RentedAccountTransaction,
 } from '../types';
 
 // --- Sarrafi API Service with Supabase ---
@@ -51,6 +53,78 @@ class SarrafiApiService {
         
         return data as AuthenticatedUser;
     }
+
+    // --- Rented Accounts ---
+    async getRentedAccountsData(): Promise<{ accounts: RentedAccount[], transactions: RentedAccountTransaction[] }> {
+        const { data, error } = await supabase.rpc('get_rented_data');
+        if (error) {
+            console.error('Error fetching rented accounts data:', error);
+            return { accounts: [], transactions: [] };
+        }
+        return data || { accounts: [], transactions: [] };
+    }
+
+    async createRentedAccount(payload: Omit<RentedAccount, 'id' | 'balance' | 'created_at' | 'currency'> & { user: User }): Promise<RentedAccount | { error: string }> {
+        const { user, ...accountData } = payload;
+        const { data, error } = await supabase.rpc('create_rented_account', accountData);
+        if (error) return { error: error.message };
+        await this.logActivity(user.name, `حساب کرایی جدید برای ${accountData.partner_name} در بانک ${accountData.bank_name} ایجاد کرد.`);
+        return data;
+    }
+
+    async createRentedTransaction(payload: Omit<RentedAccountTransaction, 'id' | 'created_by' | 'timestamp'> & { user: User }): Promise<RentedAccountTransaction | { error: string }> {
+        const { user, ...details } = payload;
+
+        const rpcPayload = {
+            p_rented_account_id: details.rented_account_id,
+            p_user_id: details.user_id,
+            p_user_type: details.user_type,
+            p_type: details.type,
+            p_amount: details.amount,
+            p_commission_percentage: details.commission_percentage,
+            p_commission_amount: details.commission_amount,
+            p_total_transaction_amount: details.total_transaction_amount,
+            p_created_by: user.name,
+            p_receipt_serial: details.receipt_serial || null,
+            p_source_bank_name: details.source_bank_name || null,
+            p_source_card_last_digits: details.source_card_last_digits || null,
+            p_destination_bank_name: details.destination_bank_name || null,
+        };
+        
+        const { data, error } = await supabase.rpc('create_rented_transaction', rpcPayload);
+        
+        if (error) {
+            console.error("RPC Error create_rented_transaction:", error);
+            if (error.message.includes("duplicate key value violates unique constraint")) {
+                 return { error: "این شماره سریال رسید قبلاً ثبت شده است." };
+            }
+            return { error: `خطای پایگاه داده: ${error.message}` };
+        }
+
+        await this.logActivity(user.name, `یک تراکنش ${payload.type === 'deposit' ? 'رسید' : 'برد'} به مبلغ ${payload.amount} در حسابات کرایی ثبت کرد.`);
+        return data;
+    }
+
+
+    async toggleRentedAccountStatus(payload: { accountId: string, user: User }): Promise<{ success: boolean, error?: string }> {
+        const { data, error } = await supabase.rpc('toggle_rented_account_status', { p_account_id: payload.accountId });
+        if (error) return { success: false, error: error.message };
+        await this.logActivity(payload.user.name, `وضعیت حساب کرایی ${payload.accountId} را تغییر داد.`);
+        return { success: true };
+    }
+    
+    async getUnifiedPortalBalance(payload: { userId: string, userType: 'Customer' | 'Partner' }): Promise<{[key in Currency]?: number}> {
+        const { data, error } = await supabase.rpc('get_unified_portal_balance', {
+            p_user_id: payload.userId,
+            p_user_type: payload.userType,
+        });
+        if (error) {
+            console.error('Error fetching unified portal balance:', error);
+            return {};
+        }
+        return data || {};
+    }
+
 
     // --- External Logins ---
     async getExternalLogins(): Promise<(ExternalLogin & { entityName: string })[]> {

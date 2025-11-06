@@ -4,8 +4,10 @@ import { useRentedAccounts } from '../contexts/RentedAccountContext';
 import { useAuth } from '../contexts/AuthContext';
 import { RentedAccountTransaction } from '../types';
 import CreateRentedAccountModal from '../components/CreateRentedAccountModal';
-import CreateRentedDepositModal from '../components/CreateRentedDepositModal';
-import CreateRentedWithdrawalModal from '../components/CreateRentedWithdrawalModal';
+import CreateRentedReceiptModal from '../components/CreateRentedReceiptModal';
+import CreateRentedBardModal from '../components/CreateRentedWithdrawalModal';
+import RentedReportsTab from '../components/RentedReportsTab'; // Import the new component
+import ShamsiDatePicker from '../components/ShamsiDatePicker';
 
 const TabButton: React.FC<{ active: boolean, onClick: () => void, children: React.ReactNode }> = ({ active, onClick, children }) => (
     <button
@@ -18,48 +20,148 @@ const TabButton: React.FC<{ active: boolean, onClick: () => void, children: Reac
     </button>
 );
 
-const RentedAccountsPage: React.FC = () => {
-    const { accounts, transactions, users, customers, partners, toggleAccountStatus } = useRentedAccounts();
-    const { hasPermission } = useAuth();
-    const [activeTab, setActiveTab] = useState<'journal' | 'accounts' | 'users'>('journal');
+const StatCard: React.FC<{ title: string, value: string, currency: string }> = ({ title, value, currency }) => (
+    <div className="bg-[#12122E]/80 p-6 border-2 border-cyan-400/20 text-center shadow-[0_0_20px_rgba(0,255,255,0.1)] flex flex-col justify-between min-h-[120px]" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)' }}>
+        <h3 className="text-xl font-semibold text-slate-300 tracking-wider">{title}</h3>
+        <p className="mt-2 text-4xl font-bold font-mono text-cyan-300 whitespace-nowrap overflow-hidden">
+            {value} <span className="text-2xl text-slate-400">{currency}</span>
+        </p>
+    </div>
+);
 
-    // Modal States
+const toISODateString = (date: Date) => {
+    return date.toISOString().split('T')[0];
+};
+
+const RentedAccountsPage: React.FC = () => {
+    const { accounts, transactions, users, toggleAccountStatus } = useRentedAccounts();
+    const { hasPermission } = useAuth();
+    const [activeTab, setActiveTab] = useState<'journal' | 'accounts' | 'users' | 'reports'>('journal');
+
     const [isCreateAccountModalOpen, setCreateAccountModalOpen] = useState(false);
     const [isDepositModalOpen, setDepositModalOpen] = useState(false);
     const [isWithdrawalModalOpen, setWithdrawalModalOpen] = useState(false);
 
+    const [timeFilter, setTimeFilter] = useState<'today' | 'yesterday' | 'dayBefore' | 'thisWeek' | 'thisMonth' | 'custom'>('today');
+    const [dateRange, setDateRange] = useState({ 
+        start: toISODateString(new Date()), 
+        end: toISODateString(new Date())
+    });
+
+    const setDateFilter = (filter: 'today' | 'yesterday' | 'dayBefore' | 'thisWeek' | 'thisMonth') => {
+        setTimeFilter(filter);
+        const today = new Date();
+        let start = new Date(today);
+        let end = new Date(today);
+
+        switch (filter) {
+            case 'today':
+                break;
+            case 'yesterday':
+                start.setDate(start.getDate() - 1);
+                end.setDate(end.getDate() - 1);
+                break;
+            case 'dayBefore':
+                start.setDate(start.getDate() - 2);
+                end.setDate(end.getDate() - 2);
+                break;
+            case 'thisWeek':
+                const dayOfWeek = today.getDay();
+                start.setDate(today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1) - 1); // Saturday as start of week
+                break;
+            case 'thisMonth':
+                start = new Date(today.getFullYear(), today.getMonth(), 1);
+                break;
+        }
+        setDateRange({ start: toISODateString(start), end: toISODateString(end) });
+    };
+
+    const handleDateRangeChange = (name: 'start' | 'end', value: string) => {
+        setTimeFilter('custom');
+        setDateRange(prev => ({ ...prev, [name]: value }));
+    };
+
+    const filteredTransactions = useMemo(() => {
+        if (!dateRange.start || !dateRange.end) return transactions;
+
+        const start = new Date(dateRange.start + 'T00:00:00');
+        const end = new Date(dateRange.end + 'T23:59:59.999');
+
+        return transactions.filter(t => {
+            const txDate = new Date(t.timestamp);
+            return txDate >= start && txDate <= end;
+        });
+    }, [transactions, dateRange]);
+
+    const { totalIncome, totalReceipts, totalBards } = useMemo(() => {
+        return filteredTransactions.reduce((acc, tx) => {
+            if (tx.type === 'deposit') {
+                acc.totalReceipts += tx.amount;
+            } else { // withdrawal
+                acc.totalBards += tx.amount;
+                acc.totalIncome += tx.commission_amount;
+            }
+            return acc;
+        }, { totalIncome: 0, totalReceipts: 0, totalBards: 0 });
+    }, [filteredTransactions]);
+
     const accountsMap = useMemo(() => new Map(accounts.map(acc => [acc.id, acc])), [accounts]);
-    const usersMap = useMemo(() => {
-        const map = new Map<string, {name: string}>();
-        customers.forEach(c => map.set(`customer-${c.id}`, { name: c.name }));
-        partners.forEach(p => map.set(`partner-${p.id}`, { name: p.name }));
-        return map;
-    }, [customers, partners]);
 
     const handleSuccess = () => {
         setCreateAccountModalOpen(false);
         setDepositModalOpen(false);
         setWithdrawalModalOpen(false);
     };
+    
+    const TimeFilterButton: React.FC<{filter: 'today' | 'yesterday' | 'dayBefore' | 'thisWeek' | 'thisMonth', label: string}> = ({filter, label}) => (
+        <button onClick={() => setDateFilter(filter)} className={`px-4 py-2 text-lg rounded-md transition-colors ${timeFilter === filter ? 'bg-cyan-400 text-slate-900 font-bold' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>{label}</button>
+    )
 
     return (
-        <div style={{ direction: 'rtl' }} className="space-y-8">
+        <div style={{ direction: 'rtl' }} className="space-y-8 pl-40">
             <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
                 <h1 className="text-5xl font-bold text-slate-100 tracking-wider">مدیریت حسابات کرایی</h1>
                 <div className="flex gap-4">
                      {hasPermission('rentedAccounts', 'create') && (
                         <>
-                         <button onClick={() => setDepositModalOpen(true)} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-900 bg-green-500 hover:bg-green-400 focus:outline-none focus:ring-4 focus:ring-green-500/50 transition-all transform hover:scale-105" style={{clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)'}}>+ ثبت واریزی</button>
-                         <button onClick={() => setWithdrawalModalOpen(true)} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-900 bg-red-500 hover:bg-red-400 focus:outline-none focus:ring-4 focus:ring-red-500/50 transition-all transform hover:scale-105" style={{clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)'}}>- ثبت برداشتی</button>
+                         <button onClick={() => setDepositModalOpen(true)} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-900 bg-green-500 hover:bg-green-400 focus:outline-none focus:ring-4 focus:ring-green-500/50 transition-all transform hover:scale-105" style={{clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)'}}>+ ثبت رسید</button>
+                         <button onClick={() => setWithdrawalModalOpen(true)} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-900 bg-red-500 hover:bg-red-400 focus:outline-none focus:ring-4 focus:ring-red-500/50 transition-all transform hover:scale-105" style={{clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)'}}>- ثبت برد</button>
                         </>
                     )}
                 </div>
             </div>
+            
+            <div className="bg-[#12122E]/80 border-2 border-cyan-400/20 p-6 shadow-[0_0_40px_rgba(0,255,255,0.2)]" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)' }}>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <StatCard title="مجموع درآمد کمیسیون" value={new Intl.NumberFormat('en-US').format(totalIncome)} currency="IRT" />
+                    <StatCard title="مجموع کل رسیدها" value={new Intl.NumberFormat('en-US').format(totalReceipts)} currency="IRT" />
+                    <StatCard title="مجموع کل بردها" value={new Intl.NumberFormat('en-US').format(totalBards)} currency="IRT" />
+                </div>
+                 <div className="flex flex-wrap gap-4 items-end p-4 border-t-2 border-cyan-400/20">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <TimeFilterButton filter="today" label="امروز" />
+                        <TimeFilterButton filter="yesterday" label="دیروز" />
+                        <TimeFilterButton filter="dayBefore" label="پریروز" />
+                        <TimeFilterButton filter="thisWeek" label="این هفته" />
+                        <TimeFilterButton filter="thisMonth" label="این ماه" />
+                    </div>
+                     <div className="flex items-end gap-2 flex-grow">
+                        <div className="flex-grow">
+                           <ShamsiDatePicker label="از تاریخ:" value={dateRange.start} onChange={(val) => handleDateRangeChange('start', val)} />
+                        </div>
+                        <div className="flex-grow">
+                           <ShamsiDatePicker label="تا تاریخ:" value={dateRange.end} onChange={(val) => handleDateRangeChange('end', val)} />
+                        </div>
+                    </div>
+                 </div>
+            </div>
+
 
             <div className="border-b-2 border-cyan-400/20 mb-8">
                 <TabButton active={activeTab === 'journal'} onClick={() => setActiveTab('journal')}>روزنامچه عمومی</TabButton>
                 <TabButton active={activeTab === 'accounts'} onClick={() => setActiveTab('accounts')}>لیست حسابات کرایی</TabButton>
-                <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')}>دفتر حساب استفاده کنندگان</TabButton>
+                <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')}>دفتر حساب مشتریان</TabButton>
+                <TabButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')}>گزارشات</TabButton>
             </div>
 
             <div className="bg-[#12122E]/80 border-2 border-cyan-400/20 p-6 shadow-[0_0_40px_rgba(0,255,255,0.2)]" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)' }}>
@@ -69,27 +171,29 @@ const RentedAccountsPage: React.FC = () => {
                              <thead className="text-xl text-slate-400 uppercase">
                                 <tr>
                                     <th className="px-4 py-3">تاریخ</th>
-                                    <th className="px-4 py-3">نوع</th>
-                                    <th className="px-4 py-3">حساب کرایی</th>
-                                    <th className="px-4 py-3">طرف حساب</th>
+                                    <th className="px-4 py-3">رسید (دهنده)</th>
+                                    <th className="px-4 py-3">برد (گیرنده)</th>
                                     <th className="px-4 py-3 text-left">مبلغ</th>
                                     <th className="px-4 py-3 text-left">کمیسیون</th>
                                     <th className="px-4 py-3">کاربر</th>
                                </tr>
                             </thead>
                             <tbody>
-                                {transactions.map(tx => {
+                                {filteredTransactions.map(tx => {
                                      const account = accountsMap.get(tx.rented_account_id);
                                      const userIdentifier = `${tx.user_type.toLowerCase()}-${tx.user_id}`;
                                      const userName = users.find(u => u.id === userIdentifier)?.name || 'ناشناس';
+                                     
+                                     const giver = tx.type === 'deposit' ? userName : `${account?.bank_name} (${account?.partner_name})`;
+                                     const taker = tx.type === 'deposit' ? `${account?.bank_name} (${account?.partner_name})` : userName;
+
                                     return (
                                         <tr key={tx.id} className="border-b border-cyan-400/10">
-                                            <td className="px-4 py-3 whitespace-nowrap">{new Date(tx.timestamp).toLocaleString('fa-IR')}</td>
-                                            <td className={`px-4 py-3 font-bold ${tx.type === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>{tx.type === 'deposit' ? 'واریز' : 'برداشت'}</td>
-                                            <td className="px-4 py-3">{account?.bank_name} ({account?.partner_name})</td>
-                                            <td className="px-4 py-3 font-semibold">{userName}</td>
-                                            <td className="px-4 py-3 text-left font-mono">{new Intl.NumberFormat('fa-IR').format(tx.amount)}</td>
-                                            <td className="px-4 py-3 text-left font-mono text-amber-400">{tx.commission_amount > 0 ? new Intl.NumberFormat('fa-IR').format(tx.commission_amount) : '-'}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap">{new Date(tx.timestamp).toLocaleString('fa-IR-u-nu-latn')}</td>
+                                            <td className="px-4 py-3 font-semibold text-green-400">{giver}</td>
+                                            <td className="px-4 py-3 font-semibold text-red-400">{taker}</td>
+                                            <td className="px-4 py-3 text-left font-mono">{new Intl.NumberFormat('en-US').format(tx.amount)}</td>
+                                            <td className="px-4 py-3 text-left font-mono text-amber-400">{tx.commission_amount > 0 ? new Intl.NumberFormat('en-US').format(tx.commission_amount) : '-'}</td>
                                             <td className="px-4 py-3">{tx.created_by}</td>
                                         </tr>
                                     );
@@ -122,7 +226,7 @@ const RentedAccountsPage: React.FC = () => {
                                         <tr key={acc.id} className={`border-b border-cyan-400/10 ${acc.status === 'Inactive' ? 'opacity-50' : ''}`}>
                                             <td className="px-4 py-3 font-semibold">{acc.partner_name}</td>
                                             <td className="px-4 py-3">{acc.bank_name} ({acc.account_number})</td>
-                                            <td className="px-4 py-3 font-mono text-left font-bold">{new Intl.NumberFormat('fa-IR').format(acc.balance)}</td>
+                                            <td className="px-4 py-3 font-mono text-left font-bold">{new Intl.NumberFormat('en-US').format(acc.balance)}</td>
                                             <td className={`px-4 py-3 font-bold ${acc.status === 'Active' ? 'text-green-400' : 'text-slate-500'}`}>{acc.status === 'Active' ? 'فعال' : 'غیرفعال'}</td>
                                             <td className="px-4 py-3 text-left space-x-4 space-x-reverse">
                                                 <button onClick={() => toggleAccountStatus(acc.id)} className="text-sm text-amber-400 hover:underline">تغییر وضعیت</button>
@@ -151,9 +255,9 @@ const RentedAccountsPage: React.FC = () => {
                                 {users.map(user => (
                                     <tr key={user.id} className="border-b border-cyan-400/10">
                                         <td className="px-4 py-3 font-semibold">{user.name}</td>
-                                        <td className="px-4 py-3 whitespace-nowrap">{new Date(user.lastActivity).toLocaleDateString('fa-IR')}</td>
+                                        <td className="px-4 py-3 whitespace-nowrap">{new Date(user.lastActivity).toLocaleDateString('fa-IR-u-nu-latn')}</td>
                                         <td className="px-4 py-3">{user.type === 'Customer' ? 'مشتری' : 'همکار'}</td>
-                                        <td className="px-4 py-3 font-mono text-left font-bold">{new Intl.NumberFormat('fa-IR').format(user.balance)}</td>
+                                        <td className="px-4 py-3 font-mono text-left font-bold">{new Intl.NumberFormat('en-US').format(user.balance)}</td>
                                         <td className="px-4 py-3 text-left"><Link to={`/rented-accounts/user/${user.id}`} className="text-cyan-300 hover:underline">مشاهده دفتر حساب</Link></td>
                                     </tr>
                                 ))}
@@ -161,11 +265,14 @@ const RentedAccountsPage: React.FC = () => {
                         </table>
                     </div>
                 )}
+                {activeTab === 'reports' && (
+                    <RentedReportsTab />
+                )}
             </div>
             
             {isCreateAccountModalOpen && <CreateRentedAccountModal isOpen={isCreateAccountModalOpen} onClose={() => setCreateAccountModalOpen(false)} onSuccess={handleSuccess} />}
-            {isDepositModalOpen && <CreateRentedDepositModal isOpen={isDepositModalOpen} onClose={() => setDepositModalOpen(false)} onSuccess={handleSuccess} />}
-            {isWithdrawalModalOpen && <CreateRentedWithdrawalModal isOpen={isWithdrawalModalOpen} onClose={() => setWithdrawalModalOpen(false)} onSuccess={handleSuccess} />}
+            {isDepositModalOpen && <CreateRentedReceiptModal isOpen={isDepositModalOpen} onClose={() => setDepositModalOpen(false)} onSuccess={handleSuccess} />}
+            {isWithdrawalModalOpen && <CreateRentedBardModal isOpen={isWithdrawalModalOpen} onClose={() => setWithdrawalModalOpen(false)} onSuccess={handleSuccess} />}
         </div>
     );
 };

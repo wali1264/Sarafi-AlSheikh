@@ -1,3 +1,4 @@
+
 import React, { useState, FormEvent } from 'react';
 import ReactDOM from 'react-dom';
 import { useRentedAccounts } from '../contexts/RentedAccountContext';
@@ -21,11 +22,11 @@ const CreateRentedAccountModal: React.FC<CreateRentedAccountModalProps> = ({ isO
     const [status, setStatus] = useState<'Active' | 'Inactive'>('Active');
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
 
-        addAccount({
+        await addAccount({
             partner_name: partnerName,
             bank_name: bankName,
             account_holder: accountHolder,
@@ -35,7 +36,7 @@ const CreateRentedAccountModal: React.FC<CreateRentedAccountModalProps> = ({ isO
         });
 
         setIsLoading(false);
-        addToast('حساب کرایی جدید با موفقیت ایجاد شد.', 'success');
+        // Toast is now handled inside addAccount
         onSuccess();
     };
 
@@ -76,3 +77,4 @@ const CreateRentedAccountModal: React.FC<CreateRentedAccountModalProps> = ({ isO
 };
 
 export default CreateRentedAccountModal;
+      
