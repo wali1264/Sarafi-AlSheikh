@@ -32,7 +32,11 @@ export const RentedAccountProvider: React.FC<{ children: ReactNode }> = ({ child
     const [isLoading, setIsLoading] = useState(true);
 
     const fetchData = useCallback(async () => {
-        setIsLoading(true);
+        // To prevent flicker on forced re-fetch, we don't set loading to true here
+        // if data already exists.
+        if (accounts.length === 0) {
+            setIsLoading(true);
+        }
         const [rentedData, customersData, partnersData] = await Promise.all([
             api.getRentedAccountsData(),
             api.getCustomers(),
@@ -41,7 +45,6 @@ export const RentedAccountProvider: React.FC<{ children: ReactNode }> = ({ child
         
         setAccounts(rentedData.accounts || []);
         
-        // FIX: Convert timestamp strings to Date objects upon fetching.
         const processedTransactions = (rentedData.transactions || []).map(tx => ({
             ...tx,
             timestamp: new Date(tx.timestamp),
@@ -52,7 +55,8 @@ export const RentedAccountProvider: React.FC<{ children: ReactNode }> = ({ child
         setPartners(partnersData || []);
 
         setIsLoading(false);
-    }, [api]);
+    }, [api, accounts.length]);
+
 
     useEffect(() => {
         fetchData();
@@ -61,6 +65,8 @@ export const RentedAccountProvider: React.FC<{ children: ReactNode }> = ({ child
             .channel('rented-accounts-realtime')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'rented_accounts' }, fetchData)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'rented_account_transactions' }, fetchData)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, fetchData)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'partner_accounts' }, fetchData)
             .subscribe();
 
         return () => {
@@ -75,9 +81,9 @@ export const RentedAccountProvider: React.FC<{ children: ReactNode }> = ({ child
             addToast(result.error, 'error');
         } else {
             addToast('حساب کرایی با موفقیت ایجاد شد.', 'success');
-            // Realtime will handle the update
+            await fetchData(); // Force refresh
         }
-    }, [user, api, addToast]);
+    }, [user, api, addToast, fetchData]);
     
     const toggleAccountStatus = useCallback(async (accountId: string) => {
         if (!user || user.userType !== 'internal') return;
@@ -86,9 +92,9 @@ export const RentedAccountProvider: React.FC<{ children: ReactNode }> = ({ child
             addToast(result.error, 'error');
         } else {
             addToast('وضعیت حساب با موفقیت تغییر کرد.', 'success');
-            // Realtime will handle the update
+            await fetchData(); // Force refresh
         }
-    }, [user, api, addToast]);
+    }, [user, api, addToast, fetchData]);
 
     const addTransaction = useCallback(async (details: Omit<RentedAccountTransaction, 'id' | 'created_by'>): Promise<boolean> => {
         if (!user || user.userType !== 'internal') return false;
@@ -100,10 +106,10 @@ export const RentedAccountProvider: React.FC<{ children: ReactNode }> = ({ child
             return false;
         } else {
             addToast('تراکنش با موفقیت ثبت شد.', 'success');
-            // Realtime will handle the update
+            await fetchData(); // Force a refresh to ensure UI is updated.
             return true;
         }
-    }, [user, api, addToast]);
+    }, [user, api, addToast, fetchData]);
 
     const processedData = useMemo(() => {
         const allUsersMap = new Map<string, { name: string; type: 'Customer' | 'Partner' }>();

@@ -17,32 +17,46 @@ const RentedAccountDetailPage: React.FC = () => {
     const [isDepositModalOpen, setDepositModalOpen] = useState(false);
     const [isWithdrawalModalOpen, setWithdrawalModalOpen] = useState(false);
 
-    const [timeFilter, setTimeFilter] = useState<'today' | 'yesterday' | 'dayBefore' | 'thisWeek' | 'thisMonth' | 'custom'>('thisMonth');
-    const [dateRange, setDateRange] = useState(() => {
-        const start = new Date();
-        start.setDate(1);
-        return { 
-            start: toISODateString(start), 
-            end: toISODateString(new Date())
-        }
-    });
+    const [timeFilter, setTimeFilter] = useState<'today' | 'yesterday' | 'dayBefore' | 'thisWeek' | 'thisMonth' | 'custom' | 'all'>('all');
+    const [dateRange, setDateRange] = useState({ start: '', end: '' });
     
     const setDateFilter = (filter: 'today' | 'yesterday' | 'dayBefore' | 'thisWeek' | 'thisMonth') => {
         setTimeFilter(filter);
         const today = new Date();
+        today.setHours(0, 0, 0, 0); // Set to local midnight
+
         let start = new Date(today);
         let end = new Date(today);
+        end.setHours(23, 59, 59, 999); // End of today
 
         switch (filter) {
-            case 'today': break;
-            case 'yesterday': start.setDate(start.getDate() - 1); end.setDate(end.getDate() - 1); break;
-            case 'dayBefore': start.setDate(start.getDate() - 2); end.setDate(end.getDate() - 2); break;
-            case 'thisWeek': const day = today.getDay(); start.setDate(today.getDate() - day + (day === 0 ? -6 : 1) - 1); break;
-            case 'thisMonth': start = new Date(today.getFullYear(), today.getMonth(), 1); break;
+            case 'today':
+                break;
+            case 'yesterday':
+                start.setDate(start.getDate() - 1);
+                end.setDate(end.getDate() - 1);
+                break;
+            case 'dayBefore':
+                start.setDate(start.getDate() - 2);
+                end.setDate(end.getDate() - 2);
+                break;
+            case 'thisWeek':
+                const dayOfWeek = today.getDay(); // 0=Sun, 6=Sat
+                const diff = (dayOfWeek + 1) % 7; // In Afghanistan/Iran, week starts on Saturday. Sat -> diff=0.
+                start.setDate(today.getDate() - diff);
+                break;
+            case 'thisMonth':
+                start = new Date(today.getFullYear(), today.getMonth(), 1);
+                break;
         }
         setDateRange({ start: toISODateString(start), end: toISODateString(end) });
     };
     
+    const handleResetFilters = () => {
+        setTimeFilter('all');
+        setDateRange({ start: '', end: '' });
+    };
+
     const handleDateRangeChange = (name: 'start' | 'end', value: string) => {
         setTimeFilter('custom');
         setDateRange(prev => ({ ...prev, [name]: value }));
@@ -139,6 +153,7 @@ const RentedAccountDetailPage: React.FC = () => {
                         <div className="flex-grow">
                             <ShamsiDatePicker label="تا تاریخ:" value={dateRange.end} onChange={(val) => handleDateRangeChange('end', val)} />
                         </div>
+                         <button onClick={handleResetFilters} className="px-4 py-2 text-lg rounded-md bg-red-500/20 text-red-300 hover:bg-red-500/30">حذف فیلتر</button>
                     </div>
                  </div>
 

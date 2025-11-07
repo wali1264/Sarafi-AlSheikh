@@ -1,8 +1,9 @@
 
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
-import { User, PartnerAccount, Role, Currency, SystemSettings, Permissions, PermissionModule, permissionModules, BankAccount, Customer, ExternalLogin, CreateExternalLoginPayload, CashboxRequest, CashboxRequestStatus } from '../types';
+import { User, PartnerAccount, Role, Currency, SystemSettings, Permissions, PermissionModule, permissionModules, BankAccount, Customer, ExternalLogin, CreateExternalLoginPayload, CashboxRequest, CashboxRequestStatus, DeleteBankAccountPayload } from '../types';
 import { permissionModuleTranslations, permissionActionTranslations, cashboxRequestStatusTranslations } from '../utils/translations';
 import { CURRENCIES } from '../constants';
 import { persianToEnglishNumber } from '../utils/translations';
@@ -540,7 +541,7 @@ const BankAccountManagement = () => {
         setEditModalOpen(true);
     };
 
-    const handleDeleteClick = async (account: BankAccount) => {
+    const handleDeactivateClick = async (account: BankAccount) => {
         if (!user || user.userType !== 'internal') return;
         if (window.confirm(`آیا از غیرفعال کردن حساب بانکی "${account.account_holder}" اطمینان دارید؟`)) {
             const result = await api.deleteBankAccount({ id: account.id, user });
@@ -552,6 +553,19 @@ const BankAccountManagement = () => {
             }
         }
     };
+    
+    const handleActivateClick = async (account: BankAccount) => {
+        if (!user || user.userType !== 'internal') return;
+        const payload: DeleteBankAccountPayload = { id: account.id, user };
+        const result = await api.activateBankAccount(payload);
+        if ('error' in result) {
+            addToast(result.error, 'error');
+        } else {
+            addToast("حساب بانکی با موفقیت فعال شد.", 'success');
+            fetchData();
+        }
+    };
+
 
     const getStatusStyle = (status: string) => status === 'Active' ? 'text-green-400' : 'text-slate-500';
 
@@ -584,11 +598,21 @@ const BankAccountManagement = () => {
                                 <td className="px-6 py-4 font-mono">{new Intl.NumberFormat('fa-IR').format(acc.balance)} {acc.currency}</td>
                                 <td className={`px-6 py-4 font-bold ${getStatusStyle(acc.status)}`}>{acc.status === 'Active' ? 'فعال' : 'غیرفعال'}</td>
                                 <td className="px-6 py-4 text-left space-x-4 space-x-reverse">
-                                     {acc.status === 'Active' && hasPermission('settings', 'edit') && (
-                                        <button onClick={() => handleEditClick(acc)} className="text-amber-400 hover:text-amber-300">ویرایش</button>
-                                    )}
-                                     {acc.status === 'Active' && hasPermission('settings', 'edit') && (
-                                        <button onClick={() => handleDeleteClick(acc)} className="text-red-400 hover:text-red-300">حذف</button>
+                                    {acc.status === 'Active' ? (
+                                        <>
+                                            {hasPermission('settings', 'edit') && (
+                                                <button onClick={() => handleEditClick(acc)} className="text-amber-400 hover:text-amber-300">ویرایش</button>
+                                            )}
+                                            {hasPermission('settings', 'edit') && (
+                                                <button onClick={() => handleDeactivateClick(acc)} className="text-red-400 hover:text-red-300">غیرفعال کردن</button>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <>
+                                            {hasPermission('settings', 'edit') && (
+                                                <button onClick={() => handleActivateClick(acc)} className="text-green-400 hover:text-green-300">فعال سازی</button>
+                                            )}
+                                        </>
                                     )}
                                 </td>
                             </tr>

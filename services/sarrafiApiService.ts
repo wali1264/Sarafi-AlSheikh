@@ -537,7 +537,8 @@ class SarrafiApiService {
     
     async addBankAccount(payload: AddBankAccountPayload): Promise<BankAccount | { error: string }> {
         const { user, ...accountData } = payload;
-        const { data, error } = await supabase.from('bank_accounts').insert(accountData).select().single();
+        const dataToInsert = { ...accountData, status: 'Active' }; // Explicitly set status
+        const { data, error } = await supabase.from('bank_accounts').insert(dataToInsert).select().single();
         if (error) return { error: error.message };
         await this.logActivity(user.name, `حساب بانکی جدیدی برای ${payload.account_holder} در بانک ${payload.bank_name} ثبت کرد.`);
         return data;
@@ -605,6 +606,13 @@ class SarrafiApiService {
         return data;
     }
     
+    async activateBankAccount(payload: DeleteBankAccountPayload): Promise<BankAccount | { error: string }> {
+        const { data, error } = await supabase.from('bank_accounts').update({ status: 'Active' }).eq('id', payload.id).select().single();
+        if(error) return { error: error.message };
+        await this.logActivity(payload.user.name, `حساب بانکی "${data.account_holder} - ${data.bank_name}" را فعال کرد.`);
+        return data;
+    }
+
     async getAvailableAssets(): Promise<Asset[]> {
         const { data, error } = await supabase.rpc('get_available_assets');
         if (error) { console.error(error); return []; }

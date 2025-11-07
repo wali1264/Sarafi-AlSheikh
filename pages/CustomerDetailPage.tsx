@@ -74,7 +74,7 @@ const CustomerDetailPage: React.FC = () => {
     const navigate = useNavigate();
     const api = useApi();
     const { user } = useAuth();
-    const { getUnifiedCustomerById } = useUnifiedBalance();
+    const { getUnifiedCustomerById, getRentedIrtBalance } = useUnifiedBalance();
 
     const [customer, setCustomer] = useState<Customer | null>(null);
     const [processedTransactions, setProcessedTransactions] = useState<(CustomerTransaction & { balanceAfter: number })[]>([]);
@@ -141,6 +141,7 @@ const CustomerDetailPage: React.FC = () => {
         fetchData(); // Refresh data after successful operation
     };
 
+    const rentedIrtBalance = customer ? getRentedIrtBalance(customer.id) : 0;
 
     if (!customer) {
         return <div className="text-center text-slate-400 text-2xl">در حال بارگذاری اطلاعات مشتری...</div>;
@@ -164,17 +165,27 @@ const CustomerDetailPage: React.FC = () => {
                     <h1 className="text-5xl font-bold text-slate-100 tracking-wider">{customer.name}</h1>
                     <div className="mt-2 text-3xl font-mono text-cyan-300">کد: {customer.code}</div>
                 </div>
-                 <div className="text-left space-y-2">
-                    <h3 className="text-2xl text-slate-400">موجودی حسابات</h3>
-                    {CURRENCIES.map(currency => {
-                        const balance = customer.balances[currency] || 0;
-                        if (balance === 0 && !processedTransactions.some(tx => tx.currency === currency)) return null; 
-                        return (
-                            <div key={currency} className={`text-3xl font-mono font-bold ${getBalanceStyle(balance)}`}>
-                                {new Intl.NumberFormat('en-US').format(balance)} {currency}
+                 <div className="flex items-start gap-x-16">
+                    {rentedIrtBalance !== 0 && (
+                        <div className="text-left space-y-2">
+                             <h3 className="text-2xl text-slate-400">&nbsp;</h3>
+                            <div className={`text-3xl font-mono font-bold ${getBalanceStyle(rentedIrtBalance)}`}>
+                                {new Intl.NumberFormat('en-US').format(rentedIrtBalance)} IRT_BANK
                             </div>
-                        )
-                    })}
+                        </div>
+                    )}
+                    <div className="text-left space-y-2">
+                        <h3 className="text-2xl text-slate-400">موجودی حسابات</h3>
+                        {CURRENCIES.map(currency => {
+                            const balance = customer.balances[currency] || 0;
+                            if (balance === 0 && !processedTransactions.some(tx => tx.currency === currency)) return null; 
+                            return (
+                                <div key={currency} className={`text-3xl font-mono font-bold ${getBalanceStyle(balance)}`}>
+                                    {new Intl.NumberFormat('en-US').format(balance)} {currency}
+                                </div>
+                            )
+                        })}
+                    </div>
                 </div>
             </div>
 

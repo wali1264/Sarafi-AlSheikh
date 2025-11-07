@@ -42,17 +42,20 @@ const RentedAccountsPage: React.FC = () => {
     const [isDepositModalOpen, setDepositModalOpen] = useState(false);
     const [isWithdrawalModalOpen, setWithdrawalModalOpen] = useState(false);
 
-    const [timeFilter, setTimeFilter] = useState<'today' | 'yesterday' | 'dayBefore' | 'thisWeek' | 'thisMonth' | 'custom'>('today');
+    const [timeFilter, setTimeFilter] = useState<'today' | 'yesterday' | 'dayBefore' | 'thisWeek' | 'thisMonth' | 'custom' | 'all'>('all');
     const [dateRange, setDateRange] = useState({ 
-        start: toISODateString(new Date()), 
-        end: toISODateString(new Date())
+        start: '', 
+        end: ''
     });
 
     const setDateFilter = (filter: 'today' | 'yesterday' | 'dayBefore' | 'thisWeek' | 'thisMonth') => {
         setTimeFilter(filter);
         const today = new Date();
+        today.setHours(0, 0, 0, 0); // Set to local midnight
+
         let start = new Date(today);
         let end = new Date(today);
+        end.setHours(23, 59, 59, 999); // End of today
 
         switch (filter) {
             case 'today':
@@ -66,14 +69,20 @@ const RentedAccountsPage: React.FC = () => {
                 end.setDate(end.getDate() - 2);
                 break;
             case 'thisWeek':
-                const dayOfWeek = today.getDay();
-                start.setDate(today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1) - 1); // Saturday as start of week
+                const dayOfWeek = today.getDay(); // 0=Sun, 6=Sat
+                const diff = (dayOfWeek + 1) % 7; // In Afghanistan/Iran, week starts on Saturday. Sat -> diff=0.
+                start.setDate(today.getDate() - diff);
                 break;
             case 'thisMonth':
                 start = new Date(today.getFullYear(), today.getMonth(), 1);
                 break;
         }
         setDateRange({ start: toISODateString(start), end: toISODateString(end) });
+    };
+    
+    const handleResetFilters = () => {
+        setTimeFilter('all');
+        setDateRange({ start: '', end: '' });
     };
 
     const handleDateRangeChange = (name: 'start' | 'end', value: string) => {
@@ -82,15 +91,16 @@ const RentedAccountsPage: React.FC = () => {
     };
 
     const filteredTransactions = useMemo(() => {
-        if (!dateRange.start || !dateRange.end) return transactions;
-
-        const start = new Date(dateRange.start + 'T00:00:00');
-        const end = new Date(dateRange.end + 'T23:59:59.999');
-
-        return transactions.filter(t => {
-            const txDate = new Date(t.timestamp);
-            return txDate >= start && txDate <= end;
-        });
+        let baseTransactions = transactions;
+        if (dateRange.start && dateRange.end) {
+            const start = new Date(dateRange.start + 'T00:00:00');
+            const end = new Date(dateRange.end + 'T23:59:59.999');
+            baseTransactions = transactions.filter(t => {
+                const txDate = new Date(t.timestamp);
+                return txDate >= start && txDate <= end;
+            });
+        }
+        return baseTransactions.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     }, [transactions, dateRange]);
 
     const { totalIncome, totalReceipts, totalBards } = useMemo(() => {
@@ -152,6 +162,7 @@ const RentedAccountsPage: React.FC = () => {
                         <div className="flex-grow">
                            <ShamsiDatePicker label="تا تاریخ:" value={dateRange.end} onChange={(val) => handleDateRangeChange('end', val)} />
                         </div>
+                        <button onClick={handleResetFilters} className="px-4 py-2 text-lg rounded-md bg-red-500/20 text-red-300 hover:bg-red-500/30">حذف فیلتر</button>
                     </div>
                  </div>
             </div>
