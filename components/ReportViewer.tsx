@@ -18,6 +18,7 @@ import {
     foreignTransactionStatusTranslations,
     expenseCategoryTranslations
 } from '../utils/translations';
+import ShareButton from './ShareButton';
 
 type ReportData = (CashboxRequest | DomesticTransfer | CommissionTransfer | Expense | AccountTransfer | ForeignTransaction)[];
 type ReportTypeKey = 'cashbox' | 'domesticTransfers' | 'commissionTransfers' | 'expenses' | 'accountTransfers' | 'foreignTransfers' | 'commissionRevenue';
@@ -230,7 +231,6 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ reportData, reportType, cus
                  <ReportPrintPreviewModal 
                     isOpen={isPrintModalOpen}
                     onClose={() => setPrintModalOpen(false)}
-                    reportData={reportData}
                     reportType={reportType}
                     headers={headers}
                     rows={rows}
@@ -244,21 +244,22 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ reportData, reportType, cus
 interface ReportPrintPreviewModalProps {
     isOpen: boolean;
     onClose: () => void;
-    reportData: ReportData;
     reportType: ReportTypeKey;
     headers: string[];
     rows: (string | number | React.ReactNode)[][];
     summary: { label: string; value: string }[];
 }
 
-const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = ({ isOpen, onClose, headers, rows, summary }) => {
+const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = ({ isOpen, onClose, reportType, headers, rows, summary }) => {
+    const printableAreaId = useMemo(() => `printable-report-${reportType}-${Date.now()}`, [reportType]);
+
     if (!isOpen) return null;
 
     const handlePrint = () => {
         const container = document.getElementById('printable-area-container');
         if (container) {
             ReactDOM.render(
-                <ReportPrintView headers={headers} rows={rows} summary={summary} />,
+                <ReportPrintView headers={headers} rows={rows} summary={summary} id={printableAreaId} />,
                 container,
                 () => {
                     setTimeout(() => {
@@ -279,11 +280,12 @@ const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = ({ isOpe
                 </div>
                 <div className="p-8 flex-grow overflow-y-auto bg-gray-600/20">
                     <div className="bg-white rounded shadow-lg mx-auto">
-                         <ReportPrintView headers={headers} rows={rows} summary={summary} />
+                         <ReportPrintView headers={headers} rows={rows} summary={summary} id={printableAreaId} />
                     </div>
                 </div>
                 <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end space-x-4 space-x-reverse">
                     <button type="button" onClick={onClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md">بستن</button>
+                    <ShareButton printableAreaId={printableAreaId} fileName={`report_${reportType}`} />
                     <button onClick={handlePrint} className="px-8 py-3 text-xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300" >
                         چاپ نهایی
                     </button>

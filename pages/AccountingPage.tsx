@@ -1,11 +1,13 @@
 
-import React, { useState, useCallback, useMemo } from 'react';
+
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
 import { Currency } from '../types';
 import { CURRENCIES } from '../constants';
 import { persianToEnglishNumber } from '../utils/translations';
 import AccountingPrintView from '../components/AccountingPrintView';
+import { useToast } from '../contexts/ToastContext';
 
 type AnalysisResult = {
     grossAssets: number;
@@ -47,41 +49,72 @@ const ResultCard: React.FC<{ title: string, value: number, description: string }
 
 const AccountingPage: React.FC = () => {
     const api = useApi();
-    const [rates, setRates] = useState<{[key: string]: string}>({ 'USD': '1' });
+    const { addToast } = useToast();
+    const [rates, setRates] = useState<{ [key: string]: string }>({ 'USD': '1' });
     const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isFetchingRates, setIsFetchingRates] = useState(false);
+    const [highlightedCurrencies, setHighlightedCurrencies] = useState<string[]>([]);
+
+    useEffect(() => {
+        try {
+            const savedRates = localStorage.getItem('sarrafi_exchange_rates');
+            if (savedRates) {
+                setRates(JSON.parse(savedRates));
+            }
+            const savedAnalysis = localStorage.getItem('sarrafi_net_worth_analysis');
+             if (savedAnalysis) {
+                setAnalysis(JSON.parse(savedAnalysis));
+            }
+        } catch (error) {
+            console.error("Failed to load data from localStorage", error);
+            addToast("خطا در بارگذاری اطلاعات ذخیره شده.", "error");
+        }
+    }, [addToast]);
     
     const handleRateChange = (currency: Currency, value: string) => {
-        setRates(prev => ({ ...prev, [currency]: value }));
+        setRates(prev => ({ ...prev, [currency]: persianToEnglishNumber(value) }));
     };
 
     const fetchLiveRates = async () => {
         setIsFetchingRates(true);
         try {
             const response = await fetch('https://open.er-api.com/v6/latest/USD');
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
+            if (!response.ok) throw new Error('خطا در دریافت نرخ‌های جهانی');
             const data = await response.json();
-            const newRates: {[key: string]: string} = { 'USD': '1' };
-            CURRENCIES.forEach(currency => {
+            const newRates: { [key: string]: string } = {};
+            const updatedCurrencies: string[] = [];
+
+            ['EUR', 'PKR', 'AFN'].forEach(currency => {
                 if (data.rates[currency]) {
                     newRates[currency] = String(data.rates[currency]);
+                    updatedCurrencies.push(currency);
                 }
             });
-            setRates(newRates);
-        } catch (error) {
+
+            setRates(prev => ({ ...prev, ...newRates }));
+            setHighlightedCurrencies(updatedCurrencies);
+            addToast("نرخ‌های جهانی با موفقیت به‌روز شد.", 'success');
+
+        } catch (error: any) {
             console.error("Failed to fetch exchange rates:", error);
-            // Here you might want to add a toast notification for the user
+            addToast(error.message || "خطا در دریافت نرخ‌های ارز.", 'error');
         } finally {
             setIsFetchingRates(false);
+            setTimeout(() => setHighlightedCurrencies([]), 2500);
         }
     };
-    
+
     const handleCalculate = useCallback(async () => {
         setIsLoading(true);
         setAnalysis(null);
+
+        try {
+            localStorage.setItem('sarrafi_exchange_rates', JSON.stringify(rates));
+        } catch (error) {
+            console.error("Failed to save rates to localStorage", error);
+            addToast("خطا در ذخیره سازی نرخ‌ها.", 'error');
+        }
 
         const numericRates: {[key: string]: number} = {};
         for(const key in rates) {
@@ -157,11 +190,18 @@ const AccountingPage: React.FC = () => {
         const netWorth = grossAssets - totals.totalLiabilitiesUSD - totals.totalCommissionLiabilityUSD;
         const liquidNetWorth = totals.totalLiquidAssetsUSD - totals.totalLiabilitiesUSD - totals.totalCommissionLiabilityUSD;
 
+        const finalAnalysis = { grossAssets, netWorth, liquidNetWorth, breakdown: { ...breakdown, usdTotals: totals } };
+        setAnalysis(finalAnalysis);
 
-        setAnalysis({ grossAssets, netWorth, liquidNetWorth, breakdown: { ...breakdown, usdTotals: totals } });
+        try {
+             localStorage.setItem('sarrafi_net_worth_analysis', JSON.stringify(finalAnalysis));
+        } catch (error) {
+            console.error("Failed to save analysis to localStorage", error);
+        }
+
         setIsLoading(false);
 
-    }, [api, rates]);
+    }, [api, rates, addToast]);
 
     const handlePrint = () => {
         if (!analysis) return;
@@ -187,7 +227,7 @@ const AccountingPage: React.FC = () => {
             <SettingsCard 
                 title="۱. مدیریت نرخ‌های تبدیل ارز (نسبت به USD)"
                 actions={
-                    <button onClick={fetchLiveRates} disabled={isFetchingRates} className="px-4 py-2 text-lg font-bold text-cyan-300 bg-slate-700/50 rounded-md hover:bg-slate-700 disabled:opacity-50">
+                    <button onClick={fetchLiveRates} disabled={isFetchingRates} className="px-4 py-2 text-lg font-bold text-cyan-300 bg-slate-700/50 rounded-md hover:bg-slate-700 disabled:opacity-50 disabled:cursor-wait w-64 text-center">
                         {isFetchingRates ? 'در حال دریافت...' : 'به‌روزرسانی با نرخ جهانی'}
                     </button>
                 }
@@ -198,12 +238,12 @@ const AccountingPage: React.FC = () => {
                         <div key={currency}>
                             <label className="block text-lg font-medium text-cyan-300 mb-2">1 USD = ? {currency}</label>
                             <input
-                                type="number"
-                                step={currency === 'EUR' ? '0.001' : '0.1'}
+                                type="text"
+                                inputMode="decimal"
                                 value={rates[currency] || ''}
-                                onChange={e => handleRateChange(currency, e.target.value)}
+                                onChange={e => handleRateChange(currency as Currency, e.target.value)}
                                 placeholder={`نرخ ${currency}`}
-                                className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400"
+                                className={`w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 transition-all duration-300 ${highlightedCurrencies.includes(currency) ? 'glowing-border' : ''}`}
                             />
                         </div>
                     ))}
@@ -216,12 +256,12 @@ const AccountingPage: React.FC = () => {
                     disabled={isLoading}
                     className="px-12 py-4 text-2xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105 disabled:opacity-50"
                     style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)', boxShadow: '0 0 25px rgba(0, 255, 255, 0.5)' }}>
-                    {isLoading ? 'در حال محاسبه...' : '۲. محاسبه دارایی خالص'}
+                    {isLoading ? 'در حال محاسبه...' : '۲. محاسبه و ذخیره'}
                 </button>
             </div>
 
             {analysis && (
-                <div className="animate-fadeIn space-y-8 ml-32">
+                <div className="animate-fadeIn space-y-8">
                     <div className="flex justify-between items-center">
                         <h2 className="text-3xl font-semibold text-slate-100 tracking-wider">۳. نتایج تحلیل (به ارزش USD)</h2>
                         <button onClick={handlePrint} className="px-6 py-3 text-xl font-bold text-cyan-300 bg-slate-700/50 rounded-md hover:bg-slate-700">چاپ گزارش</button>

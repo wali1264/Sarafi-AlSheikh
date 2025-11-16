@@ -6,11 +6,12 @@ import { Customer, PartnerAccount, CustomerTransaction, PartnerTransaction, Curr
 interface StatementPrintViewProps {
     entityId: string;
     type: 'customer' | 'partner';
+    id: string;
 }
 
 type Transaction = (CustomerTransaction | PartnerTransaction) & { balanceAfter: number };
 
-const StatementPrintView: React.FC<StatementPrintViewProps> = ({ entityId, type }) => {
+const StatementPrintView: React.FC<StatementPrintViewProps> = ({ entityId, type, id }) => {
     const api = useApi();
     const [entity, setEntity] = useState<Customer | PartnerAccount | null>(null);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -73,7 +74,7 @@ const StatementPrintView: React.FC<StatementPrintViewProps> = ({ entityId, type 
     const isCustomer = (e: Customer | PartnerAccount): e is Customer => 'code' in e;
 
     return (
-        <div id="printable-area" className="bg-white text-black p-8 font-[sans-serif]" style={{ direction: 'rtl', width: '21cm', minHeight: '29.7cm', margin: 'auto' }}>
+        <div id={id} className="printable-area bg-white text-black p-8 font-[sans-serif]" style={{ direction: 'rtl', width: '21cm', minHeight: '29.7cm', margin: 'auto' }}>
             <header className="flex justify-between items-start pb-4 border-b-2 border-gray-800 mb-8">
                 <div>
                     <h1 className="text-4xl font-bold" style={{ fontFamily: "'Times New Roman', serif" }}>صرافی الشیخ</h1>

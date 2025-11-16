@@ -9,6 +9,7 @@ import { persianToEnglishNumber, commissionTransferStatusTranslations } from '..
 import CommissionTransferPrintView from '../components/CommissionTransferPrintView';
 import BankAccountLedger from '../components/BankAccountLedger';
 import CommissionTransferDetailsModal from '../components/CommissionTransferDetailsModal';
+import ShareButton from '../components/ShareButton';
 
 
 interface CommissionTransferPrintPreviewModalProps {
@@ -20,13 +21,15 @@ interface CommissionTransferPrintPreviewModalProps {
 }
 
 const CommissionTransferPrintPreviewModal: React.FC<CommissionTransferPrintPreviewModalProps> = ({ isOpen, onClose, transfer, initiatorName, bankAccountsMap }) => {
+    const printableAreaId = useMemo(() => `printable-commission-transfer-${transfer?.id}`, [transfer]);
+
     if (!isOpen || !transfer) return null;
 
     const handlePrint = () => {
         const container = document.getElementById('printable-area-container');
         if (container) {
             ReactDOM.render(
-                <CommissionTransferPrintView transfer={transfer} initiatorName={initiatorName} bankAccountsMap={bankAccountsMap} />,
+                <CommissionTransferPrintView transfer={transfer} initiatorName={initiatorName} bankAccountsMap={bankAccountsMap} id={printableAreaId} />,
                 container,
                 () => {
                     setTimeout(() => {
@@ -48,11 +51,12 @@ const CommissionTransferPrintPreviewModal: React.FC<CommissionTransferPrintPrevi
                 </div>
                 <div className="p-8 flex-grow overflow-y-auto bg-gray-600/20">
                     <div className="bg-white rounded shadow-lg mx-auto">
-                         <CommissionTransferPrintView transfer={transfer} initiatorName={initiatorName} bankAccountsMap={bankAccountsMap} />
+                         <CommissionTransferPrintView transfer={transfer} initiatorName={initiatorName} bankAccountsMap={bankAccountsMap} id={printableAreaId} />
                     </div>
                 </div>
                 <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end space-x-4 space-x-reverse">
                     <button type="button" onClick={onClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md">بستن</button>
+                    <ShareButton printableAreaId={printableAreaId} fileName={`commission_transfer_${transfer.id}`} />
                     <button
                         onClick={handlePrint}
                         className="px-8 py-3 text-xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105"

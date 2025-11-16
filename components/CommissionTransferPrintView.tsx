@@ -6,9 +6,10 @@ interface CommissionTransferPrintViewProps {
     transfer: CommissionTransfer | null;
     initiatorName: string;
     bankAccountsMap: Map<string, BankAccount>;
+    id: string;
 }
 
-const CommissionTransferPrintView: React.FC<CommissionTransferPrintViewProps> = ({ transfer, initiatorName, bankAccountsMap }) => {
+const CommissionTransferPrintView: React.FC<CommissionTransferPrintViewProps> = ({ transfer, initiatorName, bankAccountsMap, id }) => {
     
     if (!transfer) {
         return <div className="text-center p-10 text-gray-700">سند یافت نشد.</div>;
@@ -18,7 +19,7 @@ const CommissionTransferPrintView: React.FC<CommissionTransferPrintViewProps> = 
     const paidFromAccount = transfer.paidFromBankAccountId ? bankAccountsMap.get(transfer.paidFromBankAccountId) : null;
 
     return (
-        <div id="printable-area" className="bg-white text-black p-8 max-w-2xl mx-auto font-sans" style={{ direction: 'rtl' }}>
+        <div id={id} className="printable-area bg-white text-black p-8 max-w-2xl mx-auto font-sans" style={{ direction: 'rtl' }}>
             <header className="flex justify-between items-center pb-4 border-b-2 border-black">
                 <div>
                     <h1 className="text-3xl font-bold">صرافی الشیخ</h1>

@@ -2,12 +2,12 @@ import React from 'react';
 
 interface ReportPrintViewProps {
     headers: string[];
-    // FIX: The JSX namespace is not available. Replaced JSX.Element with React.ReactNode for better type compatibility.
     rows: (string | number | React.ReactNode)[][];
     summary: { label: string; value: string }[];
+    id: string;
 }
 
-const ReportPrintView: React.FC<ReportPrintViewProps> = ({ headers, rows, summary }) => {
+const ReportPrintView: React.FC<ReportPrintViewProps> = ({ headers, rows, summary, id }) => {
     
     const cleanCell = (cell: any) => {
         if (React.isValidElement(cell)) {
@@ -17,7 +17,7 @@ const ReportPrintView: React.FC<ReportPrintViewProps> = ({ headers, rows, summar
     }
 
     return (
-        <div id="printable-area" className="bg-white text-black p-8 font-[sans-serif]" style={{ direction: 'rtl', width: '21cm', minHeight: '29.7cm', margin: 'auto' }}>
+        <div id={id} className="printable-area bg-white text-black p-8 font-[sans-serif]" style={{ direction: 'rtl', width: '21cm', minHeight: '29.7cm', margin: 'auto' }}>
             <header className="flex justify-between items-start pb-4 border-b-2 border-gray-800 mb-8">
                 <div>
                     <h1 className="text-4xl font-bold" style={{ fontFamily: "'Times New Roman', serif" }}>صرافی الشیخ</h1>

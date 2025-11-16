@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
@@ -10,6 +10,7 @@ import { cashboxRequestStatusTranslations } from '../utils/translations';
 import StatementPrintView from '../components/StatementPrintView';
 import { supabase } from '../services/supabaseClient';
 import { useRentedAccounts } from '../contexts/RentedAccountContext';
+import ShareButton from '../components/ShareButton';
 
 interface StatementPrintPreviewModalProps {
     isOpen: boolean;
@@ -18,13 +19,15 @@ interface StatementPrintPreviewModalProps {
 }
 
 const StatementPrintPreviewModal: React.FC<StatementPrintPreviewModalProps> = ({ isOpen, onClose, partnerId }) => {
+    const printableAreaId = useMemo(() => `printable-partner-statement-${partnerId}`, [partnerId]);
+
     if (!isOpen) return null;
 
     const handlePrint = () => {
         const container = document.getElementById('printable-area-container');
         if (container) {
             ReactDOM.render(
-                <StatementPrintView entityId={partnerId} type="partner" />,
+                <StatementPrintView entityId={partnerId} type="partner" id={printableAreaId} />,
                 container,
                 () => {
                     setTimeout(() => {
@@ -46,11 +49,12 @@ const StatementPrintPreviewModal: React.FC<StatementPrintPreviewModalProps> = ({
                 </div>
                 <div className="p-8 flex-grow overflow-y-auto bg-gray-600/20">
                     <div className="bg-white rounded shadow-lg mx-auto">
-                         <StatementPrintView entityId={partnerId} type="partner" />
+                         <StatementPrintView entityId={partnerId} type="partner" id={printableAreaId} />
                     </div>
                 </div>
                 <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end space-x-4 space-x-reverse">
                     <button type="button" onClick={onClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md">بستن</button>
+                    <ShareButton printableAreaId={printableAreaId} fileName={`partner_statement_${partnerId}`} />
                     <button
                         onClick={handlePrint}
                         className="px-8 py-3 text-xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105"

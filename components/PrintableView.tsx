@@ -7,6 +7,7 @@ import { numberToWords } from '../utils/numberToWords';
 interface PrintableViewProps {
     request: CashboxRequest;
     printNote?: string;
+    id: string;
 }
 
 const DetailRow: React.FC<{ label: string; value?: string | null; className?: string, valueClassName?: string }> = ({ label, value, className = '', valueClassName = '' }) => {
@@ -19,13 +20,12 @@ const DetailRow: React.FC<{ label: string; value?: string | null; className?: st
     );
 };
 
-const PrintableView: React.FC<PrintableViewProps> = ({ request, printNote }) => {
+const PrintableView: React.FC<PrintableViewProps> = ({ request, printNote, id }) => {
     const api = useApi();
     const [customer, setCustomer] = useState<Customer | null>(null);
 
     useEffect(() => {
         if (request.customer_code) {
-            // FIX: Property 'getCustomerByCode' does not exist on type 'SarrafiApiService'. Did you mean 'getCustomerById'?
             api.findCustomerByCodeOrName(request.customer_code).then(customerData => {
                 if (customerData) {
                     setCustomer(customerData);
@@ -42,7 +42,7 @@ const PrintableView: React.FC<PrintableViewProps> = ({ request, printNote }) => 
     const signature2Label = isWithdrawal ? 'امضای پرداخت کننده (صندوقدار)' : 'امضای تحویل گیرنده (صندوقدار)';
 
     return (
-        <div id="printable-area" className="bg-white text-black p-10 font-sans shadow-2xl" style={{ direction: 'rtl', width: '210mm', minHeight: '297mm', margin: 'auto', fontSize: '14pt' }}>
+        <div id={id} className="printable-area bg-white text-black p-10 font-sans shadow-2xl" style={{ direction: 'rtl', width: '210mm', minHeight: '297mm', margin: 'auto', fontSize: '14pt' }}>
             <div className="flex flex-col h-full">
                 <header className="flex justify-between items-start pb-6 border-b-4 border-gray-800">
                     <div>

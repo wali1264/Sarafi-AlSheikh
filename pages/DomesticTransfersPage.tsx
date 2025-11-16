@@ -12,6 +12,7 @@ import { persianToEnglishNumber } from '../utils/translations';
 import ProcessIncomingTransferModal from '../components/ProcessIncomingTransferModal';
 import TransferPrintView from '../components/TransferPrintView';
 import { supabase } from '../services/supabaseClient';
+import ShareButton from '../components/ShareButton';
 
 interface TransferPrintPreviewModalProps {
     isOpen: boolean;
@@ -21,18 +22,35 @@ interface TransferPrintPreviewModalProps {
 }
 
 const TransferPrintPreviewModal: React.FC<TransferPrintPreviewModalProps> = ({ isOpen, onClose, transfer, partnerProvince }) => {
+    const printableAreaId = useMemo(() => `printable-transfer-${transfer?.id}`, [transfer]);
+
     if (!isOpen || !transfer) return null;
 
     const handlePrint = () => {
         const container = document.getElementById('printable-area-container');
         if (container) {
             ReactDOM.render(
-                <TransferPrintView transfer={transfer} partnerProvince={partnerProvince} />,
+                <TransferPrintView transfer={transfer} partnerProvince={partnerProvince} id={printableAreaId} />,
                 container,
                 () => {
                     setTimeout(() => {
-                        window.print();
-                        ReactDOM.unmountComponentAtNode(container);
+                        // The print CSS will target the class, not the ID.
+                        const printableElement = document.getElementById(printableAreaId);
+                        if(printableElement) {
+                           const tempContainer = document.createElement('div');
+                           tempContainer.appendChild(printableElement.cloneNode(true));
+                           document.body.appendChild(tempContainer);
+                           
+                           Array.from(tempContainer.children).forEach(child => {
+                               if (child.classList.contains('printable-area')) {
+                                   (child as HTMLElement).style.visibility = 'visible';
+                               }
+                           });
+                           
+                           window.print();
+                           document.body.removeChild(tempContainer);
+                        }
+                         ReactDOM.unmountComponentAtNode(container);
                     }, 100);
                 }
             );
@@ -49,11 +67,12 @@ const TransferPrintPreviewModal: React.FC<TransferPrintPreviewModalProps> = ({ i
                 </div>
                 <div className="p-8 flex-grow overflow-y-auto bg-gray-600/20">
                     <div className="bg-white rounded shadow-lg mx-auto">
-                         <TransferPrintView transfer={transfer} partnerProvince={partnerProvince} />
+                         <TransferPrintView transfer={transfer} partnerProvince={partnerProvince} id={printableAreaId} />
                     </div>
                 </div>
                 <div className="px-8 py-5 bg-black/30 border-t-2 border-cyan-400/20 flex justify-end space-x-4 space-x-reverse">
                     <button type="button" onClick={onClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md">بستن</button>
+                    <ShareButton printableAreaId={printableAreaId} fileName={`transfer-${transfer.id}`} />
                     <button
                         onClick={handlePrint}
                         className="px-8 py-3 text-xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105"

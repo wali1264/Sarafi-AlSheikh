@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { CashboxRequest } from '../types';
 import PrintableView from './PrintableView';
+import ShareButton from './ShareButton';
 
 interface PrintPreviewModalProps {
     isOpen: boolean;
@@ -12,6 +13,7 @@ interface PrintPreviewModalProps {
 
 const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ isOpen, onClose, onConfirmPrint, request }) => {
     const [printNote, setPrintNote] = useState('');
+    const printableAreaId = useMemo(() => `printable-receipt-${request.id}`, [request.id]);
 
     if (!isOpen) return null;
 
@@ -30,7 +32,7 @@ const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ isOpen, onClose, 
 
                 <div className="p-8 flex-grow overflow-y-auto bg-gray-800/20 flex flex-col items-center">
                     <div className="w-full transform scale-[0.9] origin-top">
-                        <PrintableView request={request} printNote={printNote} />
+                        <PrintableView request={request} printNote={printNote} id={printableAreaId} />
                     </div>
                 </div>
                 
@@ -46,8 +48,9 @@ const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ isOpen, onClose, 
                         ></textarea>
                 </div>
 
-                <div className="px-8 py-5 bg-black/30 border-t border-slate-700 flex justify-end space-x-4 space-x-reverse flex-shrink-0">
+                <div className="px-8 py-5 bg-black/30 border-t border-slate-700 flex justify-end items-center space-x-4 space-x-reverse flex-shrink-0">
                     <button type="button" onClick={onClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md">بستن</button>
+                    <ShareButton printableAreaId={printableAreaId} fileName={`receipt-${request.id}`} />
                     <button
                         onClick={handlePrint}
                         className="px-8 py-3 text-xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105"

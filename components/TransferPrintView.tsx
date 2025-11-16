@@ -5,9 +5,10 @@ import { statusTranslations } from '../utils/translations';
 interface TransferPrintViewProps {
     transfer: DomesticTransfer | null;
     partnerProvince?: string;
+    id: string;
 }
 
-const TransferPrintView: React.FC<TransferPrintViewProps> = ({ transfer, partnerProvince }) => {
+const TransferPrintView: React.FC<TransferPrintViewProps> = ({ transfer, partnerProvince, id }) => {
     
     if (!transfer) {
         return <div className="text-center p-10 text-gray-700">سند یافت نشد.</div>;
@@ -17,7 +18,7 @@ const TransferPrintView: React.FC<TransferPrintViewProps> = ({ transfer, partner
     const totalAmount = transfer.amount + transfer.commission;
 
     return (
-        <div id="printable-area" className="bg-white text-black p-8 max-w-2xl mx-auto font-sans" style={{ direction: 'rtl' }}>
+        <div id={id} className="printable-area bg-white text-black p-8 max-w-2xl mx-auto font-sans" style={{ direction: 'rtl' }}>
             <header className="flex justify-between items-center pb-4 border-b-2 border-black">
                 <div>
                     <h1 className="text-3xl font-bold">صرافی الشیخ</h1>

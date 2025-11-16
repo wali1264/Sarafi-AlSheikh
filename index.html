@@ -10,6 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Teko:wght@300..700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script type="importmap">
 {
   "imports": {
@@ -33,13 +35,10 @@
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
-    body * {
-        visibility: hidden;
-    }
-    #printable-area, #printable-area * {
+    .printable-area, .printable-area * {
         visibility: visible;
     }
-    #printable-area {
+    .printable-area {
         position: absolute;
         left: 0;
         top: 0;
@@ -48,9 +47,20 @@
         margin: 0;
         padding: 20px;
     }
-    #root {
+    body * {
+        visibility: hidden;
+    }
+    #root, #modal-root {
         display: none !important;
     }
+  }
+  @keyframes glow {
+    0% { box-shadow: 0 0 0px rgba(34, 211, 238, 0); border-color: rgba(34, 211, 238, 0.7); }
+    50% { box-shadow: 0 0 8px 2px rgba(34, 211, 238, 0.5); border-color: rgba(34, 211, 238, 1); }
+    100% { box-shadow: 0 0 0px rgba(34, 211, 238, 0); border-color: rgba(34, 211, 238, 0.7); }
+  }
+  .glowing-border {
+    animation: glow 2.5s ease-out;
   }
 </style>
 <link rel="stylesheet" href="/index.css">

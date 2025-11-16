@@ -56,29 +56,90 @@ const BalanceSummaryCard: React.FC<{
     );
 };
 
+
+interface StoredAnalysis {
+    netWorth: number;
+    liquidNetWorth: number;
+}
+
+const NetWorthCard: React.FC<{ title: string; value: number | null; description: string; isLoading: boolean }> = ({ title, value, description, isLoading }) => {
+    const valueDisplay = value === null ? 'N/A' : `$${new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value)}`;
+    
+    return (
+         <div 
+            className={`bg-[#12122E]/80 p-6 border-2 border-cyan-500/30 shadow-[0_0_20px_rgba(0,255,255,0.1)] flex flex-col min-h-[300px] justify-between`}
+            style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)' }}
+        >
+            <div>
+                <h3 className={`text-2xl font-semibold text-slate-100 tracking-wider mb-4 border-b pb-2 border-cyan-500/30`}>{title}</h3>
+                <p className="text-slate-400 text-base">{description}</p>
+            </div>
+            <div className="flex-grow flex items-center justify-center">
+                {isLoading ? (
+                    <div className="h-12 w-3/4 bg-slate-700 rounded animate-pulse self-center"></div>
+                ) : (
+                    <p className="text-5xl lg:text-6xl font-bold font-mono text-cyan-300 text-center self-center break-all">
+                        {valueDisplay}
+                    </p>
+                )}
+            </div>
+        </div>
+    );
+};
+
+
 const DashboardPage: React.FC = () => {
     const api = useApi();
     const [summary, setSummary] = useState({
         customerCredit: {} as { [key in Currency]?: number },
         customerDebt: {} as { [key in Currency]?: number },
-        partnerCredit: {} as { [key in Currency]?: number },
-        partnerDebt: {} as { [key in Currency]?: number },
     });
     const [isLoading, setIsLoading] = useState(true);
+    const [netWorthData, setNetWorthData] = useState<StoredAnalysis | null>(null);
+    const [isWorthLoading, setIsWorthLoading] = useState(true);
+
+    const loadNetWorth = () => {
+        setIsWorthLoading(true);
+        try {
+            const savedAnalysis = localStorage.getItem('sarrafi_net_worth_analysis');
+            if (savedAnalysis) {
+                const parsed = JSON.parse(savedAnalysis);
+                setNetWorthData({
+                    netWorth: parsed.netWorth,
+                    liquidNetWorth: parsed.liquidNetWorth
+                });
+            }
+        } catch (e) {
+            console.error("Could not load net worth data", e);
+            setNetWorthData(null); // Reset on error
+        } finally {
+            setIsWorthLoading(false);
+        }
+    };
+    
+    useEffect(() => {
+        loadNetWorth(); // Initial load
+
+        const handleStorageChange = (e: StorageEvent) => {
+            if (e.key === 'sarrafi_net_worth_analysis') {
+                loadNetWorth();
+            }
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+        return () => {
+            window.removeEventListener('storage', handleStorageChange);
+        };
+    }, []);
 
     useEffect(() => {
         const calculateSummaries = async () => {
             setIsLoading(true);
-            const [customers, partners] = await Promise.all([
-                api.getCustomers(),
-                api.getPartnerAccounts()
-            ]);
+            const customers = await api.getCustomers();
 
             const newSummary = {
                 customerCredit: {} as { [key in Currency]?: number },
                 customerDebt: {} as { [key in Currency]?: number },
-                partnerCredit: {} as { [key in Currency]?: number },
-                partnerDebt: {} as { [key in Currency]?: number },
             };
 
             // Process Customers: Positive balance means we owe them (our debt). Negative means they owe us (our credit).
@@ -89,18 +150,6 @@ const DashboardPage: React.FC = () => {
                         newSummary.customerDebt[currency as Currency] = (newSummary.customerDebt[currency as Currency] || 0) + balance;
                     } else if (balance < 0) { 
                         newSummary.customerCredit[currency as Currency] = (newSummary.customerCredit[currency as Currency] || 0) + Math.abs(balance);
-                    }
-                }
-            });
-            
-            // Process Partners: Positive balance means we owe them (our debt). Negative means they owe us (our credit).
-            partners.forEach(partner => {
-                for (const currency in partner.balances) {
-                    const balance = partner.balances[currency as Currency] || 0;
-                    if (balance > 0) {
-                        newSummary.partnerDebt[currency as Currency] = (newSummary.partnerDebt[currency as Currency] || 0) + balance;
-                    } else if (balance < 0) {
-                        newSummary.partnerCredit[currency as Currency] = (newSummary.partnerCredit[currency as Currency] || 0) + Math.abs(balance);
                     }
                 }
             });
@@ -131,17 +180,17 @@ const DashboardPage: React.FC = () => {
                     type="debt"
                     isLoading={isLoading}
                 />
-                <BalanceSummaryCard 
-                    title="مجموع طلب از همکاران"
-                    balances={summary.partnerCredit}
-                    type="credit"
-                    isLoading={isLoading}
+                <NetWorthCard
+                    title="دارایی خالص واقعی"
+                    description="ثروت واقعی شما پس از کسر تمام بدهی‌ها از مجموع دارایی‌ها."
+                    value={netWorthData?.netWorth ?? null}
+                    isLoading={isWorthLoading}
                 />
-                <BalanceSummaryCard 
-                    title="مجموع بدهی به همکاران"
-                    balances={summary.partnerDebt}
-                    type="debt"
-                    isLoading={isLoading}
+                <NetWorthCard
+                    title="دارایی خالص نقد"
+                    description="سرمایه نقدی خالص شما با فرض عدم دریافت طلب‌ها."
+                    value={netWorthData?.liquidNetWorth ?? null}
+                    isLoading={isWorthLoading}
                 />
             </div>
 
