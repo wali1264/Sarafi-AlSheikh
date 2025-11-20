@@ -46,7 +46,7 @@ const CustomersPage: React.FC = () => {
         return customers.filter(c => 
             c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             c.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            c.whatsappNumber.includes(searchTerm)
+            (c.whatsapp_number && c.whatsapp_number.includes(searchTerm))
         ).sort((a,b) => a.name.localeCompare(b.name));
     }, [customers, searchTerm]);
 
@@ -86,7 +86,7 @@ const CustomersPage: React.FC = () => {
                                 <tr key={c.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5 transition-colors">
                                     <td className="px-6 py-4 font-mono text-cyan-300 text-2xl">{c.code}</td>
                                     <td className="px-6 py-4 text-2xl font-semibold text-slate-100">{c.name}</td>
-                                    <td className="px-6 py-4 font-mono text-left">{c.whatsappNumber}</td>
+                                    <td className="px-6 py-4 font-mono text-left">{c.whatsapp_number}</td>
                                     <td className="px-6 py-4 text-left space-x-4 space-x-reverse">
                                         {hasPermission('customers', 'edit') && (
                                             <button onClick={() => handleEditClick(c)} className="text-amber-400 hover:text-amber-300">ویرایش</button>

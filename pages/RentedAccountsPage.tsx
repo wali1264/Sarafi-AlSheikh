@@ -237,7 +237,7 @@ const RentedAccountsPage: React.FC = () => {
                                         <tr key={acc.id} className={`border-b border-cyan-400/10 ${acc.status === 'Inactive' ? 'opacity-50' : ''}`}>
                                             <td className="px-4 py-3 font-semibold">{acc.partner_name}</td>
                                             <td className="px-4 py-3">{acc.bank_name} ({acc.account_number})</td>
-                                            <td className="px-4 py-3 font-mono text-left font-bold">{new Intl.NumberFormat('en-US').format(acc.balance)}</td>
+                                            <td className="px-4 py-3 font-mono text-left font-bold text-xl">{new Intl.NumberFormat('en-US').format(acc.balance)}</td>
                                             <td className={`px-4 py-3 font-bold ${acc.status === 'Active' ? 'text-green-400' : 'text-slate-500'}`}>{acc.status === 'Active' ? 'فعال' : 'غیرفعال'}</td>
                                             <td className="px-4 py-3 text-left space-x-4 space-x-reverse">
                                                 <button onClick={() => toggleAccountStatus(acc.id)} className="text-sm text-amber-400 hover:underline">تغییر وضعیت</button>

@@ -233,10 +233,10 @@ const CustomerDetailPage: React.FC = () => {
                                 <tr key={tx.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5 transition-colors">
                                     <td className="px-6 py-4">{new Date(tx.timestamp).toLocaleString('fa-IR-u-nu-latn')}</td>
                                     <td className="px-6 py-4 text-slate-100">{tx.description}</td>
-                                    <td className="px-6 py-4 font-mono text-left text-red-400">
+                                    <td className="px-6 py-4 font-mono text-left text-green-400">
                                         {tx.type === 'credit' ? `${new Intl.NumberFormat('en-US').format(tx.amount)} ${tx.currency}` : '-'}
                                     </td>
-                                     <td className="px-6 py-4 font-mono text-left text-green-400">
+                                     <td className="px-6 py-4 font-mono text-left text-red-400">
                                         {tx.type === 'debit' ? `${new Intl.NumberFormat('en-US').format(tx.amount)} ${tx.currency}` : '-'}
                                     </td>
                                     <td className={`px-6 py-4 font-mono text-left whitespace-nowrap ${getBalanceStyle(tx.balanceAfter)}`}>

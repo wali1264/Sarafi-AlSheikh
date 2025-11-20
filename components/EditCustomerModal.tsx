@@ -1,3 +1,4 @@
+
 import React, { useState, FormEvent, useEffect } from 'react';
 import { useApi } from '../hooks/useApi';
 import { UpdateCustomerPayload, Customer, User } from '../types';
@@ -26,7 +27,7 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
             setFormData({
                 name: customer.name,
                 code: customer.code,
-                whatsappNumber: customer.whatsappNumber,
+                whatsappNumber: customer.whatsapp_number || '',
             });
         }
     }, [customer]);
@@ -42,7 +43,14 @@ const EditCustomerModal: React.FC<EditCustomerModalProps> = ({ isOpen, onClose, 
         e.preventDefault();
         setIsLoading(true);
 
-        const payload: UpdateCustomerPayload = { id: customer.id, ...formData, user: currentUser };
+        // Map local state (whatsappNumber) back to API payload (whatsapp_number)
+        const payload: UpdateCustomerPayload = { 
+            id: customer.id, 
+            name: formData.name,
+            code: formData.code,
+            whatsapp_number: formData.whatsappNumber,
+            user: currentUser 
+        };
         const result = await api.updateCustomer(payload);
 
         setIsLoading(false);
