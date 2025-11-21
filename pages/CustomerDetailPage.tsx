@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactDOM from 'react-dom';
@@ -170,14 +171,12 @@ const CustomerDetailPage: React.FC = () => {
                     <div className="mt-2 text-3xl font-mono text-cyan-300">کد: {customer.code}</div>
                 </div>
                  <div className="flex items-start gap-x-16">
-                    {rentedIrtBalance !== 0 && (
-                        <div className="text-left space-y-2">
-                             <h3 className="text-2xl text-slate-400">&nbsp;</h3>
-                            <div className={`text-3xl font-mono font-bold ${getBalanceStyle(rentedIrtBalance)}`}>
-                                {new Intl.NumberFormat('en-US').format(rentedIrtBalance)} IRT_BANK
-                            </div>
+                    <div className="text-left space-y-2">
+                         <h3 className="text-2xl text-teal-400">موجودی حسابات کرایی</h3>
+                        <div className={`text-3xl font-mono font-bold ${getBalanceStyle(rentedIrtBalance)}`}>
+                            {new Intl.NumberFormat('en-US').format(rentedIrtBalance)} IRT_BANK
                         </div>
-                    )}
+                    </div>
                     <div className="text-left space-y-2">
                         <h3 className="text-2xl text-slate-400">موجودی حسابات</h3>
                         {CURRENCIES.map(currency => {
@@ -197,6 +196,12 @@ const CustomerDetailPage: React.FC = () => {
                 <div className="p-6 border-b-2 border-cyan-400/20 flex justify-between items-center flex-wrap gap-4">
                     <h2 className="text-3xl font-semibold text-slate-100 tracking-wider">دفتر حساب مشتری</h2>
                      <div className="flex gap-4">
+                         <button 
+                            onClick={() => navigate(`/rented-accounts/user/customer-${customerId}`)}
+                            className="px-5 py-2 bg-teal-600/50 text-teal-100 hover:bg-teal-500/50 text-lg transition-colors border border-teal-500/50 rounded"
+                         >
+                            دفتر حساب کرایی
+                        </button>
                          <button 
                             onClick={() => setInternalExchangeModalOpen(true)}
                             className="px-5 py-2 bg-amber-600/50 text-amber-100 hover:bg-amber-500/50 text-lg transition-colors border border-amber-500/50 rounded"
