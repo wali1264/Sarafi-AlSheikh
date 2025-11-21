@@ -4,6 +4,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useRentedAccounts } from '../contexts/RentedAccountContext';
 import ShamsiDatePicker from '../components/ShamsiDatePicker';
 import { Currency } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import ConvertRentedToMainModal from '../components/ConvertRentedToMainModal';
 
 const toISODateString = (date: Date) => {
     return date.toISOString().split('T')[0];
@@ -12,10 +14,12 @@ const toISODateString = (date: Date) => {
 const RentedAccountUserPage: React.FC = () => {
     const { userIdentifier } = useParams<{ userIdentifier: string }>(); // e.g., "customer-cust_1"
     const navigate = useNavigate();
-    const { accounts, transactions, users } = useRentedAccounts();
+    const { accounts, transactions, users, customers } = useRentedAccounts();
+    const { user: currentUser, hasPermission } = useAuth();
 
     const [timeFilter, setTimeFilter] = useState<'today' | 'yesterday' | 'dayBefore' | 'thisWeek' | 'thisMonth' | 'custom' | 'all'>('all');
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
+    const [isConvertModalOpen, setConvertModalOpen] = useState(false);
     
     const setDateFilter = (filter: 'today' | 'yesterday' | 'dayBefore' | 'thisWeek' | 'thisMonth') => {
         setTimeFilter(filter);
@@ -61,6 +65,12 @@ const RentedAccountUserPage: React.FC = () => {
     
     const user = useMemo(() => users.find(u => u.id === userIdentifier), [users, userIdentifier]);
     
+    // Helper to get the real customer object if the user is a customer
+    const customerObject = useMemo(() => {
+        if (!user || user.type !== 'Customer') return null;
+        return customers.find(c => c.id === user.entityId) || null;
+    }, [user, customers]);
+
     const userTransactions = useMemo(() => {
         if (!user) return [];
         
@@ -127,6 +137,17 @@ const RentedAccountUserPage: React.FC = () => {
             <div className="bg-[#12122E]/80 border-2 border-cyan-400/20 overflow-hidden shadow-[0_0_40px_rgba(0,255,255,0.2)]" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)' }}>
                 <div className="p-6 border-b-2 border-cyan-400/20 flex justify-between items-center flex-wrap gap-4">
                     <h2 className="text-3xl font-semibold text-slate-100 tracking-wider">دفتر حساب</h2>
+                    
+                    {/* Convert Button */}
+                    {customerObject && hasPermission('rentedAccounts', 'create') && (
+                        <button 
+                            onClick={() => setConvertModalOpen(true)}
+                            className="px-5 py-2 bg-indigo-600/50 text-indigo-100 hover:bg-indigo-500/50 text-lg transition-colors border border-indigo-500/50 rounded flex items-center gap-2"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                            تبدیل به حساب اصلی
+                        </button>
+                    )}
                 </div>
                 <div className="flex flex-wrap gap-4 items-end p-4 border-b-2 border-cyan-400/20">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -178,6 +199,16 @@ const RentedAccountUserPage: React.FC = () => {
                     </table>
                 </div>
             </div>
+            
+            {isConvertModalOpen && customerObject && currentUser && (
+                <ConvertRentedToMainModal 
+                    isOpen={isConvertModalOpen} 
+                    onClose={() => setConvertModalOpen(false)} 
+                    onSuccess={() => setConvertModalOpen(false)}
+                    customer={customerObject}
+                    currentUser={currentUser}
+                />
+            )}
         </div>
     );
 };

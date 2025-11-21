@@ -1,4 +1,3 @@
-
 import React, { useState, FormEvent, useEffect } from 'react';
 import { useApi } from '../hooks/useApi';
 import { CreateCustomerPayload, Currency, User, CreateCashboxRequestPayload, BankAccount } from '../types';
@@ -261,16 +260,16 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({ isOpen, onClo
 
                                         {/* Bank Account Selector (Only for IRT_BANK) */}
                                         {row.currency === Currency.IRT_BANK && (
-                                            <div className="w-48 flex-shrink-0">
+                                            <div className="w-64 flex-shrink-0">
                                                 <select 
                                                     value={row.bankAccountId} 
                                                     onChange={(e) => updateBalanceRow(row.id, 'bankAccountId', e.target.value)}
-                                                    className="w-full text-lg p-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-white focus:border-cyan-400"
+                                                    className="w-full text-base p-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-white focus:border-cyan-400"
                                                     required
                                                 >
                                                     {bankAccounts.length === 0 && <option value="" disabled>حسابی یافت نشد</option>}
                                                     {bankAccounts.map(acc => (
-                                                        <option key={acc.id} value={acc.id}>{acc.bank_name}</option>
+                                                        <option key={acc.id} value={acc.id}>{acc.bank_name} - {acc.account_holder}</option>
                                                     ))}
                                                 </select>
                                             </div>
