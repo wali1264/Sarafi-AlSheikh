@@ -1,3 +1,4 @@
+
 import { supabase } from './supabaseClient';
 import { 
     User, Role, Permissions, DomesticTransfer, CreateDomesticTransferPayload, 
@@ -25,6 +26,7 @@ import {
     InternalExchange,
     RentedAccount,
     RentedAccountTransaction,
+    ExchangeRate,
 } from '../types';
 
 // --- Sarrafi API Service with Supabase ---
@@ -54,6 +56,27 @@ class SarrafiApiService {
         return data as AuthenticatedUser;
     }
 
+    // --- Exchange Rates ---
+    async getExchangeRates(): Promise<ExchangeRate[]> {
+        const { data, error } = await supabase.from('exchange_rates').select('*');
+        if (error) {
+            console.error('Error fetching exchange rates:', error);
+            return [];
+        }
+        return data || [];
+    }
+
+    async updateExchangeRate(currency: string, rate: number, user: User): Promise<ExchangeRate | { error: string }> {
+        const { data, error } = await supabase
+            .from('exchange_rates')
+            .upsert({ currency, rate_to_usd: rate, updated_at: new Date().toISOString(), updated_by: user.name })
+            .select()
+            .single();
+        
+        if (error) return { error: error.message };
+        return data;
+    }
+
     // --- Rented Accounts ---
     async getRentedAccountsData(): Promise<{ accounts: RentedAccount[], transactions: RentedAccountTransaction[] }> {
         const { data, error } = await supabase.rpc('get_rented_data');
@@ -77,8 +100,9 @@ class SarrafiApiService {
 
         const rpcPayload = {
             p_rented_account_id: details.rented_account_id,
-            p_user_id: details.user_id,
+            p_user_id: details.user_id || null,
             p_user_type: details.user_type,
+            p_guest_name: details.guest_name || null,
             p_type: details.type,
             p_amount: details.amount,
             p_commission_percentage: details.commission_percentage,

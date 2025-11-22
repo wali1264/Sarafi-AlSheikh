@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useContext, ReactNode, useCallback, useMemo, useEffect } from 'react';
 import { RentedAccount, RentedAccountTransaction, RentedAccountUser, Currency, Customer, PartnerAccount, User } from '../types';
 import { useAuth } from './AuthContext';
@@ -13,6 +14,7 @@ interface RentedAccountContextType {
     addAccount: (details: Omit<RentedAccount, 'id' | 'balance' | 'created_at' | 'currency'>) => Promise<void>;
     addTransaction: (details: Omit<RentedAccountTransaction, 'id' | 'created_by'>) => Promise<boolean>;
     toggleAccountStatus: (accountId: string) => Promise<void>;
+    hideGuest: (userIdentifier: string) => void; // New capability
     customers: Customer[];
     partners: PartnerAccount[];
     isLoading: boolean;
@@ -30,6 +32,9 @@ export const RentedAccountProvider: React.FC<{ children: ReactNode }> = ({ child
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [partners, setPartners] = useState<PartnerAccount[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+
+    // Runtime state for hidden guests (no database, no localStorage)
+    const [hiddenGuestIds, setHiddenGuestIds] = useState<string[]>([]);
 
     const fetchData = useCallback(async () => {
         // To prevent flicker on forced re-fetch, we don't set loading to true here
@@ -111,8 +116,14 @@ export const RentedAccountProvider: React.FC<{ children: ReactNode }> = ({ child
         }
     }, [user, api, addToast, fetchData]);
 
-    const processedData = useMemo(() => {
-        const allUsersMap = new Map<string, { name: string; type: 'Customer' | 'Partner' }>();
+    const hideGuest = useCallback((userIdentifier: string) => {
+        setHiddenGuestIds(prev => [...prev, userIdentifier]);
+        addToast('دفتر حساب مشتری گذری موقتاً مخفی شد.', 'success');
+    }, [addToast]);
+
+    // 1. Calculate raw data (balances) for everyone, including potentially hidden guests.
+    const calculatedData = useMemo(() => {
+        const allUsersMap = new Map<string, { name: string; type: 'Customer' | 'Partner' | 'Guest' }>();
         customers.forEach(c => allUsersMap.set(`customer-${c.id}`, { name: c.name, type: 'Customer' }));
         partners.forEach(p => allUsersMap.set(`partner-${p.id}`, { name: p.name, type: 'Partner' }));
 
@@ -122,8 +133,25 @@ export const RentedAccountProvider: React.FC<{ children: ReactNode }> = ({ child
         const sortedTransactions = [...transactions].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
         sortedTransactions.forEach(tx => {
-            const userIdentifier = `${tx.user_type.toLowerCase()}-${tx.user_id}`;
-            const currentUserData = userAggregates.get(userIdentifier) || { balance: 0, lastActivity: new Date(0), entityId: tx.user_id };
+            let userIdentifier = '';
+            let entityId = '';
+            let name = '';
+            
+            if (tx.user_type === 'Guest') {
+                entityId = tx.guest_name || 'Unknown';
+                userIdentifier = `guest-${entityId}`;
+                name = tx.guest_name || 'مشتری گذری';
+            } else {
+                userIdentifier = `${tx.user_type.toLowerCase()}-${tx.user_id}`;
+                entityId = tx.user_id!;
+            }
+
+            // Add guest to map if not exists
+            if (tx.user_type === 'Guest' && !allUsersMap.has(userIdentifier)) {
+                allUsersMap.set(userIdentifier, { name, type: 'Guest' });
+            }
+
+            const currentUserData = userAggregates.get(userIdentifier) || { balance: 0, lastActivity: new Date(0), entityId };
             
             const amountChange = tx.type === 'deposit' ? tx.amount : -tx.total_transaction_amount;
             currentUserData.balance += amountChange;
@@ -138,7 +166,7 @@ export const RentedAccountProvider: React.FC<{ children: ReactNode }> = ({ child
             const userInfo = allUsersMap.get(id);
             return {
                 id,
-                name: userInfo?.name || 'کاربر حذف شده',
+                name: userInfo?.name || (id.startsWith('guest-') ? id.replace('guest-', '') : 'کاربر حذف شده'),
                 type: userInfo?.type || 'Customer',
                 balance: data.balance,
                 lastActivity: data.lastActivity,
@@ -154,18 +182,36 @@ export const RentedAccountProvider: React.FC<{ children: ReactNode }> = ({ child
         return { finalAccounts, finalUsers };
 
     }, [accounts, transactions, customers, partners]);
+
+    // 2. Smart Auto-Unhide Logic
+    // If a hidden guest now has a non-zero balance (due to a new transaction), remove them from hidden list.
+    useEffect(() => {
+        const guestsToRestore = calculatedData.finalUsers
+            .filter(u => hiddenGuestIds.includes(u.id) && u.balance !== 0)
+            .map(u => u.id);
+        
+        if (guestsToRestore.length > 0) {
+            setHiddenGuestIds(prev => prev.filter(id => !guestsToRestore.includes(id)));
+        }
+    }, [calculatedData.finalUsers, hiddenGuestIds]);
+
+    // 3. Filter the users list for display
+    const visibleUsers = useMemo(() => {
+        return calculatedData.finalUsers.filter(u => !hiddenGuestIds.includes(u.id));
+    }, [calculatedData.finalUsers, hiddenGuestIds]);
     
     const value = useMemo(() => ({
-        accounts: processedData.finalAccounts, 
+        accounts: calculatedData.finalAccounts, 
         transactions, 
-        users: processedData.finalUsers, 
+        users: visibleUsers, // Only return visible users
         addAccount, 
         addTransaction,
         toggleAccountStatus,
+        hideGuest,
         customers,
         partners,
         isLoading
-    }), [processedData, transactions, addAccount, addTransaction, toggleAccountStatus, customers, partners, isLoading]);
+    }), [calculatedData.finalAccounts, transactions, visibleUsers, addAccount, addTransaction, toggleAccountStatus, hideGuest, customers, partners, isLoading]);
 
     return (
         <RentedAccountContext.Provider value={value}>

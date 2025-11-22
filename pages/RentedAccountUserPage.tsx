@@ -12,7 +12,7 @@ const toISODateString = (date: Date) => {
 };
 
 const RentedAccountUserPage: React.FC = () => {
-    const { userIdentifier } = useParams<{ userIdentifier: string }>(); // e.g., "customer-cust_1"
+    const { userIdentifier } = useParams<{ userIdentifier: string }>(); // e.g., "customer-cust_1" or "guest-GuestName"
     const navigate = useNavigate();
     const { accounts, transactions, users, customers } = useRentedAccounts();
     const { user: currentUser, hasPermission } = useAuth();
@@ -74,15 +74,27 @@ const RentedAccountUserPage: React.FC = () => {
     const userTransactions = useMemo(() => {
         if (!user) return [];
         
-        // The user ID from the context is composite, e.g., 'customer-xxxxxxxx-xxxx-...'
-        const idParts = user.id.split('-');
-        const type = idParts[0];
-        // Re-join the rest in case the UUID contains hyphens
-        const id = idParts.slice(1).join('-');
+        let userType: 'Customer' | 'Partner' | 'Guest';
+        let userId: string | undefined = undefined;
+        let guestName: string | undefined = undefined;
+
+        if (user.type === 'Guest') {
+            userType = 'Guest';
+            guestName = user.entityId; // entityId holds the name for guests
+        } else {
+            const idParts = user.id.split('-');
+            const typeStr = idParts[0];
+            userType = typeStr === 'customer' ? 'Customer' : 'Partner';
+            userId = idParts.slice(1).join('-');
+        }
         
-        const userType = type === 'customer' ? 'Customer' : 'Partner';
-        
-        const baseTransactions = transactions.filter(t => t.user_type === userType && t.user_id === id);
+        const baseTransactions = transactions.filter(t => {
+            if (userType === 'Guest') {
+                return t.user_type === 'Guest' && t.guest_name === guestName;
+            }
+            return t.user_type === userType && t.user_id === userId;
+        });
+
         if (!dateRange.start || !dateRange.end) return baseTransactions.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         
         const start = new Date(dateRange.start + 'T00:00:00');
@@ -124,7 +136,11 @@ const RentedAccountUserPage: React.FC = () => {
             <div className="flex justify-between items-start mb-10 flex-wrap gap-4">
                 <div>
                     <h1 className="text-5xl font-bold text-slate-100 tracking-wider">{user.name}</h1>
-                    <div className="text-xl text-slate-400">{user.type === 'Customer' ? 'مشتری' : 'همکار'}</div>
+                    <div className="text-xl text-slate-400">
+                        {user.type === 'Customer' && 'مشتری'}
+                        {user.type === 'Partner' && 'همکار'}
+                        {user.type === 'Guest' && 'مشتری گذری'}
+                    </div>
                 </div>
                  <div className="text-left space-y-2">
                     <h3 className="text-2xl text-slate-400">موجودی ایزوله (در این بخش)</h3>

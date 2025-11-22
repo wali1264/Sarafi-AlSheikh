@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useRentedAccounts } from '../contexts/RentedAccountContext';
@@ -12,7 +13,7 @@ const toISODateString = (date: Date) => {
 const RentedAccountDetailPage: React.FC = () => {
     const { accountId } = useParams<{ accountId: string }>();
     const navigate = useNavigate();
-    const { accounts, transactions, customers, partners } = useRentedAccounts();
+    const { accounts, transactions, users } = useRentedAccounts();
 
     const [isDepositModalOpen, setDepositModalOpen] = useState(false);
     const [isWithdrawalModalOpen, setWithdrawalModalOpen] = useState(false);
@@ -62,13 +63,6 @@ const RentedAccountDetailPage: React.FC = () => {
         setDateRange(prev => ({ ...prev, [name]: value }));
     };
     
-    const usersMap = useMemo(() => {
-        const map = new Map<string, {name: string}>();
-        customers.forEach(c => map.set(`customer-${c.id}`, { name: c.name }));
-        partners.forEach(p => map.set(`partner-${p.id}`, { name: p.name }));
-        return map;
-    }, [customers, partners]);
-
     const account = useMemo(() => accounts.find(a => a.id === accountId), [accounts, accountId]);
     
     const accountTransactions = useMemo(() => {
@@ -170,8 +164,13 @@ const RentedAccountDetailPage: React.FC = () => {
                         </thead>
                         <tbody>
                             {accountTransactions.map(tx => {
-                                const userIdentifier = `${tx.user_type.toLowerCase()}-${tx.user_id}`;
-                                const userName = usersMap.get(userIdentifier)?.name || 'ناشناس';
+                                let userName = 'ناشناس';
+                                if (tx.user_type === 'Guest') {
+                                    userName = tx.guest_name + ' (گذری)' || 'مشتری گذری';
+                                } else {
+                                    const userIdentifier = `${tx.user_type.toLowerCase()}-${tx.user_id}`;
+                                    userName = users.find(u => u.id === userIdentifier)?.name || 'ناشناس';
+                                }
                                 const accountName = `${account.bank_name} (${account.partner_name})`;
 
                                 const giver = tx.type === 'deposit' ? userName : accountName;

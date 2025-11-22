@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { useRentedAccounts } from '../contexts/RentedAccountContext';
 import RentedReportPrintModal from './RentedReportPrintModal';
@@ -56,9 +57,17 @@ const RentedReportsTab: React.FC = () => {
             case 'customerStatement': {
                 const user = usersMap.get(entityId);
                 if (!user) break;
-                const [userType, userId] = user.id.split('-');
                 
-                const userTxs = filteredTx.filter(t => t.user_type.toLowerCase() === userType && t.user_id === userId);
+                let userTxs;
+                if (user.type === 'Guest') {
+                     // Guest ID in context is guest-GuestName
+                     // Transaction guest_name matches entityId (which is GuestName)
+                     userTxs = filteredTx.filter(t => t.user_type === 'Guest' && t.guest_name === user.entityId);
+                } else {
+                    const [userType, userId] = user.id.split('-');
+                    userTxs = filteredTx.filter(t => t.user_type.toLowerCase() === userType && t.user_id === userId);
+                }
+                
                 const totalReceipts = userTxs.filter(t => t.type === 'deposit').reduce((sum, t) => sum + t.amount, 0);
                 const totalBards = userTxs.filter(t => t.type === 'withdrawal').reduce((sum, t) => sum + t.total_transaction_amount, 0);
 
@@ -95,14 +104,22 @@ const RentedReportsTab: React.FC = () => {
                         { label: 'مجموع بردها', value: new Intl.NumberFormat('en-US').format(totalBards), currency: 'IRT' },
                     ],
                     headers: ['تاریخ', 'طرف حساب', 'نوع', 'مبلغ', 'کمیسیون', 'مبلغ کل'],
-                    rows: accountTxs.map(t => [
-                        new Date(t.timestamp).toLocaleString('fa-IR-u-nu-latn'),
-                        usersMap.get(`${t.user_type.toLowerCase()}-${t.user_id}`)?.name || '-',
-                        t.type === 'deposit' ? 'رسید' : 'برد',
-                        t.amount,
-                        t.commission_amount,
-                        t.total_transaction_amount
-                    ])
+                    rows: accountTxs.map(t => {
+                        let userName = '-';
+                        if (t.user_type === 'Guest') {
+                            userName = t.guest_name + ' (گذری)';
+                        } else {
+                            userName = usersMap.get(`${t.user_type.toLowerCase()}-${t.user_id}`)?.name || '-';
+                        }
+                        return [
+                            new Date(t.timestamp).toLocaleString('fa-IR-u-nu-latn'),
+                            userName,
+                            t.type === 'deposit' ? 'رسید' : 'برد',
+                            t.amount,
+                            t.commission_amount,
+                            t.total_transaction_amount
+                        ]
+                    })
                 };
                 break;
             }
@@ -145,7 +162,7 @@ const RentedReportsTab: React.FC = () => {
                         <select value={entityId} onChange={e => setEntityId(e.target.value)} className="w-full text-lg p-2 bg-slate-900/50 border border-slate-600 rounded">
                             <option value="" disabled>-- یک مورد را انتخاب کنید --</option>
                             {reportType === 'customerStatement' 
-                                ? users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.type === 'Customer' ? 'مشتری' : 'همکار'})</option>)
+                                ? users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.type === 'Customer' ? 'مشتری' : u.type === 'Partner' ? 'همکار' : 'گذری'})</option>)
                                 : accounts.map(a => <option key={a.id} value={a.id}>{a.bank_name} ({a.partner_name})</option>)
                             }
                         </select>

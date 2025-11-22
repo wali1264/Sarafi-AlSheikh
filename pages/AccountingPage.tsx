@@ -1,6 +1,5 @@
 
-
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
 import { Currency } from '../types';
@@ -8,6 +7,7 @@ import { CURRENCIES } from '../constants';
 import { persianToEnglishNumber } from '../utils/translations';
 import AccountingPrintView from '../components/AccountingPrintView';
 import { useToast } from '../contexts/ToastContext';
+import { useFinancialPulse } from '../contexts/FinancialPulseContext'; // Import Context
 
 type AnalysisResult = {
     grossAssets: number;
@@ -50,30 +50,31 @@ const ResultCard: React.FC<{ title: string, value: number, description: string }
 const AccountingPage: React.FC = () => {
     const api = useApi();
     const { addToast } = useToast();
-    const [rates, setRates] = useState<{ [key: string]: string }>({ 'USD': '1' });
+    const { rates: liveRates, updateRate } = useFinancialPulse(); // Use context rates
+    
+    const [localRates, setLocalRates] = useState<{ [key: string]: string }>({});
     const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isFetchingRates, setIsFetchingRates] = useState(false);
     const [highlightedCurrencies, setHighlightedCurrencies] = useState<string[]>([]);
 
+    // Sync context rates to local state on mount/update
     useEffect(() => {
-        try {
-            const savedRates = localStorage.getItem('sarrafi_exchange_rates');
-            if (savedRates) {
-                setRates(JSON.parse(savedRates));
-            }
-            const savedAnalysis = localStorage.getItem('sarrafi_net_worth_analysis');
-             if (savedAnalysis) {
-                setAnalysis(JSON.parse(savedAnalysis));
-            }
-        } catch (error) {
-            console.error("Failed to load data from localStorage", error);
-            addToast("خطا در بارگذاری اطلاعات ذخیره شده.", "error");
-        }
-    }, [addToast]);
-    
+        const stringRates: {[key:string]: string} = {};
+        Object.keys(liveRates).forEach(k => stringRates[k] = String(liveRates[k]));
+        setLocalRates(stringRates);
+    }, [liveRates]);
+
     const handleRateChange = (currency: Currency, value: string) => {
-        setRates(prev => ({ ...prev, [currency]: persianToEnglishNumber(value) }));
+        const sanitized = persianToEnglishNumber(value);
+        setLocalRates(prev => ({ ...prev, [currency]: sanitized }));
+    };
+
+    const handleRateBlur = (currency: Currency) => {
+        const val = localRates[currency];
+        if (val) {
+            updateRate(currency, val);
+        }
     };
 
     const fetchLiveRates = async () => {
@@ -82,19 +83,18 @@ const AccountingPage: React.FC = () => {
             const response = await fetch('https://open.er-api.com/v6/latest/USD');
             if (!response.ok) throw new Error('خطا در دریافت نرخ‌های جهانی');
             const data = await response.json();
-            const newRates: { [key: string]: string } = {};
             const updatedCurrencies: string[] = [];
 
             ['EUR', 'PKR', 'AFN'].forEach(currency => {
                 if (data.rates[currency]) {
-                    newRates[currency] = String(data.rates[currency]);
+                    const rateStr = String(data.rates[currency]);
+                    updateRate(currency, rateStr);
                     updatedCurrencies.push(currency);
                 }
             });
 
-            setRates(prev => ({ ...prev, ...newRates }));
             setHighlightedCurrencies(updatedCurrencies);
-            addToast("نرخ‌های جهانی با موفقیت به‌روز شد.", 'success');
+            addToast("نرخ‌های جهانی با موفقیت به‌روز و ذخیره شد.", 'success');
 
         } catch (error: any) {
             console.error("Failed to fetch exchange rates:", error);
@@ -109,20 +109,13 @@ const AccountingPage: React.FC = () => {
         setIsLoading(true);
         setAnalysis(null);
 
-        try {
-            localStorage.setItem('sarrafi_exchange_rates', JSON.stringify(rates));
-        } catch (error) {
-            console.error("Failed to save rates to localStorage", error);
-            addToast("خطا در ذخیره سازی نرخ‌ها.", 'error');
-        }
+        const numericRates = liveRates; // Use rates from context directly
 
-        const numericRates: {[key: string]: number} = {};
-        for(const key in rates) {
-            numericRates[key] = parseFloat(rates[key]) || 0;
-        }
-
-        const [cashboxBalances, customers, partners, commissionTransfers] = await Promise.all([
+        // Fetch ALL necessary financial data including Bank Accounts and Rented Accounts
+        const [cashboxBalances, bankAccounts, rentedData, customers, partners, commissionTransfers] = await Promise.all([
             api.getCashboxBalances(),
+            api.getBankAccounts(),
+            api.getRentedAccountsData(),
             api.getCustomers(),
             api.getPartnerAccounts(),
             api.getCommissionTransfers(),
@@ -138,8 +131,25 @@ const AccountingPage: React.FC = () => {
             breakdown[category][currency] = (breakdown[category][currency] || 0) + amount;
         };
 
+        // 1. Cashbox Balances
         cashboxBalances.forEach(bal => addToBreakdown('liquidAssets', bal.currency, bal.balance));
 
+        // 2. Bank Accounts (NEW)
+        bankAccounts.forEach(acc => {
+            if (acc.status === 'Active' && acc.balance > 0) {
+                addToBreakdown('liquidAssets', acc.currency, acc.balance);
+            }
+        });
+
+        // 3. Rented Accounts (NEW)
+        rentedData.accounts.forEach(acc => {
+            if (acc.status === 'Active' && acc.balance > 0) {
+                // Rented accounts are typically IRT_BANK
+                addToBreakdown('liquidAssets', Currency.IRT_BANK, acc.balance);
+            }
+        });
+
+        // 4. Customers
         customers.forEach(c => {
             for (const key in c.balances) {
                 const currency = key as Currency;
@@ -149,6 +159,7 @@ const AccountingPage: React.FC = () => {
             }
         });
 
+        // 5. Partners
         partners.forEach(p => {
             for (const key in p.balances) {
                 const currency = key as Currency;
@@ -158,6 +169,7 @@ const AccountingPage: React.FC = () => {
             }
         });
         
+        // 6. Commission Transfers
         const pendingCommission = commissionTransfers.filter(t => ['PendingExecution', 'PendingWithdrawalApproval'].includes(t.status));
         pendingCommission.forEach(t => {
             const commissionAmount = t.amount * (t.commission_percentage / 100);
@@ -193,22 +205,20 @@ const AccountingPage: React.FC = () => {
         const finalAnalysis = { grossAssets, netWorth, liquidNetWorth, breakdown: { ...breakdown, usdTotals: totals } };
         setAnalysis(finalAnalysis);
 
-        try {
-             localStorage.setItem('sarrafi_net_worth_analysis', JSON.stringify(finalAnalysis));
-        } catch (error) {
-            console.error("Failed to save analysis to localStorage", error);
-        }
-
         setIsLoading(false);
 
-    }, [api, rates, addToast]);
+    }, [api, liveRates]);
 
     const handlePrint = () => {
         if (!analysis) return;
         const container = document.getElementById('printable-area-container');
         if (container) {
+            // Convert numeric rates to string for print view
+            const stringRates: {[key:string]: string} = {};
+            Object.keys(liveRates).forEach(k => stringRates[k] = String(liveRates[k]));
+
             ReactDOM.render(
-                <AccountingPrintView analysis={analysis} rates={rates} />,
+                <AccountingPrintView analysis={analysis} rates={stringRates} />,
                 container,
                 () => {
                     setTimeout(() => {
@@ -228,11 +238,11 @@ const AccountingPage: React.FC = () => {
                 title="۱. مدیریت نرخ‌های تبدیل ارز (نسبت به USD)"
                 actions={
                     <button onClick={fetchLiveRates} disabled={isFetchingRates} className="px-4 py-2 text-lg font-bold text-cyan-300 bg-slate-700/50 rounded-md hover:bg-slate-700 disabled:opacity-50 disabled:cursor-wait w-64 text-center">
-                        {isFetchingRates ? 'در حال دریافت...' : 'به‌روزرسانی با نرخ جهانی'}
+                        {isFetchingRates ? 'در حال دریافت...' : 'به‌روزرسانی و ذخیره نرخ جهانی'}
                     </button>
                 }
             >
-                <p className="text-slate-400 mb-6">برای محاسبه‌ی ارزش کل دارایی‌ها، نرخ تبدیل هر ارز را نسبت به دالر آمریکا وارد کنید. (مثال: اگر هر دالر ۷۰ افغانی باشد، عدد ۷۰ را وارد کنید)</p>
+                <p className="text-slate-400 mb-6">برای تغییر نرخ، عدد را وارد کنید و سپس خارج از کادر کلیک کنید (یا کلید تب را بزنید) تا به صورت خودکار ذخیره شود.</p>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
                     {CURRENCIES.filter(c => c !== 'USD').map(currency => (
                         <div key={currency}>
@@ -240,8 +250,9 @@ const AccountingPage: React.FC = () => {
                             <input
                                 type="text"
                                 inputMode="decimal"
-                                value={rates[currency] || ''}
+                                value={localRates[currency] || ''}
                                 onChange={e => handleRateChange(currency as Currency, e.target.value)}
+                                onBlur={() => handleRateBlur(currency as Currency)}
                                 placeholder={`نرخ ${currency}`}
                                 className={`w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 transition-all duration-300 ${highlightedCurrencies.includes(currency) ? 'glowing-border' : ''}`}
                             />
@@ -256,7 +267,7 @@ const AccountingPage: React.FC = () => {
                     disabled={isLoading}
                     className="px-12 py-4 text-2xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105 disabled:opacity-50"
                     style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)', boxShadow: '0 0 25px rgba(0, 255, 255, 0.5)' }}>
-                    {isLoading ? 'در حال محاسبه...' : '۲. محاسبه و ذخیره'}
+                    {isLoading ? 'در حال محاسبه...' : '۲. محاسبه دقیق و نمایش جزئیات'}
                 </button>
             </div>
 
@@ -267,7 +278,7 @@ const AccountingPage: React.FC = () => {
                         <button onClick={handlePrint} className="px-6 py-3 text-xl font-bold text-cyan-300 bg-slate-700/50 rounded-md hover:bg-slate-700">چاپ گزارش</button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        <ResultCard title="مجموع کل دارایی‌ها (ناخالص)" value={analysis.grossAssets} description="شامل تمام موجودی نقد (صندوق و بانک) و کل طلبی که از دیگران دارید." />
+                        <ResultCard title="مجموع کل دارایی‌ها (ناخالص)" value={analysis.grossAssets} description="شامل تمام موجودی نقد (صندوق، بانک و حسابات کرایی) و کل طلبی که از دیگران دارید." />
                         <ResultCard title="دارایی خالص واقعی" value={analysis.netWorth} description="ثروت واقعی شما پس از کسر تمام بدهی‌ها و تعهدات از مجموع کل دارایی‌ها." />
                         <ResultCard title="دارایی خالص نقد" value={analysis.liquidNetWorth} description="سرمایه نقدی خالص شما، با فرض اینکه طلب‌های خود را هنوز دریافت نکرده‌اید." />
                     </div>

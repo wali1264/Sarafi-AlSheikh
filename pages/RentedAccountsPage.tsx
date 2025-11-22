@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useRentedAccounts } from '../contexts/RentedAccountContext';
@@ -34,7 +35,7 @@ const toISODateString = (date: Date) => {
 };
 
 const RentedAccountsPage: React.FC = () => {
-    const { accounts, transactions, users, toggleAccountStatus } = useRentedAccounts();
+    const { accounts, transactions, users, toggleAccountStatus, hideGuest } = useRentedAccounts();
     const { hasPermission } = useAuth();
     const [activeTab, setActiveTab] = useState<'journal' | 'accounts' | 'users' | 'reports'>('journal');
 
@@ -192,8 +193,14 @@ const RentedAccountsPage: React.FC = () => {
                             <tbody>
                                 {filteredTransactions.map(tx => {
                                      const account = accountsMap.get(tx.rented_account_id);
-                                     const userIdentifier = `${tx.user_type.toLowerCase()}-${tx.user_id}`;
-                                     const userName = users.find(u => u.id === userIdentifier)?.name || 'ناشناس';
+                                     
+                                     let userName = 'ناشناس';
+                                     if (tx.user_type === 'Guest') {
+                                         userName = tx.guest_name + ' (گذری)' || 'مشتری گذری';
+                                     } else {
+                                         const userIdentifier = `${tx.user_type.toLowerCase()}-${tx.user_id}`;
+                                         userName = users.find(u => u.id === userIdentifier)?.name || 'ناشناس';
+                                     }
                                      
                                      const giver = tx.type === 'deposit' ? userName : `${account?.bank_name} (${account?.partner_name})`;
                                      const taker = tx.type === 'deposit' ? `${account?.bank_name} (${account?.partner_name})` : userName;
@@ -259,7 +266,7 @@ const RentedAccountsPage: React.FC = () => {
                                     <th className="px-4 py-3">آخرین فعالیت</th>
                                     <th className="px-4 py-3">نوع</th>
                                     <th className="px-4 py-3 text-left">موجودی ایزوله</th>
-                                    <th className="px-4 py-3"></th>
+                                    <th className="px-4 py-3">عملیات</th>
                                </tr>
                             </thead>
                             <tbody>
@@ -267,9 +274,32 @@ const RentedAccountsPage: React.FC = () => {
                                     <tr key={user.id} className="border-b border-cyan-400/10">
                                         <td className="px-4 py-3 font-semibold">{user.name}</td>
                                         <td className="px-4 py-3 whitespace-nowrap">{new Date(user.lastActivity).toLocaleDateString('fa-IR-u-nu-latn')}</td>
-                                        <td className="px-4 py-3">{user.type === 'Customer' ? 'مشتری' : 'همکار'}</td>
+                                        <td className="px-4 py-3">
+                                            {user.type === 'Customer' && 'مشتری'}
+                                            {user.type === 'Partner' && 'همکار'}
+                                            {user.type === 'Guest' && <span className="text-amber-400">گذری</span>}
+                                        </td>
                                         <td className="px-4 py-3 font-mono text-left font-bold">{new Intl.NumberFormat('en-US').format(user.balance)}</td>
-                                        <td className="px-4 py-3 text-left"><Link to={`/rented-accounts/user/${user.id}`} className="text-cyan-300 hover:underline">مشاهده دفتر حساب</Link></td>
+                                        <td className="px-4 py-3 text-left flex items-center justify-end gap-2">
+                                            <Link to={`/rented-accounts/user/${user.id}`} className="text-cyan-300 hover:underline">مشاهده دفتر حساب</Link>
+                                            {user.type === 'Guest' && user.balance === 0 && (
+                                                <button 
+                                                    onClick={() => {
+                                                        if(window.confirm('آیا مطمئن هستید که می‌خواهید این مشتری گذری را از لیست مخفی کنید؟ (در صورت ثبت تراکنش جدید، دوباره ظاهر خواهد شد)')) {
+                                                            hideGuest(user.id);
+                                                        }
+                                                    }}
+                                                    className="text-slate-400 hover:text-red-400 transition-colors ml-2"
+                                                    title="مخفی کردن (بایگانی موقت)"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+                                                        <path d="M3.53 2.47a.75.75 0 0 0-1.06 1.06l18 18a.75.75 0 1 0 1.06-1.06l-18-18ZM22.676 12.553a11.249 11.249 0 0 1-2.631 4.31l-3.099-3.099a5.25 5.25 0 0 0-6.71-6.71L7.759 4.577a11.217 11.217 0 0 1 4.242-.827c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113Z" />
+                                                        <path d="M15.75 12c0 .18-.013.357-.037.53l-4.244-4.243A3.75 3.75 0 0 1 15.75 12ZM12.53 15.713l-4.243-4.244a3.75 3.75 0 0 0 4.243 4.243Z" />
+                                                        <path d="M6.75 12c0-.619.107-1.215.304-1.764l-3.1-3.1a11.25 11.25 0 0 0-2.63 4.31c-.12.362-.12.752 0 1.114 1.489 4.467 5.704 7.69 10.675 7.69 1.5 0 2.933-.294 4.242-.827l-2.477-2.477A5.25 5.25 0 0 1 6.75 12Z" />
+                                                    </svg>
+                                                </button>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>

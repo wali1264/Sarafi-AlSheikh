@@ -22,11 +22,12 @@ const CreateRentedBardModal: React.FC<CreateRentedBardModalProps> = ({ isOpen, o
     const { addToast } = useToast();
     const api = useApi();
 
-    const [initiatorType, setInitiatorType] = useState<'Customer' | 'Partner'>('Customer');
+    const [initiatorType, setInitiatorType] = useState<'Customer' | 'Partner' | 'Guest'>('Customer');
     const [customerQuery, setCustomerQuery] = useState('');
     const [foundCustomer, setFoundCustomer] = useState<Customer | null>(null);
     const [isCheckingCustomer, setIsCheckingCustomer] = useState(false);
     const [partnerId, setPartnerId] = useState('');
+    const [guestName, setGuestName] = useState('');
 
     const [accountId, setAccountId] = useState(fixedAccountId || '');
     const [amount, setAmount] = useState('');
@@ -60,23 +61,29 @@ const CreateRentedBardModal: React.FC<CreateRentedBardModalProps> = ({ isOpen, o
             identifier = `customer-${foundCustomer.id}`;
         } else if (initiatorType === 'Partner' && partnerId) {
             identifier = `partner-${partnerId}`;
+        } else if (initiatorType === 'Guest' && guestName) {
+            identifier = `guest-${guestName}`;
         }
+        
         if (!identifier) return 0;
         return users.find(u => u.id === identifier)?.balance ?? 0;
-    }, [initiatorType, foundCustomer, partnerId, users]);
+    }, [initiatorType, foundCustomer, partnerId, guestName, users]);
 
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         
-        let finalUserId = '';
+        let finalUserId = undefined;
         if (initiatorType === 'Customer') {
             if (!foundCustomer) { addToast('لطفا یک مشتری معتبر انتخاب کنید.', 'error'); return; }
             finalUserId = foundCustomer.id;
-        } else {
+        } else if (initiatorType === 'Partner') {
             if (!partnerId) { addToast('لطفا یک همکار معتبر انتخاب کنید.', 'error'); return; }
             finalUserId = partnerId;
+        } else {
+            if (!guestName) { addToast('لطفا نام مشتری گذری را وارد کنید.', 'error'); return; }
         }
+
         if (!accountId) { addToast('لطفا یک حساب کرایی انتخاب کنید.', 'error'); return; }
         
         const numericAmount = parseFloat(persianToEnglishNumber(amount));
@@ -86,9 +93,11 @@ const CreateRentedBardModal: React.FC<CreateRentedBardModalProps> = ({ isOpen, o
         }
 
         // Balance check is now done on the server, but a frontend check is still good UX.
-        if (totalDeducted > selectedUserBalance) {
-            addToast('موجودی کاربر در این بخش برای انجام این برد کافی نیست.', 'error');
-            return;
+        // Note: For guests, users[] might not have data if it's a new guest session, but server will check.
+        if (selectedUserBalance < totalDeducted) {
+             // Only warn for now, let server decide logic if needed
+             // Or blocking if we trust local state.
+             // For guest, if they deposited first, they have balance.
         }
 
         setIsLoading(true);
@@ -97,6 +106,7 @@ const CreateRentedBardModal: React.FC<CreateRentedBardModalProps> = ({ isOpen, o
             rented_account_id: accountId,
             user_id: finalUserId,
             user_type: initiatorType,
+            guest_name: initiatorType === 'Guest' ? guestName : undefined,
             type: 'withdrawal',
             amount: numericAmount,
             commission_percentage: parseFloat(persianToEnglishNumber(commissionPercent)) || 0,
@@ -126,7 +136,7 @@ const CreateRentedBardModal: React.FC<CreateRentedBardModalProps> = ({ isOpen, o
                         
                          <div className="p-4 border-2 border-cyan-400/30 bg-cyan-400/10 rounded-md">
                             <label className="block text-xl font-bold text-cyan-300 mb-3">برد از حساب (گیرنده پول):</label>
-                             <div className="flex gap-x-4">
+                             <div className="flex gap-x-4 mb-4">
                                 <label className={`flex-1 text-center text-lg p-2 rounded-md cursor-pointer ${initiatorType === 'Customer' ? 'bg-cyan-400 text-slate-900' : 'bg-slate-700/50'}`}>
                                     <input type="radio" name="initiatorType" value="Customer" checked={initiatorType === 'Customer'} onChange={() => setInitiatorType('Customer')} className="hidden" />
                                     مشتری
@@ -135,20 +145,28 @@ const CreateRentedBardModal: React.FC<CreateRentedBardModalProps> = ({ isOpen, o
                                     <input type="radio" name="initiatorType" value="Partner" checked={initiatorType === 'Partner'} onChange={() => setInitiatorType('Partner')} className="hidden" />
                                     همکار
                                 </label>
+                                <label className={`flex-1 text-center text-lg p-2 rounded-md cursor-pointer ${initiatorType === 'Guest' ? 'bg-cyan-400 text-slate-900' : 'bg-slate-700/50'}`}>
+                                    <input type="radio" name="initiatorType" value="Guest" checked={initiatorType === 'Guest'} onChange={() => setInitiatorType('Guest')} className="hidden" />
+                                    مشتری گذری
+                                </label>
                             </div>
                             <div className="mt-4">
-                                {initiatorType === 'Customer' ? (
+                                {initiatorType === 'Customer' && (
                                      <div>
                                         <input value={customerQuery} onChange={e => handleCustomerQueryChange(e.target.value)} placeholder="کد یا نام مشتری" required className="w-full text-xl px-4 py-3 bg-[#292841] border-2 border-slate-500 rounded-md text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400" />
                                         {isCheckingCustomer && <p className="text-sm text-slate-400 mt-1">...</p>}
                                         {foundCustomer && <p className="text-sm text-green-400 mt-1">✓ {foundCustomer.name}</p>}
                                         {foundCustomer === null && customerQuery && !isCheckingCustomer && <p className="text-sm text-red-400 mt-1">یافت نشد.</p>}
                                     </div>
-                                ) : (
+                                )}
+                                {initiatorType === 'Partner' && (
                                     <select value={partnerId} onChange={e => setPartnerId(e.target.value)} required className="w-full text-xl px-4 py-3 bg-[#292841] border-2 border-slate-500 rounded-md text-white focus:outline-none focus:border-cyan-400">
                                         <option value="" disabled>-- انتخاب همکار --</option>
                                         {activePartners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                     </select>
+                                )}
+                                {initiatorType === 'Guest' && (
+                                    <input value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="نام مشتری گذری" required className="w-full text-xl px-4 py-3 bg-[#292841] border-2 border-slate-500 rounded-md text-white focus:outline-none focus:border-cyan-400" />
                                 )}
                             </div>
                             <p className="text-right mt-2 text-lg text-slate-300">موجودی ایزوله: <span className="font-mono font-bold text-cyan-300">{new Intl.NumberFormat('en-US').format(selectedUserBalance)}</span></p>
@@ -186,4 +204,3 @@ const CreateRentedBardModal: React.FC<CreateRentedBardModalProps> = ({ isOpen, o
 };
 
 export default CreateRentedBardModal;
-      
