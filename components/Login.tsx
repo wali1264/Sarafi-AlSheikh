@@ -83,8 +83,8 @@ const Login: React.FC = () => {
                     </button>
                 </form>
             </div>
-            <p className="fixed bottom-5 right-5 text-lg font-bold tracking-widest neon-text pointer-events-none" style={{ direction: 'ltr' }}>
-                Meraj S Production and Programming Company
+            <p className="fixed bottom-5 right-5 text-slate-500/70 text-lg pointer-events-none" style={{ direction: 'ltr' }}>
+                Meraj Production and Programming Company
             </p>
         </div>
     );

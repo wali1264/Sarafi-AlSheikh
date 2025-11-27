@@ -128,7 +128,7 @@ export interface CustomerTransaction {
     currency: Currency;
     description: string;
     linked_entity_id: string;
-    linked_entity_type: 'DomesticTransfer' | 'CashDeposit' | 'CashWithdrawal' | 'AccountTransfer' | 'ForeignTransaction' | 'InternalExchange' | 'CommissionTransfer';
+    linked_entity_type: 'DomesticTransfer' | 'CashDeposit' | 'CashWithdrawal' | 'AccountTransfer' | 'ForeignTransaction' | 'InternalExchange' | 'CommissionTransfer' | 'OpeningBalance';
 }
 
 export interface CreateCustomerPayload {

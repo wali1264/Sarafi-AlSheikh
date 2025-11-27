@@ -785,6 +785,44 @@ class SarrafiApiService {
         await this.logActivity(payload.user.name, `امانت ${payload.amanat_id} را بازگشت داد.`);
         return data;
     }
+
+    async createOpeningBalanceTransaction(payload: { customerId: string, amount: number, currency: Currency, type: 'credit' | 'debit', user: User }): Promise<{ success: boolean; error?: string }> {
+        // 1. Fetch current balances
+        const { data: customer, error: fetchError } = await supabase.from('customers').select('balances').eq('id', payload.customerId).single();
+        if (fetchError) return { success: false, error: fetchError.message };
+
+        // 2. Calculate new balance
+        // Note: Logic aligned with Cashbox Request RPC: 'deposit' -> adds to balance (liability/credit), 'withdrawal' -> subtracts (asset/debit)
+        // If type is 'deposit' (Credit/Rasid), we add amount. If 'withdrawal' (Debit/Bard), we subtract.
+        const currentBalances = customer.balances || {};
+        const currentAmount = currentBalances[payload.currency] || 0;
+        
+        // type 'credit' here maps to 'deposit' (receipt), 'debit' maps to 'withdrawal' (bard) in typical ledger logic
+        const change = payload.type === 'credit' ? payload.amount : -payload.amount;
+        const newAmount = currentAmount + change;
+        const newBalances = { ...currentBalances, [payload.currency]: newAmount };
+
+        // 3. Update Customer
+        const { error: updateError } = await supabase.from('customers').update({ balances: newBalances }).eq('id', payload.customerId);
+        if (updateError) return { success: false, error: updateError.message };
+
+        // 4. Insert Transaction
+        const { error: txError } = await supabase.from('customer_transactions').insert({
+            customer_id: payload.customerId,
+            type: payload.type, // 'credit' or 'debit' directly
+            amount: payload.amount,
+            currency: payload.currency,
+            description: 'ثبت به عنوان طلب سابقه (تراز اول دوره) - بدون درگیری صندوق',
+            linked_entity_type: 'OpeningBalance',
+            linked_entity_id: 'OB_' + Date.now(),
+            timestamp: new Date().toISOString()
+        });
+        
+        if (txError) return { success: false, error: txError.message };
+        
+        await this.logActivity(payload.user.name, `تراز اول دوره برای مشتری ${payload.customerId} ثبت شد: ${payload.amount} ${payload.currency} (${payload.type === 'credit' ? 'طلب مشتری' : 'بدهی مشتری'})`);
+        return { success: true };
+    }
 }
 
 export default SarrafiApiService;
