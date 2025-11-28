@@ -141,6 +141,10 @@ export interface UpdateCustomerPayload extends Partial<Omit<Customer, 'id' | 'ba
     id: string;
     user: User;
 }
+export interface DeleteCustomerPayload {
+    id: string;
+    user: User;
+}
 
 export interface PartnerAccount {
     id: string;

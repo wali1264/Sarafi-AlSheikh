@@ -1,3 +1,4 @@
+
 import React, { useState, FormEvent, useMemo, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
@@ -124,7 +125,7 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label className="block text-lg font-medium text-cyan-300 mb-2">از واحد پولی</label>
-                                <select name="fromCurrency" value={formData.fromCurrency} onChange={handleChange} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md">
+                                <select name="fromCurrency" value={formData.fromCurrency} onChange={handleChange} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right transition-colors duration-300">
                                     {availableFromCurrencies.length > 0 ? (
                                         availableFromCurrencies.map(c => <option key={c} value={c}>{c}</option>)
                                     ) : (
@@ -135,20 +136,20 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
                             </div>
                             <div>
                                 <label className="block text-lg font-medium text-cyan-300 mb-2">مبلغ تبدیل</label>
-                                <input name="fromAmount" value={formData.fromAmount} onChange={handleChange} placeholder="0.00" required type="text" inputMode="decimal" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md font-mono" />
+                                <input name="fromAmount" value={formData.fromAmount} onChange={handleChange} placeholder="0.00" required type="text" inputMode="decimal" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 placeholder-slate-400 focus:outline-none focus:border-cyan-400 text-right transition-colors duration-300 font-mono" />
                             </div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label className="block text-lg font-medium text-cyan-300 mb-2">به واحد پولی</label>
-                                <select name="toCurrency" value={formData.toCurrency} onChange={handleChange} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md">
+                                <select name="toCurrency" value={formData.toCurrency} onChange={handleChange} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400 text-right transition-colors duration-300">
                                     {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
                             </div>
                              <div>
                                 <label className="block text-lg font-medium text-cyan-300 mb-2">نرخ تبادله</label>
-                                <input name="rate" value={formData.rate} onChange={handleChange} placeholder="0.00" required type="text" inputMode="decimal" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md font-mono" />
+                                <input name="rate" value={formData.rate} onChange={handleChange} placeholder="0.00" required type="text" inputMode="decimal" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 placeholder-slate-400 focus:outline-none focus:border-cyan-400 text-right transition-colors duration-300 font-mono" />
                             </div>
                         </div>
 

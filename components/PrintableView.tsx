@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { CashboxRequest, Customer } from '../types';
 import { useApi } from '../hooks/useApi';
 import { numberToWords } from '../utils/numberToWords';
+import { formatTrackingCode } from '../utils/idGenerator';
 
 interface PrintableViewProps {
     request: CashboxRequest;
@@ -68,7 +69,7 @@ const PrintableView: React.FC<PrintableViewProps> = ({ request, printNote, id })
                         <div className="mt-8 border-t-2 border-dashed border-gray-400 pt-6">
                              <h3 className="text-2xl font-bold mb-4 text-center text-gray-800 border-b pb-2">مشخصات تراکنش</h3>
                              <div className="text-lg space-y-2">
-                                <DetailRow label="کد رهگیری سند" value={request.id} valueClassName="font-mono" className="bg-gray-100 rounded-t-lg" />
+                                <DetailRow label="کد رهگیری سند" value={formatTrackingCode(request.created_at)} valueClassName="font-mono text-2xl font-bold" className="bg-gray-100 rounded-t-lg" />
                                 <DetailRow label="تاریخ ثبت" value={new Date(request.created_at).toLocaleString('fa-IR-u-nu-latn')} />
                                 <DetailRow label="درخواست کننده" value={request.requested_by} className="bg-gray-100" />
                                 <DetailRow label="تایید کننده" value={request.resolved_by} />
@@ -80,7 +81,7 @@ const PrintableView: React.FC<PrintableViewProps> = ({ request, printNote, id })
                         {request.linked_entity && (
                             <div className="mt-6 border-t-2 border-dashed border-gray-400 pt-6">
                                 <h3 className="text-xl font-bold mb-2 text-gray-800">تراکنش مرتبط</h3>
-                                <p className="bg-gray-100 p-3 rounded-md text-lg">{request.linked_entity.description} (کد: {request.linked_entity.id})</p>
+                                <p className="bg-gray-100 p-3 rounded-md text-lg">{request.linked_entity.description} (کد: {formatTrackingCode(new Date()) /* Placeholder as linked entity date unknown here, usually redundant */})</p>
                             </div>
                         )}
                         

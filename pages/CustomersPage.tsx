@@ -2,15 +2,23 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
-import { Customer, User } from '../types';
+import { Customer, User, Currency } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import CreateCustomerModal from '../components/CreateCustomerModal';
 import EditCustomerModal from '../components/EditCustomerModal';
+import { useToast } from '../contexts/ToastContext';
+
+const TrashIcon: React.FC = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+);
 
 const CustomersPage: React.FC = () => {
     const api = useApi();
     const navigate = useNavigate();
     const { user, hasPermission } = useAuth();
+    const { addToast } = useToast();
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -40,6 +48,20 @@ const CustomersPage: React.FC = () => {
     const handleEditClick = (customer: Customer) => {
         setSelectedCustomer(customer);
         setEditModalOpen(true);
+    };
+
+    const handleDeleteClick = async (customer: Customer) => {
+        if (!user || user.userType !== 'internal') return;
+        
+        if (window.confirm(`هشدار مهم:\nآیا از حذف کامل مشتری "${customer.name}" اطمینان دارید؟\nاین عمل تمام سوابق مشتری را پاک می‌کند و قابل بازگشت نیست.`)) {
+            const result = await api.deleteCustomer({ id: customer.id, user });
+            if (result.error) {
+                addToast(result.error, 'error');
+            } else {
+                addToast("مشتری با موفقیت حذف شد.", 'success');
+                fetchData();
+            }
+        }
     };
 
     const filteredCustomers = useMemo(() => {
@@ -82,21 +104,36 @@ const CustomersPage: React.FC = () => {
                            </tr>
                         </thead>
                         <tbody>
-                            {filteredCustomers.map(c => (
-                                <tr key={c.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5 transition-colors">
-                                    <td className="px-6 py-4 font-mono text-cyan-300 text-2xl">{c.code}</td>
-                                    <td className="px-6 py-4 text-2xl font-semibold text-slate-100">{c.name}</td>
-                                    <td className="px-6 py-4 font-mono text-left">{c.whatsapp_number}</td>
-                                    <td className="px-6 py-4 text-left space-x-4 space-x-reverse">
-                                        {hasPermission('customers', 'edit') && (
-                                            <button onClick={() => handleEditClick(c)} className="text-amber-400 hover:text-amber-300">ویرایش</button>
-                                        )}
-                                        <button onClick={() => navigate(`/customers/${c.id}`)} className="px-5 py-2 bg-slate-600/50 text-slate-100 hover:bg-cyan-400/20 hover:text-cyan-300 text-lg transition-colors border border-slate-500/50 hover:border-cyan-400/60 rounded">
-                                            مشاهده دفتر حساب
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
+                            {filteredCustomers.map(c => {
+                                // Check if customer has zero balance in all currencies
+                                const isZeroBalance = Object.values(c.balances).every(val => val === 0);
+                                
+                                return (
+                                    <tr key={c.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5 transition-colors">
+                                        <td className="px-6 py-4 font-mono text-cyan-300 text-2xl">{c.code}</td>
+                                        <td className="px-6 py-4 text-2xl font-semibold text-slate-100">{c.name}</td>
+                                        <td className="px-6 py-4 font-mono text-left">{c.whatsapp_number}</td>
+                                        <td className="px-6 py-4 text-left whitespace-nowrap space-x-4 space-x-reverse flex justify-end">
+                                            {hasPermission('customers', 'edit') && (
+                                                <button onClick={() => handleEditClick(c)} className="text-amber-400 hover:text-amber-300">ویرایش</button>
+                                            )}
+                                            <button onClick={() => navigate(`/customers/${c.id}`)} className="px-5 py-2 bg-slate-600/50 text-slate-100 hover:bg-cyan-400/20 hover:text-cyan-300 text-lg transition-colors border border-slate-500/50 hover:border-cyan-400/60 rounded">
+                                                مشاهده دفتر حساب
+                                            </button>
+                                            {hasPermission('customers', 'delete') && (
+                                                <button 
+                                                    onClick={() => handleDeleteClick(c)} 
+                                                    disabled={!isZeroBalance}
+                                                    title={!isZeroBalance ? "امکان حذف مشتری با حساب دارای مانده وجود ندارد." : "حذف مشتری"}
+                                                    className={`p-2 rounded transition-colors ${!isZeroBalance ? 'text-slate-600 cursor-not-allowed' : 'text-red-500 hover:text-red-400 hover:bg-red-500/10'}`}
+                                                >
+                                                    <TrashIcon />
+                                                </button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

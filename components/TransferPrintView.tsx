@@ -1,6 +1,8 @@
+
 import React from 'react';
 import { DomesticTransfer } from '../types';
 import { statusTranslations } from '../utils/translations';
+import { formatTrackingCode } from '../utils/idGenerator';
 
 interface TransferPrintViewProps {
     transfer: DomesticTransfer | null;
@@ -25,7 +27,7 @@ const TransferPrintView: React.FC<TransferPrintViewProps> = ({ transfer, partner
                     <p className="text-lg">رسید حواله داخلی</p>
                 </div>
                 <div className="text-left">
-                    <p><strong>کد حواله:</strong> <span className="font-mono">{transfer.id}</span></p>
+                    <p><strong>کد حواله:</strong> <span className="font-mono text-2xl font-bold">{formatTrackingCode(transfer.created_at)}</span></p>
                     {isIncoming && <p><strong>کد همکار:</strong> <span className="font-mono">{transfer.partnerReference}</span></p>}
                     <p><strong>تاریخ:</strong> {new Date(transfer.createdAt).toLocaleString('fa-IR')}</p>
                 </div>

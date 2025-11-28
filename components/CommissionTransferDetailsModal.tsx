@@ -1,7 +1,9 @@
+
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { CommissionTransfer, BankAccount } from '../types';
 import { commissionTransferStatusTranslations } from '../utils/translations';
+import { formatTrackingCode } from '../utils/idGenerator';
 
 interface CommissionTransferDetailsModalProps {
     isOpen: boolean;
@@ -33,7 +35,7 @@ const CommissionTransferDetailsModal: React.FC<CommissionTransferDetailsModalPro
                  style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 30px), calc(100% - 30px) 100%, 0 100%)' }}>
                 <div className="px-8 py-5 border-b-2 border-cyan-400/20 flex-shrink-0">
                     <h2 className="text-4xl font-bold text-cyan-300 tracking-wider">جزئیات کامل حواله کمیشن‌کاری</h2>
-                    <p className="text-lg text-slate-400 mt-1 font-mono">{transfer.id}</p>
+                    <p className="text-2xl text-slate-400 mt-1 font-mono">{formatTrackingCode(transfer.created_at)}</p>
                 </div>
                 <div className="p-8 flex-grow overflow-y-auto space-y-8 text-xl">
                     

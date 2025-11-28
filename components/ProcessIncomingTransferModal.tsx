@@ -1,8 +1,10 @@
-import React, { useState, FormEvent } from 'react';
+
+import React, { useState, FormEvent, useEffect } from 'react';
 import { useApi } from '../hooks/useApi';
 import { DomesticTransfer, User, TransferStatus, PayoutIncomingTransferPayload } from '../types';
 import { statusTranslations } from '../utils/translations';
 import { useToast } from '../contexts/ToastContext';
+import { formatTrackingCode } from '../utils/idGenerator';
 
 interface ProcessIncomingTransferModalProps {
     isOpen: boolean;
@@ -15,10 +17,31 @@ const ProcessIncomingTransferModal: React.FC<ProcessIncomingTransferModalProps> 
     const api = useApi();
     const { addToast } = useToast();
     const [query, setQuery] = useState('');
+    const [allUnexecutedTransfers, setAllUnexecutedTransfers] = useState<DomesticTransfer[]>([]);
     const [searchResults, setSearchResults] = useState<DomesticTransfer[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
+
+    // Fetch all unexecuted transfers on mount to allow client-side filtering by short ID
+    useEffect(() => {
+        if (isOpen) {
+            const fetchTransfers = async () => {
+                setIsLoading(true);
+                const allTransfers = await api.getDomesticTransfers();
+                // Filter for unexecuted incoming transfers (those with partner_reference)
+                // Actually, an incoming transfer is defined by having a partner_reference or being received from partner.
+                // In create logic: incoming = has partner_reference.
+                const unexecuted = allTransfers.filter(t => 
+                    t.status === TransferStatus.Unexecuted && 
+                    t.partner_reference // Only incoming transfers have this usually, or logic implies it
+                );
+                setAllUnexecutedTransfers(unexecuted);
+                setIsLoading(false);
+            };
+            fetchTransfers();
+        }
+    }, [isOpen, api]);
 
 
     if (!isOpen) return null;
@@ -36,20 +59,24 @@ const ProcessIncomingTransferModal: React.FC<ProcessIncomingTransferModalProps> 
         onClose();
     };
     
-    const handleSearch = async (e: FormEvent) => {
+    const handleSearch = (e: FormEvent) => {
         e.preventDefault();
-        setIsLoading(true);
         setError(null);
-        setSearchResults([]);
         setSearched(true);
         
-        const result = await api.findTransfersByQuery({ query });
-        setIsLoading(false);
-        if ('error' in result) {
-            setError(result.error);
-        } else {
-            setSearchResults(result);
-        }
+        const q = query.toLowerCase();
+        
+        const results = allUnexecutedTransfers.filter(t => {
+            const shortCode = formatTrackingCode(t.created_at);
+            const longId = t.id.toLowerCase();
+            const partnerRef = t.partner_reference?.toLowerCase() || '';
+            const receiver = t.receiver.name.toLowerCase();
+            const sender = t.sender.name.toLowerCase();
+            
+            return shortCode.includes(q) || longId.includes(q) || partnerRef.includes(q) || receiver.includes(q) || sender.includes(q);
+        });
+        
+        setSearchResults(results);
     };
 
     const handlePayout = async (transferId: string) => {
@@ -88,13 +115,13 @@ const ProcessIncomingTransferModal: React.FC<ProcessIncomingTransferModalProps> 
                             type="text"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            placeholder="جستجو بر اساس کد رهگیری، کد همکار، نام گیرنده یا فرستنده..."
+                            placeholder="جستجو بر اساس کد رهگیری (کوتاه/بلند)، کد همکار، نام گیرنده..."
                             required
                             className="flex-grow text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-cyan-400"
                         />
                         <button type="submit" disabled={isLoading} 
                             className="px-8 py-2 text-xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300 rounded-md transition-colors disabled:opacity-50">
-                            {isLoading ? '...' : 'جستجو'}
+                            جستجو
                         </button>
                     </form>
 
@@ -122,7 +149,7 @@ const ProcessIncomingTransferModal: React.FC<ProcessIncomingTransferModalProps> 
                                         return (
                                             <tr key={t.id} className="border-b border-cyan-400/10">
                                                 <td className="px-4 py-3">
-                                                    <div className="font-mono text-cyan-300">{t.id}</div>
+                                                    <div className="font-mono text-cyan-300 font-bold">{formatTrackingCode(t.created_at)}</div>
                                                     <div className="text-sm">{t.sender.name}</div>
                                                 </td>
                                                 <td className="px-4 py-3 font-semibold">{t.receiver.name}</td>

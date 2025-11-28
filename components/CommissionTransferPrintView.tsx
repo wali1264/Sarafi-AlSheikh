@@ -1,6 +1,8 @@
+
 import React from 'react';
 import { CommissionTransfer, BankAccount } from '../types';
 import { commissionTransferStatusTranslations } from '../utils/translations';
+import { formatTrackingCode } from '../utils/idGenerator';
 
 interface CommissionTransferPrintViewProps {
     transfer: CommissionTransfer | null;
@@ -26,7 +28,7 @@ const CommissionTransferPrintView: React.FC<CommissionTransferPrintViewProps> = 
                     <p className="text-lg">رسید حواله کمیشن‌کاری</p>
                 </div>
                 <div className="text-left">
-                    <p><strong>شناسه:</strong> <span className="font-mono">{transfer.id}</span></p>
+                    <p><strong>کد رهگیری:</strong> <span className="font-mono text-2xl font-bold">{formatTrackingCode(transfer.createdAt)}</span></p>
                     <p><strong>تاریخ ثبت:</strong> {new Date(transfer.createdAt).toLocaleString('fa-IR')}</p>
                 </div>
             </header>

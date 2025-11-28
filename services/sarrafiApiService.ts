@@ -27,6 +27,7 @@ import {
     RentedAccount,
     RentedAccountTransaction,
     ExchangeRate,
+    DeleteCustomerPayload,
 } from '../types';
 
 // --- Sarrafi API Service with Supabase ---
@@ -272,6 +273,21 @@ class SarrafiApiService {
         if (error) return { error: error.message };
         await this.logActivity(user.name, `اطلاعات مشتری ${data.name} (کد: ${data.code}) را ویرایش کرد.`);
         return data;
+    }
+
+    async deleteCustomer(payload: DeleteCustomerPayload): Promise<{ success: boolean; error?: string }> {
+        const { error } = await supabase.from('customers').delete().eq('id', payload.id);
+        
+        if (error) {
+            // Check for foreign key violation code (23503 in Postgres)
+            if (error.code === '23503') {
+                return { success: false, error: 'این مشتری دارای سوابق تراکنش است و نمی‌توان آن را حذف کرد.' };
+            }
+            return { success: false, error: error.message };
+        }
+        
+        await this.logActivity(payload.user.name, `مشتری با شناسه ${payload.id} را حذف کرد.`);
+        return { success: true };
     }
     
     // --- Domestic Transfers ---
@@ -792,12 +808,10 @@ class SarrafiApiService {
         if (fetchError) return { success: false, error: fetchError.message };
 
         // 2. Calculate new balance
-        // Note: Logic aligned with Cashbox Request RPC: 'deposit' -> adds to balance (liability/credit), 'withdrawal' -> subtracts (asset/debit)
-        // If type is 'deposit' (Credit/Rasid), we add amount. If 'withdrawal' (Debit/Bard), we subtract.
         const currentBalances = customer.balances || {};
         const currentAmount = currentBalances[payload.currency] || 0;
         
-        // type 'credit' here maps to 'deposit' (receipt), 'debit' maps to 'withdrawal' (bard) in typical ledger logic
+        // type 'credit' here maps to 'deposit' (receipt - liability), 'debit' maps to 'withdrawal' (bard - asset)
         const change = payload.type === 'credit' ? payload.amount : -payload.amount;
         const newAmount = currentAmount + change;
         const newBalances = { ...currentBalances, [payload.currency]: newAmount };
@@ -809,7 +823,7 @@ class SarrafiApiService {
         // 4. Insert Transaction
         const { error: txError } = await supabase.from('customer_transactions').insert({
             customer_id: payload.customerId,
-            type: payload.type, // 'credit' or 'debit' directly
+            type: payload.type,
             amount: payload.amount,
             currency: payload.currency,
             description: 'ثبت به عنوان طلب سابقه (تراز اول دوره) - بدون درگیری صندوق',
@@ -820,7 +834,104 @@ class SarrafiApiService {
         
         if (txError) return { success: false, error: txError.message };
         
-        await this.logActivity(payload.user.name, `تراز اول دوره برای مشتری ${payload.customerId} ثبت شد: ${payload.amount} ${payload.currency} (${payload.type === 'credit' ? 'طلب مشتری' : 'بدهی مشتری'})`);
+        await this.logActivity(payload.user.name, `تراز اول دوره برای مشتری ${payload.customerId} ثبت شد: ${payload.amount} ${payload.currency}`);
+        return { success: true };
+    }
+
+    async getOpeningBalanceTransactions(customerId: string): Promise<CustomerTransaction[]> {
+        const { data, error } = await supabase
+            .from('customer_transactions')
+            .select('*')
+            .eq('customer_id', customerId)
+            .eq('linked_entity_type', 'OpeningBalance');
+        
+        if (error) {
+            console.error('Error fetching OB transactions:', error);
+            return [];
+        }
+        return data || [];
+    }
+
+    async upsertOpeningBalance(payload: { transactionId?: string, customerId: string, currency: Currency, amount: number, type: 'credit' | 'debit', user: User }): Promise<{ success: boolean; error?: string }> {
+        const { transactionId, customerId, currency, amount, type, user } = payload;
+
+        // 1. Get current customer balances
+        const { data: customer, error: fetchError } = await supabase.from('customers').select('balances').eq('id', customerId).single();
+        if (fetchError) return { success: false, error: fetchError.message };
+
+        let currentBalance = customer.balances[currency] || 0;
+
+        // 2. If Updating: Revert old impact
+        if (transactionId) {
+            const { data: oldTx, error: txError } = await supabase.from('customer_transactions').select('*').eq('id', transactionId).single();
+            if (txError) return { success: false, error: txError.message };
+            
+            const oldImpact = oldTx.type === 'credit' ? oldTx.amount : -oldTx.amount;
+            currentBalance -= oldImpact;
+        }
+
+        // 3. Apply New Impact
+        const newImpact = type === 'credit' ? amount : -amount;
+        const newBalance = currentBalance + newImpact;
+
+        // 4. Update Customer Balance
+        const newBalances = { ...customer.balances, [currency]: newBalance };
+        const { error: updateCustError } = await supabase.from('customers').update({ balances: newBalances }).eq('id', customerId);
+        if (updateCustError) return { success: false, error: updateCustError.message };
+
+        // 5. Update/Insert Transaction
+        if (transactionId) {
+            const { error: updateTxError } = await supabase.from('customer_transactions').update({
+                amount: amount,
+                type: type,
+                currency: currency, // Typically currency doesn't change, but good to be explicit
+                // We keep description same or update it? Let's keep it generic.
+            }).eq('id', transactionId);
+            if (updateTxError) return { success: false, error: updateTxError.message };
+        } else {
+            const { error: insertTxError } = await supabase.from('customer_transactions').insert({
+                customer_id: customerId,
+                currency: currency,
+                amount: amount,
+                type: type,
+                linked_entity_type: 'OpeningBalance',
+                linked_entity_id: `OB_${Date.now()}`,
+                description: 'طلب سابقه (تراز اول دوره) - ویرایش شده',
+                timestamp: new Date().toISOString()
+            });
+            if (insertTxError) return { success: false, error: insertTxError.message };
+        }
+
+        await this.logActivity(user.name, `موجودی اول دوره مشتری ${customerId} را ویرایش کرد: ${amount} ${currency}`);
+        return { success: true };
+    }
+
+    async deleteOpeningBalance(payload: { transactionId: string, customerId: string, user: User }): Promise<{ success: boolean; error?: string }> {
+        const { transactionId, customerId, user } = payload;
+
+        // 1. Get Transaction
+        const { data: tx, error: txError } = await supabase.from('customer_transactions').select('*').eq('id', transactionId).single();
+        if (txError) return { success: false, error: txError.message };
+
+        // 2. Get Customer
+        const { data: customer, error: fetchError } = await supabase.from('customers').select('balances').eq('id', customerId).single();
+        if (fetchError) return { success: false, error: fetchError.message };
+
+        // 3. Revert Impact
+        const currentBalance = customer.balances[tx.currency] || 0;
+        const txImpact = tx.type === 'credit' ? tx.amount : -tx.amount;
+        const newBalance = currentBalance - txImpact;
+
+        // 4. Update Customer
+        const newBalances = { ...customer.balances, [tx.currency]: newBalance };
+        const { error: updateCustError } = await supabase.from('customers').update({ balances: newBalances }).eq('id', customerId);
+        if (updateCustError) return { success: false, error: updateCustError.message };
+
+        // 5. Delete Transaction
+        const { error: deleteError } = await supabase.from('customer_transactions').delete().eq('id', transactionId);
+        if (deleteError) return { success: false, error: deleteError.message };
+
+        await this.logActivity(user.name, `تراکنش موجودی اول دوره ${transactionId} را برای مشتری ${customerId} حذف کرد.`);
         return { success: true };
     }
 }

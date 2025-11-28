@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { useApi } from '../hooks/useApi';
@@ -13,6 +14,7 @@ import ProcessIncomingTransferModal from '../components/ProcessIncomingTransferM
 import TransferPrintView from '../components/TransferPrintView';
 import { supabase } from '../services/supabaseClient';
 import ShareButton from '../components/ShareButton';
+import { formatTrackingCode } from '../utils/idGenerator';
 
 interface TransferPrintPreviewModalProps {
     isOpen: boolean;
@@ -203,7 +205,8 @@ const DomesticTransfersPage: React.FC = () => {
             
             const matchesTrackingCode = !filters.trackingCode || 
                 t.id.toLowerCase().includes(filters.trackingCode.toLowerCase()) || 
-                (t.partner_reference && t.partner_reference.toLowerCase().includes(filters.trackingCode.toLowerCase()));
+                (t.partner_reference && t.partner_reference.toLowerCase().includes(filters.trackingCode.toLowerCase())) ||
+                formatTrackingCode(t.created_at).includes(filters.trackingCode);
             
             const matchesSender = !filters.senderName || t.sender.name.toLowerCase().includes(filters.senderName.toLowerCase());
             const matchesReceiver = !filters.receiverName || t.receiver.name.toLowerCase().includes(filters.receiverName.toLowerCase());
@@ -339,7 +342,7 @@ const DomesticTransfersPage: React.FC = () => {
                             {filteredTransfers.map(t => (
                                 <tr key={t.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5 transition-colors">
                                     <td className="px-6 py-4">
-                                        <div className="font-mono text-cyan-300">{t.id}</div>
+                                        <div className="font-mono text-cyan-300 font-bold text-2xl">{formatTrackingCode(t.created_at)}</div>
                                         {t.partner_reference && <div className="font-mono text-xs text-amber-400">همکار: {t.partner_reference}</div>}
                                         <div className="text-sm text-slate-400">{new Date(t.created_at).toLocaleDateString('fa-IR-u-nu-latn')}</div>
                                     </td>
