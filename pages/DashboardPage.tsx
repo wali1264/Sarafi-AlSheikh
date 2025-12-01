@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApi } from '../hooks/useApi';
-import { Currency } from '../types';
+import { Currency, Customer } from '../types';
 import ActivityFeed from '../components/ActivityFeed';
 import DashboardChartContainer from '../components/DashboardChartContainer';
 import { useFinancialPulse } from '../contexts/FinancialPulseContext';
@@ -96,6 +96,16 @@ const LiveNetWorthCard: React.FC<{ title: string; value: number | null; descript
     );
 };
 
+// Helper to check if a customer record is actually a system account
+const isSystemAccount = (customer: Customer) => {
+    // Known system codes
+    const systemCodes = ['1000', '58', '108', '1500'];
+    if (systemCodes.includes(customer.code)) return true;
+    
+    // Known system keywords in name
+    const systemKeywords = ['صندوق', 'فایده', 'سود', 'هزینه', 'مصرف', 'روغن', 'کالا', 'دفترچه'];
+    return systemKeywords.some(keyword => customer.name.includes(keyword));
+};
 
 const DashboardPage: React.FC = () => {
     const api = useApi();
@@ -125,6 +135,9 @@ const DashboardPage: React.FC = () => {
 
             // Process Customers: Positive balance means we owe them (our debt). Negative means they owe us (our credit).
             customers.forEach(customer => {
+                // FILTER: Skip system accounts to show only real customer stats
+                if (isSystemAccount(customer)) return;
+
                 for (const currency in customer.balances) {
                     const balance = customer.balances[currency as Currency] || 0;
                     if (balance > 0) {

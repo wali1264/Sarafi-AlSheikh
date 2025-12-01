@@ -12,8 +12,16 @@ import { useToast } from '../contexts/ToastContext';
 import PrintPreviewModal from '../components/PrintPreviewModal';
 import PrintableView from '../components/PrintableView';
 import { supabase } from '../services/supabaseClient';
+import NumberViewModal from '../components/NumberViewModal';
 
-const StatCard: React.FC<{ title: string, value: string, currency: string }> = ({ title, value, currency }) => {
+const EyeIcon: React.FC<{className?: string}> = ({className = "h-6 w-6"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+);
+
+const StatCard: React.FC<{ title: string, value: string, currency: string, onView: () => void }> = ({ title, value, currency, onView }) => {
     const valueRef = useRef<HTMLParagraphElement>(null);
 
     useLayoutEffect(() => {
@@ -41,8 +49,17 @@ const StatCard: React.FC<{ title: string, value: string, currency: string }> = (
     }, [value, currency]);
 
     return (
-         <div className="bg-[#12122E]/80 p-6 border-2 border-cyan-400/20 text-right shadow-[0_0_20px_rgba(0,255,255,0.2)] flex flex-col justify-between min-h-[120px]" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)' }}>
-            <h3 className="text-xl font-semibold text-slate-300 tracking-wider">{title}</h3>
+         <div className="bg-[#12122E]/80 p-6 border-2 border-cyan-400/20 text-right shadow-[0_0_20px_rgba(0,255,255,0.2)] flex flex-col justify-between min-h-[120px] relative group" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)' }}>
+            <div className="flex justify-between items-start">
+                <h3 className="text-xl font-semibold text-slate-300 tracking-wider">{title}</h3>
+                <button 
+                    onClick={(e) => { e.stopPropagation(); onView(); }}
+                    className="text-cyan-400 hover:text-cyan-200 transition-all duration-300 p-1 opacity-0 group-hover:opacity-100 focus:opacity-100 transform hover:scale-110"
+                    title="مشاهده بزرگ"
+                >
+                    <EyeIcon className="h-6 w-6" />
+                </button>
+            </div>
             <p ref={valueRef} className="mt-2 text-4xl font-bold font-mono text-cyan-300 whitespace-nowrap overflow-hidden">
                 {value} <span className="text-2xl text-slate-400">{currency}</span>
             </p>
@@ -53,13 +70,6 @@ const StatCard: React.FC<{ title: string, value: string, currency: string }> = (
 const FilterIcon: React.FC = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293.707L3.293 7.293A1 1 0 013 6.586V4z" />
-    </svg>
-);
-
-const EyeIcon: React.FC = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
 );
 
@@ -82,6 +92,7 @@ const CashboxPage: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
     const [selectedRequestForPrint, setSelectedRequestForPrint] = useState<CashboxRequest | null>(null);
+    const [viewModalData, setViewModalData] = useState<{title: string, value: string, currency: string} | null>(null);
 
     const initialFilters = {
         reason: '',
@@ -278,7 +289,14 @@ const CashboxPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-8">
                     {CURRENCIES.map(currency => {
                         const balance = balances.find(b => b.currency === currency)?.balance ?? 0;
-                        return <StatCard key={currency} title={`موجودی ${currency}`} value={new Intl.NumberFormat('en-US').format(balance)} currency={currency} />
+                        const formattedValue = new Intl.NumberFormat('en-US').format(balance);
+                        return <StatCard 
+                            key={currency} 
+                            title={`موجودی ${currency}`} 
+                            value={formattedValue} 
+                            currency={currency} 
+                            onView={() => setViewModalData({ title: `موجودی کامل ${currency}`, value: formattedValue, currency })}
+                        />
                     })}
                 </div>
             </div>
@@ -427,6 +445,14 @@ const CashboxPage: React.FC = () => {
                     request={selectedRequestForPrint}
                 />
             )}
+
+            <NumberViewModal 
+                isOpen={!!viewModalData} 
+                onClose={() => setViewModalData(null)} 
+                title={viewModalData?.title || ''} 
+                value={viewModalData?.value || ''} 
+                currency={viewModalData?.currency || ''} 
+            />
 
         </div>
     );
