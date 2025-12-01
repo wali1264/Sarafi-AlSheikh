@@ -25,6 +25,9 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
         rate: '',
     });
     
+    // New state for calculation mode: true = Multiply (X), false = Divide (/)
+    const [isMultiply, setIsMultiply] = useState(true);
+    
     const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
@@ -40,10 +43,14 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
         const from = parseFloat(formData.fromAmount);
         const rate = parseFloat(formData.rate);
         if (!isNaN(from) && !isNaN(rate) && from > 0 && rate > 0) {
-            return (from * rate).toFixed(2);
+            if (isMultiply) {
+                return (from * rate).toFixed(2);
+            } else {
+                return (from / rate).toFixed(2);
+            }
         }
         return '0.00';
-    }, [formData.fromAmount, formData.rate]);
+    }, [formData.fromAmount, formData.rate, isMultiply]);
 
     if (!isOpen) return null;
 
@@ -54,6 +61,7 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
             toCurrency: CURRENCIES[1] || CURRENCIES[0],
             rate: '',
         });
+        setIsMultiply(true); // Reset to default multiply mode
         setIsLoading(false);
     };
 
@@ -76,6 +84,11 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
         e.preventDefault();
         setIsLoading(true);
 
+        // Calculate the effective rate to store in DB
+        // If dividing, the mathematical rate is 1 / inputRate
+        const inputRate = parseFloat(formData.rate) || 0;
+        const effectiveRate = isMultiply ? inputRate : (inputRate !== 0 ? 1 / inputRate : 0);
+
         // FIX: Changed payload keys to snake_case to match the API definition.
         const payload: InternalCustomerExchangePayload = {
             customer_id: customer.id,
@@ -83,7 +96,7 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
             from_amount: parseFloat(formData.fromAmount) || 0,
             to_currency: formData.toCurrency as Currency,
             to_amount: parseFloat(toAmount) || 0,
-            rate: parseFloat(formData.rate) || 0,
+            rate: effectiveRate, // Send the effective mathematical rate
             user: currentUser,
         };
         
@@ -149,7 +162,33 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
                             </div>
                              <div>
                                 <label className="block text-lg font-medium text-cyan-300 mb-2">نرخ تبادله</label>
-                                <input name="rate" value={formData.rate} onChange={handleChange} placeholder="0.00" required type="text" inputMode="decimal" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 placeholder-slate-400 focus:outline-none focus:border-cyan-400 text-right transition-colors duration-300 font-mono" />
+                                <div className="relative">
+                                    <input 
+                                        name="rate" 
+                                        value={formData.rate} 
+                                        onChange={handleChange} 
+                                        placeholder="0.00" 
+                                        required 
+                                        type="text" 
+                                        inputMode="decimal" 
+                                        className="w-full text-xl px-3 py-2 pl-12 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 placeholder-slate-400 focus:outline-none focus:border-cyan-400 text-right transition-colors duration-300 font-mono" 
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsMultiply(!isMultiply)}
+                                        className={`absolute left-1 top-1 bottom-1 px-3 rounded flex items-center justify-center transition-colors ${isMultiply ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-amber-500 text-slate-900 hover:bg-amber-400'}`}
+                                        title={isMultiply ? "حالت ضرب (پیش‌فرض)" : "حالت تقسیم (فعال)"}
+                                    >
+                                        {isMultiply ? (
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                        ) : (
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 12.75H5a.75.75 0 0 1 0-1.5h14a.75.75 0 0 1 0 1.5Zm0-6.75H5a.75.75 0 0 1 0-1.5h14a.75.75 0 0 1 0 1.5Zm0 13.5H5a.75.75 0 0 1 0-1.5h14a.75.75 0 0 1 0 1.5Z" /><circle cx="12" cy="7" r="1" fill="currentColor"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg>
+                                        )}
+                                    </button>
+                                </div>
+                                <span className="text-xs text-slate-400 mt-1 block">
+                                    {isMultiply ? 'حالت محاسبه: ضرب (مبلغ × نرخ)' : 'حالت محاسبه: تقسیم (مبلغ ÷ نرخ)'}
+                                </span>
                             </div>
                         </div>
 

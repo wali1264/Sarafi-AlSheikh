@@ -855,37 +855,47 @@ class SarrafiApiService {
     async upsertOpeningBalance(payload: { transactionId?: string, customerId: string, currency: Currency, amount: number, type: 'credit' | 'debit', user: User }): Promise<{ success: boolean; error?: string }> {
         const { transactionId, customerId, currency, amount, type, user } = payload;
 
-        // 1. Get current customer balances
+        // 1. Fetch Customer to get current balances
         const { data: customer, error: fetchError } = await supabase.from('customers').select('balances').eq('id', customerId).single();
         if (fetchError) return { success: false, error: fetchError.message };
 
-        let currentBalance = customer.balances[currency] || 0;
+        const balances = { ...customer.balances };
 
-        // 2. If Updating: Revert old impact
+        // 2. If Updating: Revert impact of OLD transaction from its SPECIFIC currency balance
         if (transactionId) {
             const { data: oldTx, error: txError } = await supabase.from('customer_transactions').select('*').eq('id', transactionId).single();
             if (txError) return { success: false, error: txError.message };
             
-            const oldImpact = oldTx.type === 'credit' ? oldTx.amount : -oldTx.amount;
-            currentBalance -= oldImpact;
+            // Revert logic:
+            // credit (deposit/liability) -> subtracted to revert
+            // debit (withdrawal/asset) -> added to revert (or subtract negative impact)
+            // Basically: oldImpact = (type == credit ? amount : -amount)
+            // balance = balance - oldImpact
+            const oldAmount = oldTx.amount;
+            const oldCurrency = oldTx.currency as Currency;
+            const oldType = oldTx.type;
+
+            const oldImpact = oldType === 'credit' ? oldAmount : -oldAmount;
+            
+            // Remove the old transaction's effect from the old currency bucket
+            balances[oldCurrency] = (balances[oldCurrency] || 0) - oldImpact;
         }
 
-        // 3. Apply New Impact
+        // 3. Apply New Impact to the NEW currency bucket
         const newImpact = type === 'credit' ? amount : -amount;
-        const newBalance = currentBalance + newImpact;
+        balances[currency] = (balances[currency] || 0) + newImpact;
 
-        // 4. Update Customer Balance
-        const newBalances = { ...customer.balances, [currency]: newBalance };
-        const { error: updateCustError } = await supabase.from('customers').update({ balances: newBalances }).eq('id', customerId);
+        // 4. Update Customer with the new balances map
+        const { error: updateCustError } = await supabase.from('customers').update({ balances: balances }).eq('id', customerId);
         if (updateCustError) return { success: false, error: updateCustError.message };
 
-        // 5. Update/Insert Transaction
+        // 5. Update/Insert Transaction Record
         if (transactionId) {
             const { error: updateTxError } = await supabase.from('customer_transactions').update({
                 amount: amount,
                 type: type,
-                currency: currency, // Typically currency doesn't change, but good to be explicit
-                // We keep description same or update it? Let's keep it generic.
+                currency: currency, 
+                description: 'طلب سابقه (تراز اول دوره) - ویرایش شده',
             }).eq('id', transactionId);
             if (updateTxError) return { success: false, error: updateTxError.message };
         } else {
@@ -896,13 +906,13 @@ class SarrafiApiService {
                 type: type,
                 linked_entity_type: 'OpeningBalance',
                 linked_entity_id: `OB_${Date.now()}`,
-                description: 'طلب سابقه (تراز اول دوره) - ویرایش شده',
+                description: 'ثبت به عنوان طلب سابقه (تراز اول دوره) - بدون درگیری صندوق',
                 timestamp: new Date().toISOString()
             });
             if (insertTxError) return { success: false, error: insertTxError.message };
         }
 
-        await this.logActivity(user.name, `موجودی اول دوره مشتری ${customerId} را ویرایش کرد: ${amount} ${currency}`);
+        await this.logActivity(user.name, `موجودی اول دوره مشتری ${customerId} را ویرایش/ثبت کرد: ${amount} ${currency}`);
         return { success: true };
     }
 
