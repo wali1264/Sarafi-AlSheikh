@@ -1,18 +1,14 @@
 
-import { GoogleGenAI, FunctionDeclaration, Type } from '@google/genai';
-import { Currency, ExpenseCategory, ReportType, TransferStatus } from '../types';
-
-// Hardcoded API key as requested by the user for deployment purposes.
-const apiKey = 'AIzaSyClpXrP1CNPc5ebgsdNk6U6mBFmim6qjm0';
+import { GoogleGenAI } from "@google/genai";
 
 class GeminiService {
     public ai: GoogleGenAI;
 
-    constructor(apiKey: string | undefined) {
-        // Initialize with the key.
-        this.ai = new GoogleGenAI({ apiKey: apiKey || "" });
+    constructor() {
+        // Obtain the API key exclusively from the environment variable as per guidelines.
+        this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
     }
 }
 
-const geminiService = new GeminiService(apiKey);
+const geminiService = new GeminiService();
 export default geminiService;

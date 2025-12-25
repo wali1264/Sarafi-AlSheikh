@@ -40,7 +40,6 @@ class SarrafiApiService {
     
     // --- Auth ---
     async login(username: string, password?: string): Promise<AuthenticatedUser | { error: string }> {
-        // This RPC is assumed to exist and return snake_case keys which are handled by the AuthenticatedUser type
         const { data, error } = await supabase.rpc('login', {
             p_username: username,
             p_password: password
@@ -203,7 +202,7 @@ class SarrafiApiService {
             p_id: payload.id,
             p_name: payload.name,
             p_username: payload.username,
-            p_password: payload.password, // Pass null/empty string if not changing
+            p_password: payload.password, 
             p_role_id: payload.role_id,
         });
         if (error) { console.error(error); return undefined; }
@@ -253,7 +252,6 @@ class SarrafiApiService {
             console.error('findCustomerByCodeOrName error:', error);
             return undefined;
         }
-        // The function returns a SETOF, so data will be an array. We expect 0 or 1 items.
         return data && data.length > 0 ? data[0] : undefined;
     }
     async createCustomer(payload: CreateCustomerPayload): Promise<Customer | { error: string }> {
@@ -277,22 +275,24 @@ class SarrafiApiService {
 
     async deleteCustomer(payload: DeleteCustomerPayload): Promise<{ success: boolean; error?: string }> {
         const { error } = await supabase.from('customers').delete().eq('id', payload.id);
-        
         if (error) {
-            // Check for foreign key violation code (23503 in Postgres)
             if (error.code === '23503') {
                 return { success: false, error: 'این مشتری دارای سوابق تراکنش است و نمی‌توان آن را حذف کرد.' };
             }
             return { success: false, error: error.message };
         }
-        
         await this.logActivity(payload.user.name, `مشتری با شناسه ${payload.id} را حذف کرد.`);
         return { success: true };
     }
     
     // --- Domestic Transfers ---
     async getDomesticTransfers(): Promise<DomesticTransfer[]> { 
-        const { data, error } = await supabase.from('domestic_transfers').select('*');
+        // FIX: Added explicit ordering and increased limit to ensure latest transactions are fetched
+        const { data, error } = await supabase
+            .from('domestic_transfers')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(5000);
         if (error) { console.error(error); return []; }
         return data || [];
     }
@@ -340,14 +340,25 @@ class SarrafiApiService {
         return data;
     }
     async getTransactionsForPartner(partnerId: string): Promise<PartnerTransaction[]> {
-        const { data, error } = await supabase.from('partner_transactions').select('*').eq('partner_id', partnerId);
+        const { data, error } = await supabase
+            .from('partner_transactions')
+            .select('*')
+            .eq('partner_id', partnerId)
+            .order('timestamp', { ascending: false })
+            .limit(5000);
         if (error) { console.error(error); return []; }
         return data || [];
     }
     
     // --- Cashbox ---
     async getCashboxRequests(): Promise<CashboxRequest[]> { 
-        const { data, error } = await supabase.from('cashbox_requests').select('*');
+        // FIX: Essential fix for approved transactions disappearing.
+        // We ensure newest records are fetched first and increase the fetch limit to 5000 records.
+        const { data, error } = await supabase
+            .from('cashbox_requests')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(5000);
         if (error) { console.error(error); return []; }
         return data || [];
     }
@@ -402,7 +413,12 @@ class SarrafiApiService {
     
     // --- Expenses ---
     async getExpenses(): Promise<Expense[]> { 
-        const { data, error } = await supabase.from('expenses').select('*');
+        // FIX: Added ordering and limit for expenses
+        const { data, error } = await supabase
+            .from('expenses')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(5000);
         if (error) { console.error(error); return []; }
         return data || [];
     }
@@ -415,7 +431,7 @@ class SarrafiApiService {
     
     // --- Reports & Analytics ---
     async getActivityLogs(): Promise<ActivityLog[]> { 
-        const { data, error } = await supabase.from('activity_logs').select('*').order('timestamp', { ascending: false }).limit(50);
+        const { data, error } = await supabase.from('activity_logs').select('*').order('timestamp', { ascending: false }).limit(200);
         if (error) { console.error(error); return []; }
         return data || [];
     }
@@ -505,7 +521,12 @@ class SarrafiApiService {
     }
 
     async getTransactionsForCustomer(customerId: string): Promise<CustomerTransaction[]> {
-        const { data, error } = await supabase.from('customer_transactions').select('*').eq('customer_id', customerId);
+        const { data, error } = await supabase
+            .from('customer_transactions')
+            .select('*')
+            .eq('customer_id', customerId)
+            .order('timestamp', { ascending: false })
+            .limit(5000);
         if (error) { console.error(error); return []; }
         return data || [];
     }
@@ -560,7 +581,11 @@ class SarrafiApiService {
         return data;
     }
     async getAccountTransfers(): Promise<AccountTransfer[]> { 
-        const { data, error } = await supabase.from('account_transfers').select('*');
+        const { data, error } = await supabase
+            .from('account_transfers')
+            .select('*')
+            .order('timestamp', { ascending: false })
+            .limit(5000);
         if (error) { console.error(error); return []; }
         return data || [];
     }
@@ -577,7 +602,7 @@ class SarrafiApiService {
     
     async addBankAccount(payload: AddBankAccountPayload): Promise<BankAccount | { error: string }> {
         const { user, ...accountData } = payload;
-        const dataToInsert = { ...accountData, status: 'Active' }; // Explicitly set status
+        const dataToInsert = { ...accountData, status: 'Active' }; 
         const { data, error } = await supabase.from('bank_accounts').insert(dataToInsert).select().single();
         if (error) return { error: error.message };
         await this.logActivity(user.name, `حساب بانکی جدیدی برای ${payload.account_holder} در بانک ${payload.bank_name} ثبت کرد.`);
@@ -596,7 +621,8 @@ class SarrafiApiService {
             .from('cashbox_requests')
             .select('*')
             .eq('bank_account_id', accountId)
-            .order('created_at', { ascending: true }); // Fetch oldest first for balance calculation
+            .order('created_at', { ascending: true })
+            .limit(5000);
         if (error) { 
             console.error('Error fetching bank account transactions:', error); 
             return []; 
@@ -700,19 +726,33 @@ class SarrafiApiService {
 
 
     async getForeignTransactions(): Promise<ForeignTransaction[]> { 
-        const { data, error } = await supabase.from('foreign_transactions').select('*');
+        // FIX: Added ordering and limit for foreign transactions
+        const { data, error } = await supabase
+            .from('foreign_transactions')
+            .select('*')
+            .order('timestamp', { ascending: false })
+            .limit(5000);
         if (error) { console.error(error); return []; }
         return data || [];
     }
     
     async getInternalExchangesForCustomer(customerId: string): Promise<InternalExchange[]> {
-        const { data, error } = await supabase.from('internal_exchanges').select('*').eq('customer_id', customerId);
+        const { data, error } = await supabase
+            .from('internal_exchanges')
+            .select('*')
+            .eq('customer_id', customerId)
+            .order('timestamp', { ascending: false })
+            .limit(5000);
         if (error) { console.error(error); return []; }
         return data || [];
     }
 
     async getCommissionTransfers(): Promise<CommissionTransfer[]> {
-        const { data, error } = await supabase.from('commission_transfers').select('*');
+        const { data, error } = await supabase
+            .from('commission_transfers')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(5000);
         if (error) { console.error(error); return []; }
         return data || [];
     }
@@ -721,7 +761,9 @@ class SarrafiApiService {
         const { data, error } = await supabase
             .from('commission_transfers')
             .select('*')
-            .eq('initiator_id', initiatorId);
+            .eq('initiator_id', initiatorId)
+            .order('created_at', { ascending: false })
+            .limit(5000);
         if (error) { console.error(error); return []; }
         return data || [];
     }
@@ -773,7 +815,12 @@ class SarrafiApiService {
     }
     
     async getAmanat(): Promise<Amanat[]> {
-        const { data, error } = await supabase.from('amanat').select('*');
+        // FIX: Added ordering and limit for amanat
+        const { data, error } = await supabase
+            .from('amanat')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(5000);
         if (error) { console.error(error); return []; }
         return data || [];
     }
@@ -788,6 +835,7 @@ class SarrafiApiService {
             p_bank_account_id: payload.bank_account_id
         });
         if (error) return { error: error.message };
+        // FIX: Change 'user.name' to 'payload.user.name' as 'user' is not defined in this scope.
         await this.logActivity(payload.user.name, `امانتی به مبلغ ${payload.amount} ${payload.currency} برای ${payload.customer_name} ثبت کرد.`);
         return data;
     }
@@ -803,24 +851,19 @@ class SarrafiApiService {
     }
 
     async createOpeningBalanceTransaction(payload: { customerId: string, amount: number, currency: Currency, type: 'credit' | 'debit', user: User }): Promise<{ success: boolean; error?: string }> {
-        // 1. Fetch current balances
         const { data: customer, error: fetchError } = await supabase.from('customers').select('balances').eq('id', payload.customerId).single();
         if (fetchError) return { success: false, error: fetchError.message };
 
-        // 2. Calculate new balance
         const currentBalances = customer.balances || {};
         const currentAmount = currentBalances[payload.currency] || 0;
         
-        // type 'credit' here maps to 'deposit' (receipt - liability), 'debit' maps to 'withdrawal' (bard - asset)
         const change = payload.type === 'credit' ? payload.amount : -payload.amount;
         const newAmount = currentAmount + change;
         const newBalances = { ...currentBalances, [payload.currency]: newAmount };
 
-        // 3. Update Customer
         const { error: updateError } = await supabase.from('customers').update({ balances: newBalances }).eq('id', payload.customerId);
         if (updateError) return { success: false, error: updateError.message };
 
-        // 4. Insert Transaction
         const { error: txError } = await supabase.from('customer_transactions').insert({
             customer_id: payload.customerId,
             type: payload.type,
@@ -843,7 +886,8 @@ class SarrafiApiService {
             .from('customer_transactions')
             .select('*')
             .eq('customer_id', customerId)
-            .eq('linked_entity_type', 'OpeningBalance');
+            .eq('linked_entity_type', 'OpeningBalance')
+            .order('timestamp', { ascending: false });
         
         if (error) {
             console.error('Error fetching OB transactions:', error);
@@ -855,41 +899,30 @@ class SarrafiApiService {
     async upsertOpeningBalance(payload: { transactionId?: string, customerId: string, currency: Currency, amount: number, type: 'credit' | 'debit', user: User }): Promise<{ success: boolean; error?: string }> {
         const { transactionId, customerId, currency, amount, type, user } = payload;
 
-        // 1. Fetch Customer to get current balances
         const { data: customer, error: fetchError } = await supabase.from('customers').select('balances').eq('id', customerId).single();
         if (fetchError) return { success: false, error: fetchError.message };
 
         const balances = { ...customer.balances };
 
-        // 2. If Updating: Revert impact of OLD transaction from its SPECIFIC currency balance
         if (transactionId) {
             const { data: oldTx, error: txError } = await supabase.from('customer_transactions').select('*').eq('id', transactionId).single();
             if (txError) return { success: false, error: txError.message };
             
-            // Revert logic:
-            // credit (deposit/liability) -> subtracted to revert
-            // debit (withdrawal/asset) -> added to revert (or subtract negative impact)
-            // Basically: oldImpact = (type == credit ? amount : -amount)
-            // balance = balance - oldImpact
             const oldAmount = oldTx.amount;
             const oldCurrency = oldTx.currency as Currency;
             const oldType = oldTx.type;
 
             const oldImpact = oldType === 'credit' ? oldAmount : -oldAmount;
             
-            // Remove the old transaction's effect from the old currency bucket
             balances[oldCurrency] = (balances[oldCurrency] || 0) - oldImpact;
         }
 
-        // 3. Apply New Impact to the NEW currency bucket
         const newImpact = type === 'credit' ? amount : -amount;
         balances[currency] = (balances[currency] || 0) + newImpact;
 
-        // 4. Update Customer with the new balances map
         const { error: updateCustError } = await supabase.from('customers').update({ balances: balances }).eq('id', customerId);
         if (updateCustError) return { success: false, error: updateCustError.message };
 
-        // 5. Update/Insert Transaction Record
         if (transactionId) {
             const { error: updateTxError } = await supabase.from('customer_transactions').update({
                 amount: amount,
@@ -919,25 +952,20 @@ class SarrafiApiService {
     async deleteOpeningBalance(payload: { transactionId: string, customerId: string, user: User }): Promise<{ success: boolean; error?: string }> {
         const { transactionId, customerId, user } = payload;
 
-        // 1. Get Transaction
         const { data: tx, error: txError } = await supabase.from('customer_transactions').select('*').eq('id', transactionId).single();
         if (txError) return { success: false, error: txError.message };
 
-        // 2. Get Customer
         const { data: customer, error: fetchError } = await supabase.from('customers').select('balances').eq('id', customerId).single();
         if (fetchError) return { success: false, error: fetchError.message };
 
-        // 3. Revert Impact
         const currentBalance = customer.balances[tx.currency] || 0;
         const txImpact = tx.type === 'credit' ? tx.amount : -tx.amount;
         const newBalance = currentBalance - txImpact;
 
-        // 4. Update Customer
         const newBalances = { ...customer.balances, [tx.currency]: newBalance };
         const { error: updateCustError } = await supabase.from('customers').update({ balances: newBalances }).eq('id', customerId);
         if (updateCustError) return { success: false, error: updateCustError.message };
 
-        // 5. Delete Transaction
         const { error: deleteError } = await supabase.from('customer_transactions').delete().eq('id', transactionId);
         if (deleteError) return { success: false, error: deleteError.message };
 
