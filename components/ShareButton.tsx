@@ -1,4 +1,6 @@
+
 import React, { useState, useRef, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { useToast } from '../contexts/ToastContext';
 
 declare const html2canvas: any;
@@ -18,18 +20,43 @@ const ShareIcon: React.FC = () => (
 const ShareButton: React.FC<ShareButtonProps> = ({ printableAreaId, fileName }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [isLoading, setIsLoading] = useState<string | null>(null);
+    const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
     const { addToast } = useToast();
+    const buttonRef = useRef<HTMLButtonElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) && 
+                buttonRef.current && !buttonRef.current.contains(event.target as Node)) {
                 setIsOpen(false);
             }
         };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
+        
+        if (isOpen) {
+            document.addEventListener("mousedown", handleClickOutside);
+            window.addEventListener("scroll", () => setIsOpen(false), { passive: true });
+            window.addEventListener("resize", () => setIsOpen(false));
+        }
+
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+            window.removeEventListener("scroll", () => setIsOpen(false));
+            window.removeEventListener("resize", () => setIsOpen(false));
+        };
+    }, [isOpen]);
+
+    const toggleDropdown = () => {
+        if (buttonRef.current) {
+            const rect = buttonRef.current.getBoundingClientRect();
+            setCoords({
+                top: rect.top,
+                left: rect.left,
+                width: rect.width
+            });
+        }
+        setIsOpen(!isOpen);
+    };
 
     const shareOrDownload = async (file: File, title: string, text: string) => {
         if (navigator.share && navigator.canShare({ files: [file] })) {
@@ -107,25 +134,39 @@ const ShareButton: React.FC<ShareButtonProps> = ({ printableAreaId, fileName }) 
         }
     };
 
+    const dropdownMenu = isOpen && ReactDOM.createPortal(
+        <div 
+            ref={dropdownRef}
+            className="fixed bg-slate-800/95 backdrop-blur-md border border-cyan-500/30 rounded-lg shadow-[0_10px_40px_rgba(0,0,0,0.5)] z-[100] animate-fadeInUp"
+            style={{ 
+                top: coords.top - 10, // Small gap
+                left: coords.left,
+                width: coords.width,
+                transform: 'translateY(-100%)', // Lift above
+                direction: 'rtl'
+            }}
+        >
+            <button onClick={() => handleShare('image')} className="w-full text-right px-5 py-4 text-xl text-slate-100 hover:bg-cyan-500/20 transition-colors rounded-t-lg border-b border-slate-700/50">به عنوان عکس (PNG)</button>
+            <button onClick={() => handleShare('pdf')} className="w-full text-right px-5 py-4 text-xl text-slate-100 hover:bg-cyan-500/20 transition-colors border-b border-slate-700/50">به عنوان سند (PDF)</button>
+            <button onClick={() => handleShare('text')} className="w-full text-right px-5 py-4 text-xl text-slate-100 hover:bg-cyan-500/20 transition-colors rounded-b-lg">به عنوان متن</button>
+        </div>,
+        document.getElementById('modal-root')!
+    );
+
     return (
-        <div className="relative" ref={dropdownRef}>
+        <>
             <button
-                onClick={() => setIsOpen(!isOpen)}
+                ref={buttonRef}
+                onClick={toggleDropdown}
                 disabled={!!isLoading}
                 className="flex items-center justify-center px-6 py-3 text-xl font-bold tracking-wider text-slate-900 bg-green-500 hover:bg-green-400 focus:outline-none focus:ring-4 focus:ring-green-500/50 transition-all rounded-md disabled:opacity-60 min-w-[200px]"
             >
                 <ShareIcon />
                 {isLoading ? `...${{image: 'عکس', pdf: 'PDF', text: 'متن'}[isLoading]}` : 'اشتراک گذاری'}
-                 <svg className={`w-5 h-5 ml-2 transform transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                <svg className={`w-5 h-5 ml-2 transform transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
             </button>
-            {isOpen && (
-                <div className="absolute bottom-full mb-2 w-full bg-slate-700/90 backdrop-blur-sm border border-slate-500 rounded-md shadow-lg z-10">
-                    <button onClick={() => handleShare('image')} className="w-full text-right px-4 py-3 text-lg text-slate-200 hover:bg-slate-600/50">به عنوان عکس (PNG)</button>
-                    <button onClick={() => handleShare('pdf')} className="w-full text-right px-4 py-3 text-lg text-slate-200 hover:bg-slate-600/50">به عنوان سند (PDF)</button>
-                    <button onClick={() => handleShare('text')} className="w-full text-right px-4 py-3 text-lg text-slate-200 hover:bg-slate-600/50">به عنوان متن</button>
-                </div>
-            )}
-        </div>
+            {dropdownMenu}
+        </>
     );
 };
 

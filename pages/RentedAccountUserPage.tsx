@@ -6,6 +6,7 @@ import ShamsiDatePicker from '../components/ShamsiDatePicker';
 import { Currency } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import ConvertRentedToMainModal from '../components/ConvertRentedToMainModal';
+import ShareButton from '../components/ShareButton';
 
 const toISODateString = (date: Date) => {
     return date.toISOString().split('T')[0];
@@ -126,6 +127,8 @@ const RentedAccountUserPage: React.FC = () => {
         <button onClick={() => setDateFilter(filter)} className={`px-4 py-2 text-lg rounded-md transition-colors ${timeFilter === filter ? 'bg-cyan-400 text-slate-900 font-bold' : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'}`}>{label}</button>
     );
 
+    const printableAreaId = `rented-ledger-${user.id}`;
+
     return (
         <div style={{ direction: 'rtl' }} className="space-y-12 pl-40">
             <button onClick={() => navigate(-1)} className="text-cyan-300 hover:text-cyan-200 text-lg mb-6 flex items-center">
@@ -154,16 +157,18 @@ const RentedAccountUserPage: React.FC = () => {
                 <div className="p-6 border-b-2 border-cyan-400/20 flex justify-between items-center flex-wrap gap-4">
                     <h2 className="text-3xl font-semibold text-slate-100 tracking-wider">دفتر حساب</h2>
                     
-                    {/* Convert Button */}
-                    {customerObject && hasPermission('rentedAccounts', 'create') && (
-                        <button 
-                            onClick={() => setConvertModalOpen(true)}
-                            className="px-5 py-2 bg-indigo-600/50 text-indigo-100 hover:bg-indigo-500/50 text-lg transition-colors border border-indigo-500/50 rounded flex items-center gap-2"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-                            تبدیل به حساب اصلی
-                        </button>
-                    )}
+                    <div className="flex gap-4">
+                        <ShareButton printableAreaId={printableAreaId} fileName={`rented_statement_${user.name}`} />
+                        {customerObject && hasPermission('rentedAccounts', 'create') && (
+                            <button 
+                                onClick={() => setConvertModalOpen(true)}
+                                className="px-5 py-2 bg-indigo-600/50 text-indigo-100 hover:bg-indigo-500/50 text-lg transition-colors border border-indigo-500/50 rounded flex items-center gap-2"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                                تبدیل به حساب اصلی
+                            </button>
+                        )}
+                    </div>
                 </div>
                 <div className="flex flex-wrap gap-4 items-end p-4 border-b-2 border-cyan-400/20">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -184,35 +189,42 @@ const RentedAccountUserPage: React.FC = () => {
                     </div>
                  </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full text-lg text-right text-slate-300">
-                        <thead className="text-xl text-slate-400 uppercase">
-                            <tr>
-                                <th className="px-6 py-4 font-medium">تاریخ</th>
-                                <th className="px-6 py-4 font-medium">نوع تراکنش</th>
-                                <th className="px-6 py-4 font-medium">حساب کرایی</th>
-                                <th className="px-6 py-4 font-medium text-left">مبلغ</th>
-                                <th className="px-6 py-4 font-medium text-left">کمیسیون</th>
-                                <th className="px-6 py-4 font-medium text-left">تغییر در موجودی</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {userTransactions.map(tx => {
-                                const account = accountsMap.get(tx.rented_account_id);
-                                return (
-                                <tr key={tx.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5">
-                                    <td className="px-6 py-4 whitespace-nowrap">{new Date(tx.timestamp).toLocaleString('fa-IR-u-nu-latn')}</td>
-                                    <td className={`px-6 py-4 font-bold ${tx.type === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>{tx.type === 'deposit' ? 'رسید' : 'برد'}</td>
-                                    <td className="px-6 py-4">{account?.bank_name} ({account?.partner_name})</td>
-                                    <td className="px-6 py-4 font-mono text-left">{new Intl.NumberFormat('en-US').format(tx.amount)}</td>
-                                    <td className="px-6 py-4 font-mono text-left text-amber-400">{tx.commission_amount > 0 ? new Intl.NumberFormat('en-US').format(tx.commission_amount) : '-'}</td>
-                                    <td className={`px-6 py-4 font-mono text-left font-bold ${tx.type === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>
-                                        {tx.type === 'deposit' ? '+' : '-'}{new Intl.NumberFormat('en-US').format(tx.total_transaction_amount)}
-                                    </td>
+                <div id={printableAreaId} className="bg-transparent">
+                    <div className="hidden print:block p-8 bg-white text-black mb-4">
+                        <h1 className="text-3xl font-bold mb-2">صرافی الشیخ - دفتر حساب کرایی</h1>
+                        <p className="text-xl">نام: {user.name} | تاریخ: {new Date().toLocaleDateString('fa-IR')}</p>
+                        <p className="text-xl font-bold mt-2">مانده نهایی: {new Intl.NumberFormat('en-US').format(displayBalance)} IRT_BANK</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-lg text-right text-slate-300 print:text-black">
+                            <thead className="text-xl text-slate-400 print:text-gray-700 uppercase">
+                                <tr>
+                                    <th className="px-6 py-4 font-medium">تاریخ</th>
+                                    <th className="px-6 py-4 font-medium">نوع تراکنش</th>
+                                    <th className="px-6 py-4 font-medium">حساب کرایی</th>
+                                    <th className="px-6 py-4 font-medium text-left">مبلغ</th>
+                                    <th className="px-6 py-4 font-medium text-left">کمیسیون</th>
+                                    <th className="px-6 py-4 font-medium text-left">تغییر در موجودی</th>
                                 </tr>
-                            )})}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {userTransactions.map(tx => {
+                                    const account = accountsMap.get(tx.rented_account_id);
+                                    return (
+                                    <tr key={tx.id} className="border-b border-cyan-400/10 hover:bg-cyan-400/5 print:border-gray-300">
+                                        <td className="px-6 py-4 whitespace-nowrap">{new Date(tx.timestamp).toLocaleString('fa-IR-u-nu-latn')}</td>
+                                        <td className={`px-6 py-4 font-bold ${tx.type === 'deposit' ? 'text-green-400 print:text-green-700' : 'text-red-400 print:text-red-700'}`}>{tx.type === 'deposit' ? 'رسید' : 'برد'}</td>
+                                        <td className="px-6 py-4">{account?.bank_name} ({account?.partner_name})</td>
+                                        <td className="px-6 py-4 font-mono text-left">{new Intl.NumberFormat('en-US').format(tx.amount)}</td>
+                                        <td className="px-6 py-4 font-mono text-left text-amber-400 print:text-amber-700">{tx.commission_amount > 0 ? new Intl.NumberFormat('en-US').format(tx.commission_amount) : '-'}</td>
+                                        <td className={`px-6 py-4 font-mono text-left font-bold ${tx.type === 'deposit' ? 'text-green-400 print:text-green-700' : 'text-red-400 print:text-red-700'}`}>
+                                            {tx.type === 'deposit' ? '+' : '-'}{new Intl.NumberFormat('en-US').format(tx.total_transaction_amount)}
+                                        </td>
+                                    </tr>
+                                )})}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
             
