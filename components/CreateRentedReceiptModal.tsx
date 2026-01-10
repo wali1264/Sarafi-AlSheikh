@@ -123,6 +123,8 @@ const CreateRentedReceiptModal: React.FC<CreateRentedReceiptModalProps> = ({ isO
     const activeAccounts = accounts.filter(a => a.status === 'Active');
     const activePartners = partners.filter(p => p.status === 'Active');
 
+    const inputBaseClass = "w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 placeholder-slate-400 focus:outline-none focus:border-green-400 transition-colors duration-300";
+
     return ReactDOM.createPortal(
         <div className="fixed inset-0 bg-[#0D0C22]/80 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity animate-fadeIn" style={{ direction: 'rtl' }}>
             <div className="bg-[#12122E]/90 w-full max-w-2xl border-2 border-green-500/30 shadow-[0_0_40px_rgba(74,222,128,0.2)]" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 30px), calc(100% - 30px) 100%, 0 100%)' }}>
@@ -144,15 +146,15 @@ const CreateRentedReceiptModal: React.FC<CreateRentedReceiptModalProps> = ({ isO
                             <div className="p-4 border-2 border-cyan-400/30 bg-cyan-400/10 rounded-md animate-fadeIn">
                                 <label className="block text-xl font-bold text-cyan-300 mb-3">رسید از طرف (دهنده پول):</label>
                                 <div className="flex gap-x-4 mb-4">
-                                    <label className={`flex-1 text-center text-lg p-2 rounded-md cursor-pointer ${initiatorType === 'Customer' ? 'bg-cyan-400 text-slate-900' : 'bg-slate-700/50'}`}>
+                                    <label className={`flex-1 text-center text-lg p-2 rounded-md cursor-pointer transition-colors ${initiatorType === 'Customer' ? 'bg-cyan-400 text-slate-900 font-bold' : 'bg-slate-700/50 text-slate-300'}`}>
                                         <input type="radio" name="initiatorType" value="Customer" checked={initiatorType === 'Customer'} onChange={() => setInitiatorType('Customer')} className="hidden" />
                                         مشتری
                                     </label>
-                                    <label className={`flex-1 text-center text-lg p-2 rounded-md cursor-pointer ${initiatorType === 'Partner' ? 'bg-cyan-400 text-slate-900' : 'bg-slate-700/50'}`}>
+                                    <label className={`flex-1 text-center text-lg p-2 rounded-md cursor-pointer transition-colors ${initiatorType === 'Partner' ? 'bg-cyan-400 text-slate-900 font-bold' : 'bg-slate-700/50 text-slate-300'}`}>
                                         <input type="radio" name="initiatorType" value="Partner" checked={initiatorType === 'Partner'} onChange={() => setInitiatorType('Partner')} className="hidden" />
                                         همکار
                                     </label>
-                                    <label className={`flex-1 text-center text-lg p-2 rounded-md cursor-pointer ${initiatorType === 'Guest' ? 'bg-cyan-400 text-slate-900' : 'bg-slate-700/50'}`}>
+                                    <label className={`flex-1 text-center text-lg p-2 rounded-md cursor-pointer transition-colors ${initiatorType === 'Guest' ? 'bg-cyan-400 text-slate-900 font-bold' : 'bg-slate-700/50 text-slate-300'}`}>
                                         <input type="radio" name="initiatorType" value="Guest" checked={initiatorType === 'Guest'} onChange={() => setInitiatorType('Guest')} className="hidden" />
                                         مشتری گذری
                                     </label>
@@ -160,39 +162,39 @@ const CreateRentedReceiptModal: React.FC<CreateRentedReceiptModalProps> = ({ isO
                                 <div className="mt-4">
                                     {initiatorType === 'Customer' && (
                                         <div>
-                                            <input value={customerQuery} onChange={e => handleCustomerQueryChange(e.target.value)} placeholder="کد یا نام مشتری" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50" />
+                                            <input value={customerQuery} onChange={e => handleCustomerQueryChange(e.target.value)} placeholder="کد یا نام مشتری" required className={inputBaseClass} />
                                             {isCheckingCustomer && <p className="text-sm text-slate-400 mt-1">...</p>}
                                             {foundCustomer && <p className="text-sm text-green-400 mt-1">✓ {foundCustomer.name}</p>}
                                             {foundCustomer === null && customerQuery && !isCheckingCustomer && <p className="text-sm text-red-400 mt-1">یافت نشد.</p>}
                                         </div>
                                     )}
                                     {initiatorType === 'Partner' && (
-                                        <select value={partnerId} onChange={e => setPartnerId(e.target.value)} required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50">
-                                            <option value="" disabled>-- انتخاب همکار --</option>
-                                            {activePartners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                        <select value={partnerId} onChange={e => setPartnerId(e.target.value)} required className={inputBaseClass}>
+                                            <option value="" disabled className="text-slate-900">-- انتخاب همکار --</option>
+                                            {activePartners.map(p => <option key={p.id} value={p.id} className="text-slate-900">{p.name}</option>)}
                                         </select>
                                     )}
                                     {initiatorType === 'Guest' && (
-                                        <input value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="نام مشتری گذری (مثلا: مسافر - علی)" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50" />
+                                        <input value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="نام مشتری گذری (مثلا: مسافر - علی)" required className={inputBaseClass} />
                                     )}
                                 </div>
                             </div>
                         )}
 
-                        <select value={accountId} onChange={e => setAccountId(e.target.value)} required disabled={!!fixedAccountId} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md">
-                             <option value="" disabled>-- واریز به حساب کرایی (بانک مقصد) --</option>
-                            {activeAccounts.map(a => <option key={a.id} value={a.id}>{a.bank_name} ({a.partner_name})</option>)}
+                        <select value={accountId} onChange={e => setAccountId(e.target.value)} required disabled={!!fixedAccountId} className={inputBaseClass}>
+                             <option value="" disabled className="text-slate-900">-- واریز به حساب کرایی (بانک مقصد) --</option>
+                            {activeAccounts.map(a => <option key={a.id} value={a.id} className="text-slate-900">{a.bank_name} ({a.partner_name})</option>)}
                         </select>
-                        <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="مبلغ واریز شده (تومان)" required type="text" inputMode="decimal" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md" />
-                        <input value={sourceBank} onChange={e => setSourceBank(e.target.value)} placeholder="نام بانک مبدأ (اختیاری)" className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md" />
+                        <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="مبلغ واریز شده (تومان)" required type="text" inputMode="decimal" className={inputBaseClass} />
+                        <input value={sourceBank} onChange={e => setSourceBank(e.target.value)} placeholder="نام بانک مبدأ (اختیاری)" className={inputBaseClass} />
                         <div className="grid grid-cols-2 gap-4">
-                            <input value={sourceCardDigits} onChange={e => setSourceCardDigits(e.target.value)} placeholder="۴ رقم آخر کارت" required maxLength={4} className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md" />
-                            <input value={receiptSerial} onChange={e => setReceiptSerial(e.target.value)} placeholder="شماره سریال رسید" required className="w-full text-xl px-3 py-2 bg-slate-900/50 border-2 border-slate-600/50 rounded-md" />
+                            <input value={sourceCardDigits} onChange={e => setSourceCardDigits(e.target.value)} placeholder="۴ رقم آخر کارت" required maxLength={4} className={inputBaseClass} />
+                            <input value={receiptSerial} onChange={e => setReceiptSerial(e.target.value)} placeholder="شماره سریال رسید" required className={inputBaseClass} />
                         </div>
                     </div>
                      <div className="px-8 py-5 bg-black/30 border-t-2 border-green-500/20 flex justify-end space-x-4 space-x-reverse">
-                        <button type="button" onClick={onClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md">لغو</button>
-                        <button type="submit" disabled={isLoading} className="px-8 py-3 text-xl font-bold tracking-wider text-slate-900 bg-green-500 hover:bg-green-400 disabled:opacity-50" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)' }}>
+                        <button type="button" onClick={onClose} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-300 bg-transparent hover:bg-slate-600/30 rounded-md transition-colors">لغو</button>
+                        <button type="submit" disabled={isLoading} className="px-8 py-3 text-xl font-bold tracking-wider text-slate-900 bg-green-500 hover:bg-green-400 disabled:opacity-50 transition-all transform hover:scale-105" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)' }}>
                             {isLoading ? 'در حال ثبت...' : 'ثبت رسید'}
                         </button>
                     </div>
