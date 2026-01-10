@@ -3,9 +3,10 @@ import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useRentedAccounts } from '../contexts/RentedAccountContext';
 import ShamsiDatePicker from '../components/ShamsiDatePicker';
-import { Currency } from '../types';
+import { Currency, RentedAccountTransaction } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import ConvertRentedToMainModal from '../components/ConvertRentedToMainModal';
+import AllocateRentedTransactionModal from '../components/AllocateRentedTransactionModal';
 import ShareButton from '../components/ShareButton';
 
 const toISODateString = (date: Date) => {
@@ -22,6 +23,10 @@ const RentedAccountUserPage: React.FC = () => {
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
     const [isConvertModalOpen, setConvertModalOpen] = useState(false);
     
+    // Suspense management
+    const [isAllocateModalOpen, setAllocateModalOpen] = useState(false);
+    const [selectedSuspenseTx, setSelectedSuspenseTx] = useState<RentedAccountTransaction | null>(null);
+
     const setDateFilter = (filter: 'today' | 'yesterday' | 'dayBefore' | 'thisWeek' | 'thisMonth') => {
         setTimeFilter(filter);
         const today = new Date();
@@ -65,7 +70,8 @@ const RentedAccountUserPage: React.FC = () => {
     };
     
     const user = useMemo(() => users.find(u => u.id === userIdentifier), [users, userIdentifier]);
-    
+    const isSuspenseAccount = userIdentifier === 'guest-SUSPENSE';
+
     // Helper to get the real customer object if the user is a customer
     const customerObject = useMemo(() => {
         if (!user || user.type !== 'Customer') return null;
@@ -112,6 +118,11 @@ const RentedAccountUserPage: React.FC = () => {
     
     const accountsMap = useMemo(() => new Map(accounts.map(acc => [acc.id, acc])), [accounts]);
 
+    const handleAllocateClick = (tx: RentedAccountTransaction) => {
+        setSelectedSuspenseTx(tx);
+        setAllocateModalOpen(true);
+    };
+
     if (!user) {
         return (
             <div className="text-center p-10">
@@ -128,6 +139,7 @@ const RentedAccountUserPage: React.FC = () => {
     );
 
     const printableAreaId = `rented-ledger-${user.id}`;
+    const displayName = isSuspenseAccount ? 'حساب معلق (نامشخص)' : user.name;
 
     return (
         <div style={{ direction: 'rtl' }} className="space-y-12 pl-40">
@@ -138,16 +150,14 @@ const RentedAccountUserPage: React.FC = () => {
 
             <div className="flex justify-between items-start mb-10 flex-wrap gap-4">
                 <div>
-                    <h1 className="text-5xl font-bold text-slate-100 tracking-wider">{user.name}</h1>
+                    <h1 className={`text-5xl font-bold tracking-wider ${isSuspenseAccount ? 'text-amber-400' : 'text-slate-100'}`}>{displayName}</h1>
                     <div className="text-xl text-slate-400">
-                        {user.type === 'Customer' && 'مشتری'}
-                        {user.type === 'Partner' && 'همکار'}
-                        {user.type === 'Guest' && 'مشتری گذری'}
+                        {isSuspenseAccount ? 'وجوه در انتظار تخصیص' : (user.type === 'Customer' ? 'مشتری' : user.type === 'Partner' ? 'همکار' : 'مشتری گذری')}
                     </div>
                 </div>
                  <div className="text-left space-y-2">
                     <h3 className="text-2xl text-slate-400">موجودی ایزوله (در این بخش)</h3>
-                    <div className="text-5xl font-mono font-bold text-cyan-300">
+                    <div className={`text-5xl font-mono font-bold ${isSuspenseAccount ? 'text-amber-400' : 'text-cyan-300'}`}>
                         {new Intl.NumberFormat('en-US').format(displayBalance)} IRT_BANK
                     </div>
                 </div>
@@ -192,7 +202,7 @@ const RentedAccountUserPage: React.FC = () => {
                 <div id={printableAreaId} className="bg-transparent">
                     <div className="hidden print:block p-8 bg-white text-black mb-4">
                         <h1 className="text-3xl font-bold mb-2">صرافی الشیخ - دفتر حساب کرایی</h1>
-                        <p className="text-xl">نام: {user.name} | تاریخ: {new Date().toLocaleDateString('fa-IR')}</p>
+                        <p className="text-xl">نام: {displayName} | تاریخ: {new Date().toLocaleDateString('fa-IR')}</p>
                         <p className="text-xl font-bold mt-2">مانده نهایی: {new Intl.NumberFormat('en-US').format(displayBalance)} IRT_BANK</p>
                     </div>
                     <div className="overflow-x-auto">
@@ -205,6 +215,7 @@ const RentedAccountUserPage: React.FC = () => {
                                     <th className="px-6 py-4 font-medium text-left">مبلغ</th>
                                     <th className="px-6 py-4 font-medium text-left">کمیسیون</th>
                                     <th className="px-6 py-4 font-medium text-left">تغییر در موجودی</th>
+                                    {isSuspenseAccount && <th className="px-6 py-4">عملیات</th>}
                                 </tr>
                             </thead>
                             <tbody>
@@ -220,6 +231,18 @@ const RentedAccountUserPage: React.FC = () => {
                                         <td className={`px-6 py-4 font-mono text-left font-bold ${tx.type === 'deposit' ? 'text-green-400 print:text-green-700' : 'text-red-400 print:text-red-700'}`}>
                                             {tx.type === 'deposit' ? '+' : '-'}{new Intl.NumberFormat('en-US').format(tx.total_transaction_amount)}
                                         </td>
+                                        {isSuspenseAccount && (
+                                            <td className="px-6 py-4">
+                                                {tx.type === 'deposit' && (
+                                                    <button 
+                                                        onClick={() => handleAllocateClick(tx)}
+                                                        className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/50 rounded hover:bg-amber-500/40 transition-colors"
+                                                    >
+                                                        تخصیص به مشتری
+                                                    </button>
+                                                )}
+                                            </td>
+                                        )}
                                     </tr>
                                 )})}
                             </tbody>
@@ -235,6 +258,15 @@ const RentedAccountUserPage: React.FC = () => {
                     onSuccess={() => setConvertModalOpen(false)}
                     customer={customerObject}
                     currentUser={currentUser}
+                />
+            )}
+
+            {isAllocateModalOpen && selectedSuspenseTx && (
+                <AllocateRentedTransactionModal
+                    isOpen={isAllocateModalOpen}
+                    onClose={() => setAllocateModalOpen(false)}
+                    onSuccess={() => { setAllocateModalOpen(false); setSelectedSuspenseTx(null); }}
+                    transaction={selectedSuspenseTx}
                 />
             )}
         </div>
