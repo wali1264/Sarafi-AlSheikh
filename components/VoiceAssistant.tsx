@@ -153,7 +153,7 @@ const getDynamicTools = (hasPermission: (module: any, action: any) => boolean): 
 const VoiceAssistant: React.FC = () => {
     const api = useApi();
     const { user, hasPermission } = useAuth();
-    const [session, setSession] = useState<Awaited<ReturnType<typeof geminiService.ai.live.connect>> | null>(null);
+    const [session, setSession] = useState<any>(null);
     const [assistantState, setAssistantState] = useState<AssistantState>('IDLE');
     const [transcriptHistory, setTranscriptHistory] = useState<TranscriptLine[]>([]);
     
@@ -240,6 +240,10 @@ ${contextString}
 "${args.query}"
 `;
             
+            if (!geminiService.ai) {
+                console.error("Gemini AI is not initialized.");
+                return;
+            }
             const response = await geminiService.ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
             
             setModalContent({
@@ -312,7 +316,12 @@ ${contextString}
     };
 
     const startSession = useCallback(async () => {
-        if (session || !user) return;
+        if (session || !user || !geminiService.ai) {
+            if (!geminiService.ai) {
+                console.warn("Voice Assistant is disabled because Gemini AI is not initialized.");
+            }
+            return;
+        }
         inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
         outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
         setTranscriptHistory([]);
@@ -428,6 +437,9 @@ ${contextString}
     const toggleSession = () => { session ? stopSession() : startSession(); };
 
     const getStateAppearance = () => {
+        if (!geminiService.ai) {
+            return { className: 'bg-gray-600/50 cursor-not-allowed opacity-50', label: 'دستیار صوتی غیرفعال است' };
+        }
         switch (assistantState) {
             case 'LISTENING': return { className: 'bg-green-500/80 animate-pulse', label: 'در حال شنیدن...' };
             case 'THINKING': return { className: 'bg-yellow-500/80 animate-spin-slow', label: 'در حال پردازش...' };
