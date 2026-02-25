@@ -28,6 +28,7 @@ import {
     RentedAccountTransaction,
     ExchangeRate,
     DeleteCustomerPayload,
+    BalanceSnapshot,
 } from '../types';
 
 // --- Sarrafi API Service with Supabase ---
@@ -971,6 +972,24 @@ class SarrafiApiService {
 
         await this.logActivity(user.name, `تراکنش موجودی اول دوره ${transactionId} را برای مشتری ${customerId} حذف کرد.`);
         return { success: true };
+    }
+
+    // --- Balance Snapshots ---
+    async getBalanceSnapshots(customerId?: string): Promise<BalanceSnapshot[]> {
+        let query = supabase.from('balance_snapshots').select('*').order('created_at', { ascending: false });
+        if (customerId) query = query.eq('customer_id', customerId);
+        const { data, error } = await query;
+        if (error) {
+            console.error('Error fetching balance snapshots:', error);
+            return [];
+        }
+        return data || [];
+    }
+
+    async createBalanceSnapshot(snapshot: Omit<BalanceSnapshot, 'id' | 'created_at'>): Promise<BalanceSnapshot | { error: string }> {
+        const { data, error } = await supabase.from('balance_snapshots').insert(snapshot).select().single();
+        if (error) return { error: error.message };
+        return data;
     }
 }
 

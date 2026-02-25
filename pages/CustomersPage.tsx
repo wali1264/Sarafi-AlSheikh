@@ -76,11 +76,16 @@ const CustomersPage: React.FC = () => {
         <div style={{direction: 'rtl'}}>
             <div className="flex justify-between items-center mb-10 flex-wrap gap-4">
                 <h1 className="text-5xl font-bold text-slate-100 tracking-wider">مدیریت مشتریان</h1>
-                {hasPermission('customers', 'create') && (
-                    <button onClick={() => setCreateModalOpen(true)} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105" style={{clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)', boxShadow: '0 0 25px rgba(0, 255, 255, 0.5)'}}>
-                        + ثبت مشتری جدید
+                <div className="flex gap-4">
+                    <button onClick={() => navigate('/balances')} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-100 bg-amber-600 hover:bg-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-600/50 transition-all transform hover:scale-105" style={{clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)', boxShadow: '0 0 25px rgba(217, 119, 6, 0.5)'}}>
+                        مدیریت بیلان‌ها
                     </button>
-                )}
+                    {hasPermission('customers', 'create') && (
+                        <button onClick={() => setCreateModalOpen(true)} className="px-6 py-3 text-xl font-bold tracking-wider text-slate-900 bg-cyan-400 hover:bg-cyan-300 focus:outline-none focus:ring-4 focus:ring-cyan-400/50 transition-all transform hover:scale-105" style={{clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)', boxShadow: '0 0 25px rgba(0, 255, 255, 0.5)'}}>
+                            + ثبت مشتری جدید
+                        </button>
+                    )}
+                </div>
             </div>
             
             <div className="bg-[#12122E]/80 border-2 border-cyan-400/20 overflow-hidden shadow-[0_0_40px_rgba(0,255,255,0.2)]" style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%)' }}>

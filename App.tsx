@@ -30,6 +30,7 @@ import PortalLayout from './components/PortalLayout';
 import PortalStatementPage from './pages/PortalStatementPage';
 import { useApi } from './hooks/useApi';
 import AccountingPage from './pages/AccountingPage';
+import BalancesPage from './pages/BalancesPage';
 import { RentedAccountProvider } from './contexts/RentedAccountContext';
 import RentedAccountsPage from './pages/RentedAccountsPage';
 import RentedAccountDetailPage from './pages/RentedAccountDetailPage';
@@ -187,6 +188,9 @@ const SarrafAIApp: React.FC = () => {
                                             </Route>
                                             <Route element={<PermissionRoute module="accounting" action="view" />}>
                                                 <Route path="/accounting" element={<AccountingPage />} />
+                                            </Route>
+                                            <Route element={<PermissionRoute module="customers" action="view" />}>
+                                                <Route path="/balances" element={<BalancesPage />} />
                                             </Route>
                                             <Route path="*" element={<Navigate to="/dashboard" />} />
                                         </Route>

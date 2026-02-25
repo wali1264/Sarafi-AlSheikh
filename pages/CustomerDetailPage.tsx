@@ -10,6 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 import StatementPrintView from '../components/StatementPrintView';
 import { supabase } from '../services/supabaseClient';
 import CommissionLedgerModal from '../components/CommissionLedgerModal';
+import CreateBalanceEntryModal from '../components/CreateBalanceEntryModal';
 import { useUnifiedBalance } from '../contexts/UnifiedBalanceContext';
 import ShareButton from '../components/ShareButton';
 
@@ -87,6 +88,7 @@ const CustomerDetailPage: React.FC = () => {
     const [isInternalExchangeModalOpen, setInternalExchangeModalOpen] = useState(false);
     const [isPrintModalOpen, setPrintModalOpen] = useState(false);
     const [isCommissionLedgerOpen, setCommissionLedgerOpen] = useState(false);
+    const [isBalanceModalOpen, setBalanceModalOpen] = useState(false);
 
 
     const fetchData = useCallback(async () => {
@@ -215,6 +217,12 @@ const CustomerDetailPage: React.FC = () => {
                             حواله های کمیشنی
                         </button>
                          <button 
+                            onClick={() => setBalanceModalOpen(true)}
+                            className="px-5 py-2 bg-amber-600/50 text-amber-100 hover:bg-amber-500/50 text-lg transition-colors border border-amber-500/50 rounded"
+                         >
+                            قید بیلان
+                        </button>
+                         <button 
                             onClick={() => setPrintModalOpen(true)}
                             className="px-5 py-2 bg-slate-600/50 text-slate-100 hover:bg-cyan-400/20 hover:text-cyan-300 text-lg transition-colors border border-slate-500/50 hover:border-cyan-400/60 rounded"
                          >
@@ -314,6 +322,20 @@ const CustomerDetailPage: React.FC = () => {
                     onClose={() => setCommissionLedgerOpen(false)}
                     customerId={customerId}
                     customerName={customer.name}
+                />
+            )}
+
+            {isBalanceModalOpen && customerId && user && (
+                <CreateBalanceEntryModal
+                    isOpen={isBalanceModalOpen}
+                    onClose={() => setBalanceModalOpen(false)}
+                    onSuccess={() => {
+                        setBalanceModalOpen(false);
+                        // Optional: navigate to balances page or show success toast
+                    }}
+                    customer={customer}
+                    rentedBalance={rentedIrtBalance}
+                    currentUser={user}
                 />
             )}
 
