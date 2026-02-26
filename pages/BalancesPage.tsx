@@ -32,6 +32,7 @@ const PrinterIcon: React.FC = () => (
 );
 
 const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }> = ({ customer, snapshots }) => {
+    const api = useApi();
     const [isExpanded, setIsExpanded] = useState(false);
     const [selectedSnapshots, setSelectedSnapshots] = useState<Set<string>>(new Set());
     const [printOptions, setPrintOptions] = useState<{ [key: string]: 'summary' | 'detailed' }>({});
@@ -53,71 +54,190 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
         setSelectedSnapshots(newSet);
     };
 
-    const handlePrint = () => {
+    const getTransactionsForPeriod = (allTransactions: any[], endSnapshot: BalanceSnapshot | null, startSnapshot: BalanceSnapshot | null) => {
+        const endTime = endSnapshot ? new Date(endSnapshot.created_at).getTime() : Date.now();
+        const startTime = startSnapshot ? new Date(startSnapshot.created_at).getTime() : 0;
+        
+        return allTransactions.filter(tx => {
+            const txTime = new Date(tx.timestamp).getTime();
+            return txTime > startTime && txTime <= endTime;
+        }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    };
+
+    const formatTransactionTable = (transactions: any[]) => {
+        if (transactions.length === 0) return '<p style="font-size: 12px; color: #666; margin: 10px 0;">تراکنشی در این دوره ثبت نشده است.</p>';
+        
+        let table = `
+            <table style="width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 11px;">
+                <thead>
+                    <tr style="background: #eee;">
+                        <th style="border: 1px solid #ddd; padding: 5px;">تاریخ</th>
+                        <th style="border: 1px solid #ddd; padding: 5px;">شرح</th>
+                        <th style="border: 1px solid #ddd; padding: 5px;">نوع</th>
+                        <th style="border: 1px solid #ddd; padding: 5px;">مبلغ</th>
+                        <th style="border: 1px solid #ddd; padding: 5px;">ارز</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        transactions.forEach(tx => {
+            table += `
+                <tr>
+                    <td style="border: 1px solid #ddd; padding: 5px; text-align: center;">${new Date(tx.timestamp).toLocaleDateString('fa-IR')}</td>
+                    <td style="border: 1px solid #ddd; padding: 5px;">${tx.description}</td>
+                    <td style="border: 1px solid #ddd; padding: 5px; text-align: center; color: ${tx.type === 'credit' ? 'red' : 'green'}">${tx.type === 'credit' ? 'برد' : 'رسید'}</td>
+                    <td style="border: 1px solid #ddd; padding: 5px; text-align: left;">${tx.amount.toLocaleString()}</td>
+                    <td style="border: 1px solid #ddd; padding: 5px; text-align: center;">${tx.currency}</td>
+                </tr>
+            `;
+        });
+
+        table += '</tbody></table>';
+        return table;
+    };
+
+    const handlePrint = async () => {
+        const allTransactions = await api.getTransactionsForCustomer(customer.id);
         const printWindow = window.open('', '_blank');
         if (!printWindow) return;
 
         let content = `
             <div style="direction: rtl; font-family: sans-serif; padding: 20px;">
-                <h1 style="border-bottom: 2px solid #333; padding-bottom: 10px;">بیلان مشتری: ${customer.name} (${customer.code})</h1>
-                <p>تاریخ چاپ: ${new Date().toLocaleString('fa-IR')}</p>
+                <h1 style="border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px;">بیلان مشتری: ${customer.name} (${customer.code})</h1>
+                <p style="font-size: 12px; color: #666;">تاریخ چاپ: ${new Date().toLocaleString('fa-IR')}</p>
                 
-                <div style="margin-top: 20px; background: #f5f5f5; padding: 15px; border-radius: 8px;">
-                    <h3>آخرین وضعیت حساب:</h3>
-                    <ul style="list-style: none; padding: 0;">
+                <div style="margin-top: 20px; border: 1px solid #ccc; padding: 15px; border-radius: 8px; background: #fafafa;">
+                    <h2 style="margin-top: 0; color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 5px;">وضعیت فعلی حساب (لحظه‌ای)</h2>
+                    <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 15px;">
         `;
 
-        if (latestSnapshot) {
-            Object.entries(latestSnapshot.balances_data.main_balances || {}).forEach(([curr, amount]) => {
-                content += `<li style="margin-bottom: 5px;"><strong>${curr}:</strong> ${(amount as number).toLocaleString()}</li>`;
-            });
-            if (latestSnapshot.balances_data.rented_balance !== 0) {
-                content += `<li style="margin-top: 10px; color: #b45309;"><strong>مانده کرایی (تومان):</strong> ${latestSnapshot.balances_data.rented_balance.toLocaleString()}</li>`;
-            }
-            content += `<p style="margin-top: 15px; border-top: 1px solid #ddd; pt: 10px;">${latestSnapshot.summary_text}</p>`;
-        }
-
-        content += `
-                    </div>
+        // Current Live Balances
+        Object.entries(customer.balances || {}).forEach(([curr, amount]) => {
+            content += `
+                <div style="background: white; border: 1px solid #ddd; padding: 8px 12px; border-radius: 4px; min-width: 120px;">
+                    <span style="font-size: 10px; color: #888; display: block;">${curr}</span>
+                    <strong style="font-size: 14px; color: ${(amount as number) > 0 ? '#e74c3c' : '#27ae60'}">${(amount as number).toLocaleString()}</strong>
                 </div>
-            </div>
-        `;
+            `;
+        });
+
+        content += `</div>`;
+        
+        // Transactions from latest snapshot to now
+        const currentPeriodTxs = getTransactionsForPeriod(allTransactions, null, latestSnapshot);
+        content += `<h3 style="font-size: 14px; color: #34495e; margin-top: 20px;">ریز تراکنش‌های دوره اخیر (از آخرین بیلان تا کنون):</h3>`;
+        content += formatTransactionTable(currentPeriodTxs);
+        content += `</div>`;
+
+        // Snapshots and their periods
+        snapshots.forEach((snap, index) => {
+            const isSelected = selectedSnapshots.has(snap.id);
+            const isDetailed = index === 0 || (isSelected && printOptions[snap.id] === 'detailed');
+            
+            // We print the latest snapshot ALWAYS, and others if selected
+            if (index === 0 || isSelected) {
+                content += `
+                    <div style="margin-top: 30px; border: 1px solid #ddd; padding: 15px; border-radius: 8px;">
+                        <div style="display: flex; justify-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 10px;">
+                            <h2 style="margin: 0; font-size: 16px; color: #2c3e50;">بیلان ثبت شده در تاریخ: ${new Date(snap.created_at).toLocaleString('fa-IR')}</h2>
+                            <span style="font-size: 10px; color: #999; margin-right: auto;">توسط: ${snap.created_by_name || snap.created_by}</span>
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
+                `;
+
+                Object.entries(snap.balances_data.main_balances || {}).forEach(([curr, amount]) => {
+                    content += `
+                        <div style="background: #f9f9f9; border: 1px solid #eee; padding: 5px 10px; border-radius: 4px;">
+                            <span style="font-size: 9px; color: #777;">${curr}:</span>
+                            <strong style="font-size: 12px; color: ${(amount as number) > 0 ? '#c0392b' : '#1e8449'}">${(amount as number).toLocaleString()}</strong>
+                        </div>
+                    `;
+                });
+
+                content += `</div>`;
+
+                if (isDetailed) {
+                    const nextSnap = snapshots[index + 1] || null;
+                    const periodTxs = getTransactionsForPeriod(allTransactions, snap, nextSnap);
+                    content += `<h3 style="font-size: 13px; color: #555; margin-top: 15px;">ریز تراکنش‌های منتهی به این بیلان:</h3>`;
+                    content += formatTransactionTable(periodTxs);
+                }
+
+                if (snap.notes) {
+                    content += `<p style="font-size: 11px; color: #777; font-style: italic; margin-top: 10px; border-top: 1px dashed #eee; pt: 5px;">یادداشت: ${snap.notes}</p>`;
+                }
+                
+                content += `</div>`;
+            }
+        });
+
+        content += `</div>`;
 
         printWindow.document.write(`
             <html>
-                <head><title>چاپ بیلان - ${customer.name}</title></head>
+                <head>
+                    <title>چاپ بیلان - ${customer.name}</title>
+                    <style>
+                        @media print {
+                            body { margin: 0; padding: 0; }
+                            .no-print { display: none; }
+                        }
+                        body { font-family: 'Tahoma', sans-serif; }
+                        table { page-break-inside: auto; }
+                        tr { page-break-inside: avoid; page-break-after: auto; }
+                    </style>
+                </head>
                 <body onload="window.print();window.close()">${content}</body>
             </html>
         `);
         printWindow.document.close();
     };
 
-    const handleShare = () => {
+    const handleShare = async () => {
+        const allTransactions = await api.getTransactionsForCustomer(customer.id);
         let shareText = `📋 بیلان مشتری: ${customer.name} (${customer.code})\n`;
-        shareText += `📅 تاریخ: ${new Date().toLocaleDateString('fa-IR')}\n\n`;
+        shareText += `📅 تاریخ گزارش: ${new Date().toLocaleDateString('fa-IR')}\n\n`;
 
-        if (latestSnapshot) {
-            shareText += `--- 💰 آخرین وضعیت حساب ---\n`;
-            Object.entries(latestSnapshot.balances_data.main_balances || {}).forEach(([curr, amount]) => {
-                shareText += `🔹 ${curr}: ${(amount as number).toLocaleString()}\n`;
+        shareText += `--- 💰 وضعیت فعلی (لحظه‌ای) ---\n`;
+        Object.entries(customer.balances || {}).forEach(([curr, amount]) => {
+            shareText += `🔹 ${curr}: ${(amount as number).toLocaleString()}\n`;
+        });
+        
+        const currentPeriodTxs = getTransactionsForPeriod(allTransactions, null, latestSnapshot);
+        if (currentPeriodTxs.length > 0) {
+            shareText += `\n📥 تراکنش‌های اخیر:\n`;
+            currentPeriodTxs.slice(0, 5).forEach(tx => {
+                shareText += `▫️ ${new Date(tx.timestamp).toLocaleDateString('fa-IR')} | ${tx.description.substring(0, 20)}... | ${tx.amount.toLocaleString()} ${tx.currency} (${tx.type === 'credit' ? 'برد' : 'رسید'})\n`;
             });
-            if (latestSnapshot.balances_data.rented_balance !== 0) {
-                shareText += `🚚 مانده کرایی: ${latestSnapshot.balances_data.rented_balance.toLocaleString()} تومان\n`;
+            if (currentPeriodTxs.length > 5) shareText += `... و ${currentPeriodTxs.length - 5} تراکنش دیگر\n`;
+        }
+
+        snapshots.forEach((snap, index) => {
+            const isSelected = selectedSnapshots.has(snap.id);
+            const isDetailed = index === 0 || (isSelected && printOptions[snap.id] === 'detailed');
+
+            if (index === 0 || isSelected) {
+                shareText += `\n--------------------------\n`;
+                shareText += `📌 بیلان مورخ: ${new Date(snap.created_at).toLocaleDateString('fa-IR')}\n`;
+                
+                Object.entries(snap.balances_data.main_balances || {}).forEach(([curr, amount]) => {
+                    shareText += `🔸 ${curr}: ${(amount as number).toLocaleString()}\n`;
+                });
+
+                if (isDetailed) {
+                    const nextSnap = snapshots[index + 1] || null;
+                    const periodTxs = getTransactionsForPeriod(allTransactions, snap, nextSnap);
+                    if (periodTxs.length > 0) {
+                        shareText += `\n📝 ریز تراکنش‌های این دوره:\n`;
+                        periodTxs.slice(0, 5).forEach(tx => {
+                            shareText += `▪️ ${new Date(tx.timestamp).toLocaleDateString('fa-IR')} | ${tx.amount.toLocaleString()} ${tx.currency} (${tx.type === 'credit' ? 'برد' : 'رسید'})\n`;
+                        });
+                        if (periodTxs.length > 5) shareText += `... و ${periodTxs.length - 5} مورد دیگر\n`;
+                    }
+                }
             }
-            shareText += `\n📝 خلاصه: ${latestSnapshot.summary_text}\n\n`;
-        }
-
-        // Include selected history
-        const selected = snapshots.filter(s => selectedSnapshots.has(s.id));
-        if (selected.length > 0) {
-            shareText += `--- سوابق انتخابی ---\n`;
-            selected.forEach(s => {
-                const option = printOptions[s.id] || 'detailed';
-                shareText += `تاریخ: ${new Date(s.created_at).toLocaleDateString('fa-IR')}\n`;
-                shareText += `نوع: ${option === 'summary' ? 'خلاصه' : 'تفصیلی'}\n`;
-                shareText += `${s.summary_text}\n\n`;
-            });
-        }
+        });
 
         if (navigator.share) {
             navigator.share({
