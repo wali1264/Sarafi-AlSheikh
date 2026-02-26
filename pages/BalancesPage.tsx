@@ -102,9 +102,10 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
     };
 
     const handlePrint = async () => {
-        const [allTransactions, rentedTransactions] = await Promise.all([
+        const [allTransactions, rentedTransactions, unifiedBalances] = await Promise.all([
             api.getTransactionsForCustomer(customer.id),
-            api.getRentedTransactionsForCustomer(customer.id)
+            api.getRentedTransactionsForCustomer(customer.id),
+            api.getUnifiedPortalBalance({ userId: customer.id, userType: 'Customer' })
         ]);
 
         const printWindow = window.open('', '_blank');
@@ -120,8 +121,9 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
                     <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 15px;">
         `;
 
-        // Current Live Balances
-        Object.entries(customer.balances || {}).forEach(([curr, amount]) => {
+        // Current Live Balances from Unified Data
+        Object.entries(unifiedBalances || {}).forEach(([curr, amount]) => {
+            if (curr === 'IRT_BANK') return; // Skip K here to show it separately
             content += `
                 <div style="background: white; border: 1px solid #ddd; padding: 8px 12px; border-radius: 4px; min-width: 120px;">
                     <span style="font-size: 10px; color: #888; display: block;">${curr}</span>
@@ -130,8 +132,8 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
             `;
         });
 
-        // Current Rented Balance (K)
-        const currentRentedBalance = customer.rented_balance || 0;
+        // Current Rented Balance (K) from Unified Data
+        const currentRentedBalance = unifiedBalances['IRT_BANK'] || 0;
         content += `
             <div style="background: #fffbeb; border: 1px solid #fef3c7; padding: 8px 12px; border-radius: 4px; min-width: 120px;">
                 <span style="font-size: 10px; color: #b45309; display: block;">K (تومان)</span>
@@ -229,20 +231,22 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
     };
 
     const handleShare = async () => {
-        const [allTransactions, rentedTransactions] = await Promise.all([
+        const [allTransactions, rentedTransactions, unifiedBalances] = await Promise.all([
             api.getTransactionsForCustomer(customer.id),
-            api.getRentedTransactionsForCustomer(customer.id)
+            api.getRentedTransactionsForCustomer(customer.id),
+            api.getUnifiedPortalBalance({ userId: customer.id, userType: 'Customer' })
         ]);
 
         let shareText = `📋 بیلان مشتری: ${customer.name} (${customer.code})\n`;
         shareText += `📅 تاریخ گزارش: ${new Date().toLocaleDateString('fa-IR')}\n\n`;
 
         shareText += `--- 💰 وضعیت فعلی (لحظه‌ای) ---\n`;
-        Object.entries(customer.balances || {}).forEach(([curr, amount]) => {
+        Object.entries(unifiedBalances || {}).forEach(([curr, amount]) => {
+            if (curr === 'IRT_BANK') return;
             shareText += `🔹 ${curr}: ${(amount as number).toLocaleString()}\n`;
         });
         
-        const currentRentedBalance = customer.rented_balance || 0;
+        const currentRentedBalance = unifiedBalances['IRT_BANK'] || 0;
         shareText += `🔸 K (تومان): ${currentRentedBalance.toLocaleString()}\n`;
         
         const currentPeriodTxs = getTransactionsForPeriod(allTransactions, null, latestSnapshot);
