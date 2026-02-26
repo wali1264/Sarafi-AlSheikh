@@ -150,6 +150,20 @@ class SarrafiApiService {
         return data || {};
     }
 
+    async getRentedTransactionsForCustomer(customerId: string): Promise<RentedAccountTransaction[]> {
+        const { data, error } = await supabase
+            .from('rented_account_transactions')
+            .select('*')
+            .eq('user_id', customerId)
+            .eq('user_type', 'Customer')
+            .order('timestamp', { ascending: false });
+        if (error) {
+            console.error('Error fetching rented transactions for customer:', error);
+            return [];
+        }
+        return data || [];
+    }
+
 
     // --- External Logins ---
     async getExternalLogins(): Promise<(ExternalLogin & { entityName: string })[]> {
