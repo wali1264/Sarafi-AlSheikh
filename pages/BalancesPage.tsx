@@ -53,14 +53,58 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
         setSelectedSnapshots(newSet);
     };
 
-    const handleShare = () => {
-        let shareText = `بیلان مشتری: ${customer.name} (${customer.code})\n`;
-        shareText += `تاریخ: ${new Date().toLocaleDateString('fa-IR')}\n\n`;
+    const handlePrint = () => {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return;
 
-        // Always include latest if it exists
+        let content = `
+            <div style="direction: rtl; font-family: sans-serif; padding: 20px;">
+                <h1 style="border-bottom: 2px solid #333; padding-bottom: 10px;">بیلان مشتری: ${customer.name} (${customer.code})</h1>
+                <p>تاریخ چاپ: ${new Date().toLocaleString('fa-IR')}</p>
+                
+                <div style="margin-top: 20px; background: #f5f5f5; padding: 15px; border-radius: 8px;">
+                    <h3>آخرین وضعیت حساب:</h3>
+                    <ul style="list-style: none; padding: 0;">
+        `;
+
         if (latestSnapshot) {
-            shareText += `--- آخرین وضعیت ---\n`;
-            shareText += `${latestSnapshot.summary_text}\n\n`;
+            Object.entries(latestSnapshot.balances_data.main_balances || {}).forEach(([curr, amount]) => {
+                content += `<li style="margin-bottom: 5px;"><strong>${curr}:</strong> ${(amount as number).toLocaleString()}</li>`;
+            });
+            if (latestSnapshot.balances_data.rented_balance !== 0) {
+                content += `<li style="margin-top: 10px; color: #b45309;"><strong>مانده کرایی (تومان):</strong> ${latestSnapshot.balances_data.rented_balance.toLocaleString()}</li>`;
+            }
+            content += `<p style="margin-top: 15px; border-top: 1px solid #ddd; pt: 10px;">${latestSnapshot.summary_text}</p>`;
+        }
+
+        content += `
+                    </div>
+                </div>
+            </div>
+        `;
+
+        printWindow.document.write(`
+            <html>
+                <head><title>چاپ بیلان - ${customer.name}</title></head>
+                <body onload="window.print();window.close()">${content}</body>
+            </html>
+        `);
+        printWindow.document.close();
+    };
+
+    const handleShare = () => {
+        let shareText = `📋 بیلان مشتری: ${customer.name} (${customer.code})\n`;
+        shareText += `📅 تاریخ: ${new Date().toLocaleDateString('fa-IR')}\n\n`;
+
+        if (latestSnapshot) {
+            shareText += `--- 💰 آخرین وضعیت حساب ---\n`;
+            Object.entries(latestSnapshot.balances_data.main_balances || {}).forEach(([curr, amount]) => {
+                shareText += `🔹 ${curr}: ${(amount as number).toLocaleString()}\n`;
+            });
+            if (latestSnapshot.balances_data.rented_balance !== 0) {
+                shareText += `🚚 مانده کرایی: ${latestSnapshot.balances_data.rented_balance.toLocaleString()} تومان\n`;
+            }
+            shareText += `\n📝 خلاصه: ${latestSnapshot.summary_text}\n\n`;
         }
 
         // Include selected history
@@ -98,15 +142,24 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
             <div className="p-6">
                 <div className="flex justify-between items-start mb-4">
                     <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                            <h3 className="text-2xl font-bold text-slate-100">{customer.name}</h3>
-                            <button 
-                                onClick={handleShare}
-                                className="p-2 text-slate-400 hover:text-amber-400 transition-colors"
-                                title="اشتراک‌گذاری بیلان"
-                            >
-                                <ShareIcon />
-                            </button>
+                        <div className="flex items-center gap-2">
+                            <h3 className="text-2xl font-bold text-slate-100 truncate max-w-[180px]">{customer.name}</h3>
+                            <div className="flex items-center">
+                                <button 
+                                    onClick={handlePrint}
+                                    className="p-1.5 text-slate-400 hover:text-cyan-400 transition-colors"
+                                    title="چاپ بیلان"
+                                >
+                                    <PrinterIcon />
+                                </button>
+                                <button 
+                                    onClick={handleShare}
+                                    className="p-1.5 text-slate-400 hover:text-amber-400 transition-colors"
+                                    title="اشتراک‌گذاری بیلان"
+                                >
+                                    <ShareIcon />
+                                </button>
+                            </div>
                         </div>
                         <span className="text-lg font-mono text-amber-400">کد: {customer.code}</span>
                     </div>
@@ -121,32 +174,37 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
                 <div className="space-y-3 mb-6">
                     {latestSnapshot ? (
                         <div className="bg-black/20 p-4 rounded border border-amber-500/10">
-                            {/* Detailed Currency Display */}
-                            <div className="grid grid-cols-2 gap-2 mb-3 pb-3 border-b border-white/5">
+                            {/* Smart Flexible Currency Grid */}
+                            <div className="flex flex-wrap gap-2 mb-1">
                                 {Object.entries(latestSnapshot.balances_data.main_balances || {}).map(([currency, amount]) => (
-                                    <div key={currency} className="flex justify-between items-center bg-white/5 p-2 rounded">
-                                        <span className="text-xs text-slate-400">{currency}</span>
-                                        <span className={`text-sm font-bold ${getBalanceStyle(amount as number)}`}>
+                                    <div key={currency} className="flex-1 min-w-[100px] flex justify-between items-center bg-white/5 p-2 rounded border border-white/5 transition-all hover:bg-white/10">
+                                        <span className="text-[10px] text-slate-400 font-medium">{currency}</span>
+                                        <span className={`font-bold ${getBalanceStyle(amount as number)}`}
+                                              style={{ fontSize: (amount as number).toString().length > 10 ? '0.75rem' : '0.9rem' }}>
                                             {(amount as number).toLocaleString()}
                                         </span>
                                     </div>
                                 ))}
-                                {latestSnapshot.balances_data.rented_balance !== 0 && (
-                                    <div className="flex justify-between items-center bg-white/5 p-2 rounded col-span-2">
-                                        <span className="text-xs text-slate-400">مانده کرایی (تومان)</span>
-                                        <span className={`text-sm font-bold ${getBalanceStyle(latestSnapshot.balances_data.rented_balance)}`}>
-                                            {latestSnapshot.balances_data.rented_balance.toLocaleString()}
-                                        </span>
-                                    </div>
-                                )}
                             </div>
-                            
-                            <p className="text-lg text-slate-300 leading-relaxed">{latestSnapshot.summary_text}</p>
-                            {latestSnapshot.notes && (
-                                <p className="text-sm text-slate-500 mt-2 italic">"{latestSnapshot.notes}"</p>
+
+                            {/* Distinct Rented Balance Display */}
+                            {latestSnapshot.balances_data.rented_balance !== 0 && (
+                                <div className="mt-2 flex justify-between items-center bg-amber-500/10 p-2 rounded border border-amber-500/20">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-amber-400 text-sm">🚚</span>
+                                        <span className="text-[10px] text-amber-200/70 font-semibold">مانده کرایی (تومان)</span>
+                                    </div>
+                                    <span className={`text-sm font-bold ${getBalanceStyle(latestSnapshot.balances_data.rented_balance)}`}>
+                                        {latestSnapshot.balances_data.rented_balance.toLocaleString()}
+                                    </span>
+                                </div>
                             )}
-                            <div className="mt-3 flex justify-end">
-                                <span className="text-[10px] text-slate-600">ثبت توسط: {latestSnapshot.created_by_name || latestSnapshot.created_by}</span>
+                            
+                            {latestSnapshot.notes && (
+                                <p className="text-[11px] text-slate-500 mt-3 italic border-t border-white/5 pt-2">"{latestSnapshot.notes}"</p>
+                            )}
+                            <div className="mt-2 flex justify-end">
+                                <span className="text-[9px] text-slate-600">ثبت توسط: {latestSnapshot.created_by_name || latestSnapshot.created_by}</span>
                             </div>
                         </div>
                     ) : (
