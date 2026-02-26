@@ -976,20 +976,29 @@ class SarrafiApiService {
 
     // --- Balance Snapshots ---
     async getBalanceSnapshots(customerId?: string): Promise<BalanceSnapshot[]> {
-        let query = supabase.from('balance_snapshots').select('*').order('created_at', { ascending: false });
+        let query = supabase.from('balance_snapshots').select('*, created_by_user:users(name)').order('created_at', { ascending: false });
         if (customerId) query = query.eq('customer_id', customerId);
         const { data, error } = await query;
         if (error) {
             console.error('Error fetching balance snapshots:', error);
             return [];
         }
-        return data || [];
+        return (data || []).map(snap => ({
+            ...snap,
+            created_by_name: (snap as any).created_by_user?.name || snap.created_by
+        }));
     }
 
     async createBalanceSnapshot(snapshot: Omit<BalanceSnapshot, 'id' | 'created_at'>): Promise<BalanceSnapshot | { error: string }> {
         const { data, error } = await supabase.from('balance_snapshots').insert(snapshot).select().single();
         if (error) return { error: error.message };
         return data;
+    }
+
+    async createBulkBalanceSnapshots(snapshots: Omit<BalanceSnapshot, 'id' | 'created_at'>[]): Promise<{ success: boolean; error?: string }> {
+        const { error } = await supabase.from('balance_snapshots').insert(snapshots);
+        if (error) return { success: false, error: error.message };
+        return { success: true };
     }
 }
 
