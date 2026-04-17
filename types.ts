@@ -758,4 +758,5 @@ export interface BalanceSnapshot {
     };
     summary_text: string;
     notes?: string;
+    created_by_name?: string;
 }
