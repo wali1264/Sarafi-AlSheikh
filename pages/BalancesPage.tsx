@@ -64,11 +64,10 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
         }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     };
 
-    const formatTransactionTable = (transactions: any[], title: string = 'ریز تراکنش‌ها') => {
-        if (transactions.length === 0) return `<p style="font-size: 12px; color: #666; margin: 10px 0;">تراکنشی در این ${title} ثبت نشده است.</p>`;
+    const formatTransactionTable = (transactions: any[]) => {
+        if (transactions.length === 0) return '<p style="font-size: 12px; color: #666; margin: 10px 0;">تراکنشی در این دوره ثبت نشده است.</p>';
         
         let table = `
-            <h3 style="font-size: 13px; color: #555; margin-top: 15px;">${title}:</h3>
             <table style="width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 11px;">
                 <thead>
                     <tr style="background: #eee;">
@@ -83,16 +82,13 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
         `;
 
         transactions.forEach(tx => {
-            const isRented = tx.rented_account_id !== undefined;
             table += `
                 <tr>
                     <td style="border: 1px solid #ddd; padding: 5px; text-align: center;">${new Date(tx.timestamp).toLocaleDateString('fa-IR')}</td>
-                    <td style="border: 1px solid #ddd; padding: 5px;">${tx.description || (isRented ? 'تراکنش حساب K' : '')}</td>
-                    <td style="border: 1px solid #ddd; padding: 5px; text-align: center; color: ${tx.type === 'credit' || tx.type === 'withdrawal' ? 'red' : 'green'}">
-                        ${(tx.type === 'credit' || tx.type === 'withdrawal') ? 'برد' : 'رسید'}
-                    </td>
+                    <td style="border: 1px solid #ddd; padding: 5px;">${tx.description}</td>
+                    <td style="border: 1px solid #ddd; padding: 5px; text-align: center; color: ${tx.type === 'credit' ? 'red' : 'green'}">${tx.type === 'credit' ? 'برد' : 'رسید'}</td>
                     <td style="border: 1px solid #ddd; padding: 5px; text-align: left;">${tx.amount.toLocaleString()}</td>
-                    <td style="border: 1px solid #ddd; padding: 5px; text-align: center;">${tx.currency || 'تومان'} ${isRented ? '(K)' : ''}</td>
+                    <td style="border: 1px solid #ddd; padding: 5px; text-align: center;">${tx.currency}</td>
                 </tr>
             `;
         });
@@ -102,12 +98,7 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
     };
 
     const handlePrint = async () => {
-        const [allTransactions, rentedTransactions, unifiedBalances] = await Promise.all([
-            api.getTransactionsForCustomer(customer.id),
-            api.getRentedTransactionsForCustomer(customer.id),
-            api.getUnifiedPortalBalance({ userId: customer.id, userType: 'Customer' })
-        ]);
-
+        const allTransactions = await api.getTransactionsForCustomer(customer.id);
         const printWindow = window.open('', '_blank');
         if (!printWindow) return;
 
@@ -121,9 +112,8 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
                     <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 15px;">
         `;
 
-        // Current Live Balances from Unified Data
-        Object.entries(unifiedBalances || {}).forEach(([curr, amount]) => {
-            if (curr === 'IRT_BANK') return; // Skip K here to show it separately
+        // Current Live Balances
+        Object.entries(customer.balances || {}).forEach(([curr, amount]) => {
             content += `
                 <div style="background: white; border: 1px solid #ddd; padding: 8px 12px; border-radius: 4px; min-width: 120px;">
                     <span style="font-size: 10px; color: #888; display: block;">${curr}</span>
@@ -132,26 +122,12 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
             `;
         });
 
-        // Current Rented Balance (K) from Unified Data
-        const currentRentedBalance = unifiedBalances['IRT_BANK'] || 0;
-        content += `
-            <div style="background: #fffbeb; border: 1px solid #fef3c7; padding: 8px 12px; border-radius: 4px; min-width: 120px;">
-                <span style="font-size: 10px; color: #b45309; display: block;">K (تومان)</span>
-                <strong style="font-size: 14px; color: ${currentRentedBalance > 0 ? '#e74c3c' : '#27ae60'}">${currentRentedBalance.toLocaleString()}</strong>
-            </div>
-        `;
-
         content += `</div>`;
         
         // Transactions from latest snapshot to now
         const currentPeriodTxs = getTransactionsForPeriod(allTransactions, null, latestSnapshot);
-        const currentPeriodRentedTxs = getTransactionsForPeriod(rentedTransactions, null, latestSnapshot);
-        
         content += `<h3 style="font-size: 14px; color: #34495e; margin-top: 20px;">ریز تراکنش‌های دوره اخیر (از آخرین بیلان تا کنون):</h3>`;
-        content += formatTransactionTable(currentPeriodTxs, 'تراکنش‌های ارزی');
-        if (currentPeriodRentedTxs.length > 0) {
-            content += formatTransactionTable(currentPeriodRentedTxs, 'تراکنش‌های حساب K');
-        }
+        content += formatTransactionTable(currentPeriodTxs);
         content += `</div>`;
 
         // Snapshots and their periods
@@ -159,6 +135,7 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
             const isSelected = selectedSnapshots.has(snap.id);
             const isDetailed = index === 0 || (isSelected && printOptions[snap.id] === 'detailed');
             
+            // We print the latest snapshot ALWAYS, and others if selected
             if (index === 0 || isSelected) {
                 content += `
                     <div style="margin-top: 30px; border: 1px solid #ddd; padding: 15px; border-radius: 8px;">
@@ -178,26 +155,13 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
                     `;
                 });
 
-                // Rented Balance in Snapshot (K)
-                const snapRentedBalance = snap.balances_data.rented_balance || 0;
-                content += `
-                    <div style="background: #fffbeb; border: 1px solid #fef3c7; padding: 5px 10px; border-radius: 4px;">
-                        <span style="font-size: 9px; color: #b45309;">K (تومان):</span>
-                        <strong style="font-size: 12px; color: ${snapRentedBalance > 0 ? '#c0392b' : '#1e8449'}">${snapRentedBalance.toLocaleString()}</strong>
-                    </div>
-                `;
-
                 content += `</div>`;
 
                 if (isDetailed) {
                     const nextSnap = snapshots[index + 1] || null;
                     const periodTxs = getTransactionsForPeriod(allTransactions, snap, nextSnap);
-                    const periodRentedTxs = getTransactionsForPeriod(rentedTransactions, snap, nextSnap);
-                    
-                    content += formatTransactionTable(periodTxs, 'ریز تراکنش‌های ارزی منتهی به این بیلان');
-                    if (periodRentedTxs.length > 0) {
-                        content += formatTransactionTable(periodRentedTxs, 'ریز تراکنش‌های حساب K منتهی به این بیلان');
-                    }
+                    content += `<h3 style="font-size: 13px; color: #555; margin-top: 15px;">ریز تراکنش‌های منتهی به این بیلان:</h3>`;
+                    content += formatTransactionTable(periodTxs);
                 }
 
                 if (snap.notes) {
@@ -231,38 +195,22 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
     };
 
     const handleShare = async () => {
-        const [allTransactions, rentedTransactions, unifiedBalances] = await Promise.all([
-            api.getTransactionsForCustomer(customer.id),
-            api.getRentedTransactionsForCustomer(customer.id),
-            api.getUnifiedPortalBalance({ userId: customer.id, userType: 'Customer' })
-        ]);
-
+        const allTransactions = await api.getTransactionsForCustomer(customer.id);
         let shareText = `📋 بیلان مشتری: ${customer.name} (${customer.code})\n`;
         shareText += `📅 تاریخ گزارش: ${new Date().toLocaleDateString('fa-IR')}\n\n`;
 
         shareText += `--- 💰 وضعیت فعلی (لحظه‌ای) ---\n`;
-        Object.entries(unifiedBalances || {}).forEach(([curr, amount]) => {
-            if (curr === 'IRT_BANK') return;
+        Object.entries(customer.balances || {}).forEach(([curr, amount]) => {
             shareText += `🔹 ${curr}: ${(amount as number).toLocaleString()}\n`;
         });
         
-        const currentRentedBalance = unifiedBalances['IRT_BANK'] || 0;
-        shareText += `🔸 K (تومان): ${currentRentedBalance.toLocaleString()}\n`;
-        
         const currentPeriodTxs = getTransactionsForPeriod(allTransactions, null, latestSnapshot);
-        const currentPeriodRentedTxs = getTransactionsForPeriod(rentedTransactions, null, latestSnapshot);
-
         if (currentPeriodTxs.length > 0) {
-            shareText += `\n📥 تراکنش‌های ارزی اخیر:\n`;
+            shareText += `\n📥 تراکنش‌های اخیر:\n`;
             currentPeriodTxs.slice(0, 5).forEach(tx => {
                 shareText += `▫️ ${new Date(tx.timestamp).toLocaleDateString('fa-IR')} | ${tx.description.substring(0, 20)}... | ${tx.amount.toLocaleString()} ${tx.currency} (${tx.type === 'credit' ? 'برد' : 'رسید'})\n`;
             });
-        }
-        if (currentPeriodRentedTxs.length > 0) {
-            shareText += `\n📥 تراکنش‌های حساب K اخیر:\n`;
-            currentPeriodRentedTxs.slice(0, 5).forEach(tx => {
-                shareText += `▫️ ${new Date(tx.timestamp).toLocaleDateString('fa-IR')} | ${tx.amount.toLocaleString()} تومان (${tx.type === 'withdrawal' ? 'برد' : 'رسید'})\n`;
-            });
+            if (currentPeriodTxs.length > 5) shareText += `... و ${currentPeriodTxs.length - 5} تراکنش دیگر\n`;
         }
 
         snapshots.forEach((snap, index) => {
@@ -276,24 +224,16 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
                 Object.entries(snap.balances_data.main_balances || {}).forEach(([curr, amount]) => {
                     shareText += `🔸 ${curr}: ${(amount as number).toLocaleString()}\n`;
                 });
-                shareText += `🔸 K (تومان): ${(snap.balances_data.rented_balance || 0).toLocaleString()}\n`;
 
                 if (isDetailed) {
                     const nextSnap = snapshots[index + 1] || null;
                     const periodTxs = getTransactionsForPeriod(allTransactions, snap, nextSnap);
-                    const periodRentedTxs = getTransactionsForPeriod(rentedTransactions, snap, nextSnap);
-
                     if (periodTxs.length > 0) {
-                        shareText += `\n📝 ریز تراکنش‌های ارزی این دوره:\n`;
-                        periodTxs.slice(0, 3).forEach(tx => {
+                        shareText += `\n📝 ریز تراکنش‌های این دوره:\n`;
+                        periodTxs.slice(0, 5).forEach(tx => {
                             shareText += `▪️ ${new Date(tx.timestamp).toLocaleDateString('fa-IR')} | ${tx.amount.toLocaleString()} ${tx.currency} (${tx.type === 'credit' ? 'برد' : 'رسید'})\n`;
                         });
-                    }
-                    if (periodRentedTxs.length > 0) {
-                        shareText += `\n📝 ریز تراکنش‌های حساب K این دوره:\n`;
-                        periodRentedTxs.slice(0, 3).forEach(tx => {
-                            shareText += `▪️ ${new Date(tx.timestamp).toLocaleDateString('fa-IR')} | ${tx.amount.toLocaleString()} تومان (${tx.type === 'withdrawal' ? 'برد' : 'رسید'})\n`;
-                        });
+                        if (periodTxs.length > 5) shareText += `... و ${periodTxs.length - 5} مورد دیگر\n`;
                     }
                 }
             }
@@ -371,6 +311,7 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
                             {latestSnapshot.balances_data.rented_balance !== 0 && (
                                 <div className="mt-2 flex justify-between items-center bg-amber-500/10 p-2 rounded border border-amber-500/20">
                                     <div className="flex items-center gap-2">
+                                        <span className="text-amber-400 text-sm">🚚</span>
                                         <span className="text-[10px] text-amber-200/70 font-semibold">مانده کرایی (تومان)</span>
                                     </div>
                                     <span className={`text-sm font-bold ${getBalanceStyle(latestSnapshot.balances_data.rented_balance)}`}>
