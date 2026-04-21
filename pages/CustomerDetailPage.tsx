@@ -220,7 +220,7 @@ const CustomerDetailPage: React.FC = () => {
                             onClick={() => setBalanceModalOpen(true)}
                             className="px-5 py-2 bg-amber-600/50 text-amber-100 hover:bg-amber-500/50 text-lg transition-colors border border-amber-500/50 rounded"
                          >
-                            قید بیلان
+                            قید بیلانس
                         </button>
                          <button 
                             onClick={() => setPrintModalOpen(true)}

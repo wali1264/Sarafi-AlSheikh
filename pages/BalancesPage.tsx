@@ -113,7 +113,7 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
 
         let content = `
             <div style="direction: rtl; font-family: sans-serif; padding: 20px;">
-                <h1 style="border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px;">بیلان مشتری: ${customer.name} (${customer.code})</h1>
+                <h1 style="border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px;">بیلانس مشتری: ${customer.name} (${customer.code})</h1>
                 <p style="font-size: 12px; color: #666;">تاریخ چاپ: ${new Date().toLocaleString('fa-IR')}</p>
                 
                 <div style="margin-top: 20px; border: 1px solid #ccc; padding: 15px; border-radius: 8px; background: #fafafa;">
@@ -127,7 +127,7 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
             content += `
                 <div style="background: white; border: 1px solid #ddd; padding: 8px 12px; border-radius: 4px; min-width: 120px;">
                     <span style="font-size: 10px; color: #888; display: block;">${curr}</span>
-                    <strong style="font-size: 14px; color: ${(amount as number) > 0 ? '#e74c3c' : '#27ae60'}">${(amount as number).toLocaleString()}</strong>
+                    <strong style="font-size: 14px; color: ${(amount as number) >= 0 ? '#27ae60' : '#e74c3c'}">${(amount as number).toLocaleString()}</strong>
                 </div>
             `;
         });
@@ -137,7 +137,7 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
         content += `
             <div style="background: #fffbeb; border: 1px solid #fef3c7; padding: 8px 12px; border-radius: 4px; min-width: 120px;">
                 <span style="font-size: 10px; color: #b45309; display: block;">K (تومان)</span>
-                <strong style="font-size: 14px; color: ${currentRentedBalance > 0 ? '#e74c3c' : '#27ae60'}">${currentRentedBalance.toLocaleString()}</strong>
+                <strong style="font-size: 14px; color: ${currentRentedBalance >= 0 ? '#27ae60' : '#e74c3c'}">${currentRentedBalance.toLocaleString()}</strong>
             </div>
         `;
 
@@ -147,7 +147,7 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
         const currentPeriodTxs = getTransactionsForPeriod(allTransactions, null, latestSnapshot);
         const currentPeriodRentedTxs = getTransactionsForPeriod(rentedTransactions, null, latestSnapshot);
         
-        content += `<h3 style="font-size: 14px; color: #34495e; margin-top: 20px;">ریز تراکنش‌های دوره اخیر (از آخرین بیلان تا کنون):</h3>`;
+        content += `<h3 style="font-size: 14px; color: #34495e; margin-top: 20px;">ریز تراکنش‌های دوره اخیر (از آخرین بیلانس تا کنون):</h3>`;
         content += formatTransactionTable(currentPeriodTxs, 'تراکنش‌های ارزی');
         if (currentPeriodRentedTxs.length > 0) {
             content += formatTransactionTable(currentPeriodRentedTxs, 'تراکنش‌های حساب K');
@@ -163,7 +163,7 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
                 content += `
                     <div style="margin-top: 30px; border: 1px solid #ddd; padding: 15px; border-radius: 8px;">
                         <div style="display: flex; justify-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 10px;">
-                            <h2 style="margin: 0; font-size: 16px; color: #2c3e50;">بیلان ثبت شده در تاریخ: ${new Date(snap.created_at).toLocaleString('fa-IR')}</h2>
+                            <h2 style="margin: 0; font-size: 16px; color: #2c3e50;">بیلانس ثبت شده در تاریخ: ${new Date(snap.created_at).toLocaleString('fa-IR')}</h2>
                             <span style="font-size: 10px; color: #999; margin-right: auto;">توسط: ${snap.created_by_name || snap.created_by}</span>
                         </div>
                         <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
@@ -173,7 +173,7 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
                     content += `
                         <div style="background: #f9f9f9; border: 1px solid #eee; padding: 5px 10px; border-radius: 4px;">
                             <span style="font-size: 9px; color: #777;">${curr}:</span>
-                            <strong style="font-size: 12px; color: ${(amount as number) > 0 ? '#c0392b' : '#1e8449'}">${(amount as number).toLocaleString()}</strong>
+                            <strong style="font-size: 12px; color: ${(amount as number) >= 0 ? '#1e8449' : '#c0392b'}">${(amount as number).toLocaleString()}</strong>
                         </div>
                     `;
                 });
@@ -183,7 +183,7 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
                 content += `
                     <div style="background: #fffbeb; border: 1px solid #fef3c7; padding: 5px 10px; border-radius: 4px;">
                         <span style="font-size: 9px; color: #b45309;">K (تومان):</span>
-                        <strong style="font-size: 12px; color: ${snapRentedBalance > 0 ? '#c0392b' : '#1e8449'}">${snapRentedBalance.toLocaleString()}</strong>
+                        <strong style="font-size: 12px; color: ${snapRentedBalance >= 0 ? '#1e8449' : '#c0392b'}">${snapRentedBalance.toLocaleString()}</strong>
                     </div>
                 `;
 
@@ -194,9 +194,9 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
                     const periodTxs = getTransactionsForPeriod(allTransactions, snap, nextSnap);
                     const periodRentedTxs = getTransactionsForPeriod(rentedTransactions, snap, nextSnap);
                     
-                    content += formatTransactionTable(periodTxs, 'ریز تراکنش‌های ارزی منتهی به این بیلان');
+                    content += formatTransactionTable(periodTxs, 'ریز تراکنش‌های ارزی منتهی به این بیلانس');
                     if (periodRentedTxs.length > 0) {
-                        content += formatTransactionTable(periodRentedTxs, 'ریز تراکنش‌های حساب K منتهی به این بیلان');
+                        content += formatTransactionTable(periodRentedTxs, 'ریز تراکنش‌های حساب K منتهی به این بیلانس');
                     }
                 }
 
@@ -213,7 +213,7 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
         printWindow.document.write(`
             <html>
                 <head>
-                    <title>چاپ بیلان - ${customer.name}</title>
+                    <title>چاپ بیلانس - ${customer.name}</title>
                     <style>
                         @media print {
                             body { margin: 0; padding: 0; }
@@ -237,7 +237,7 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
             api.getUnifiedPortalBalance({ userId: customer.id, userType: 'Customer' })
         ]);
 
-        let shareText = `📋 بیلان مشتری: ${customer.name} (${customer.code})\n`;
+        let shareText = `📋 بیلانس مشتری: ${customer.name} (${customer.code})\n`;
         shareText += `📅 تاریخ گزارش: ${new Date().toLocaleDateString('fa-IR')}\n\n`;
 
         shareText += `--- 💰 وضعیت فعلی (لحظه‌ای) ---\n`;
@@ -271,7 +271,7 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
 
             if (index === 0 || isSelected) {
                 shareText += `\n--------------------------\n`;
-                shareText += `📌 بیلان مورخ: ${new Date(snap.created_at).toLocaleDateString('fa-IR')}\n`;
+                shareText += `📌 بیلانس مورخ: ${new Date(snap.created_at).toLocaleDateString('fa-IR')}\n`;
                 
                 Object.entries(snap.balances_data.main_balances || {}).forEach(([curr, amount]) => {
                     shareText += `🔸 ${curr}: ${(amount as number).toLocaleString()}\n`;
@@ -301,18 +301,18 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
 
         if (navigator.share) {
             navigator.share({
-                title: `بیلان ${customer.name}`,
+                title: `بیلانس ${customer.name}`,
                 text: shareText,
             }).catch(err => console.error('Error sharing:', err));
         } else {
             navigator.clipboard.writeText(shareText);
-            alert('متن بیلان در حافظه کپی شد.');
+            alert('متن بیلانس در حافظه کپی شد.');
         }
     };
 
     const getBalanceStyle = (balance: number) => {
-        if (balance > 0) return 'text-red-400';
-        if (balance < 0) return 'text-green-400';
+        if (balance >= 0) return 'text-green-400';
+        if (balance < 0) return 'text-red-400';
         return 'text-slate-300';
     };
 
@@ -328,14 +328,14 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
                                 <button 
                                     onClick={handlePrint}
                                     className="p-1.5 text-slate-400 hover:text-cyan-400 transition-colors"
-                                    title="چاپ بیلان"
+                                    title="چاپ بیلانس"
                                 >
                                     <PrinterIcon />
                                 </button>
                                 <button 
                                     onClick={handleShare}
                                     className="p-1.5 text-slate-400 hover:text-amber-400 transition-colors"
-                                    title="اشتراک‌گذاری بیلان"
+                                    title="اشتراک‌گذاری بیلانس"
                                 >
                                     <ShareIcon />
                                 </button>
@@ -345,7 +345,7 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
                     </div>
                     {latestSnapshot && (
                         <div className="text-left">
-                            <span className="text-sm text-slate-500 block">آخرین بیلان:</span>
+                            <span className="text-sm text-slate-500 block">آخرین بیلانس:</span>
                             <span className="text-sm text-slate-400">{new Date(latestSnapshot.created_at).toLocaleDateString('fa-IR')}</span>
                         </div>
                     )}
@@ -397,7 +397,7 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
                         className={`flex items-center gap-2 text-amber-400 hover:text-amber-300 transition-colors ${snapshots.length <= 1 ? 'invisible' : ''}`}
                     >
                         {isExpanded ? <ChevronUpIcon /> : <ChevronDownIcon />}
-                        <span className="text-lg">تاریخچه بیلان‌ها ({snapshots.length})</span>
+                        <span className="text-lg">تاریخچه بیلانس‌ها ({snapshots.length})</span>
                     </button>
                     <button 
                         onClick={() => window.location.href = `#/customers/${customer.id}`}
@@ -501,7 +501,7 @@ const BalancesPage: React.FC = () => {
     const handleBulkRecord = async () => {
         if (!user) return;
         
-        const confirm = window.confirm('آیا از ثبت بیلان برای تمام مشتریان اطمینان دارید؟ این عملیات وضعیت فعلی تمام حساب‌ها را ذخیره می‌کند.');
+        const confirm = window.confirm('آیا از ثبت بیلانس برای تمام مشتریان اطمینان دارید؟ این عملیات وضعیت فعلی تمام حساب‌ها را ذخیره می‌کند.');
         if (!confirm) return;
 
         setIsBulkRecording(true);
@@ -516,7 +516,7 @@ const BalancesPage: React.FC = () => {
                     summary = 'حساب تصفیه است.';
                 } else {
                     summary = balanceEntries
-                        .map(([curr, amount]) => `${(amount as number) > 0 ? 'بدهکار' : 'طلبکار'}: ${Math.abs(amount as number).toLocaleString()} ${curr}`)
+                        .map(([curr, amount]) => `${(amount as number) >= 0 ? 'بدهکار' : 'طلبکار'}: ${Math.abs(amount as number).toLocaleString()} ${curr}`)
                         .join(' | ');
                 }
 
@@ -528,7 +528,7 @@ const BalancesPage: React.FC = () => {
                         rented_balance: 0, // Simplified for bulk
                     },
                     summary_text: summary,
-                    notes: 'ثبت همگانی بیلان'
+                    notes: 'ثبت همگانی بیلانس'
                 });
             }
 
@@ -536,7 +536,7 @@ const BalancesPage: React.FC = () => {
             if ('error' in result) {
                 addToast(`خطا در ثبت همگانی: ${result.error}`, 'error');
             } else {
-                addToast('بیلان تمام مشتریان با موفقیت ثبت شد.', 'success');
+                addToast('بیلانس تمام مشتریان با موفقیت ثبت شد.', 'success');
                 fetchData();
             }
         } catch (error) {
@@ -587,7 +587,7 @@ const BalancesPage: React.FC = () => {
     return (
         <div style={{ direction: 'rtl' }}>
             <div className="flex justify-between items-center mb-10 flex-wrap gap-4">
-                <h1 className="text-5xl font-bold text-slate-100 tracking-wider">مدیریت بیلان‌ها</h1>
+                <h1 className="text-5xl font-bold text-slate-100 tracking-wider">مدیریت بیلانس‌ها</h1>
                 <div className="flex gap-4">
                     <button 
                         onClick={handleBulkRecord}
@@ -595,7 +595,7 @@ const BalancesPage: React.FC = () => {
                         className="px-6 py-3 text-xl font-bold tracking-wider text-white bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105"
                         style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%)', boxShadow: '0 0 25px rgba(245, 158, 11, 0.3)' }}
                     >
-                        {isBulkRecording ? 'در حال ثبت...' : 'ثبت همگانی بیلان'}
+                        {isBulkRecording ? 'در حال ثبت...' : 'ثبت همگانی بیلانس'}
                     </button>
                     <button 
                         onClick={() => navigate('/customers')}
@@ -618,7 +618,7 @@ const BalancesPage: React.FC = () => {
             </div>
 
             {isLoading ? (
-                <div className="text-center py-20 text-slate-400 text-2xl">در حال بارگذاری بیلان‌ها...</div>
+                <div className="text-center py-20 text-slate-400 text-2xl">در حال بارگذاری بیلانس‌ها...</div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
                     {filteredCustomers.map(customer => (

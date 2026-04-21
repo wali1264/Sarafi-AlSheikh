@@ -53,11 +53,11 @@ const CreateBalanceEntryModal: React.FC<CreateBalanceEntryModalProps> = ({ isOpe
             if ('error' in result) {
                 addToast(result.error as string, 'error');
             } else {
-                addToast('بیلان با موفقیت قید شد.', 'success');
+                addToast('بیلانس با موفقیت قید شد.', 'success');
                 onSuccess();
             }
         } catch (error) {
-            addToast('خطا در ثبت بیلان.', 'error');
+            addToast('خطا در ثبت بیلانس.', 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -68,7 +68,7 @@ const CreateBalanceEntryModal: React.FC<CreateBalanceEntryModalProps> = ({ isOpe
             <div className="bg-[#12122E]/90 w-full max-w-2xl border-2 border-amber-500/30 shadow-[0_0_40px_rgba(245,158,11,0.2)]"
                  style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 30px), calc(100% - 30px) 100%, 0 100%)' }}>
                 <div className="px-8 py-5 border-b-2 border-amber-500/20">
-                    <h2 className="text-4xl font-bold text-amber-400 tracking-wider">قید بیلان مشتری</h2>
+                    <h2 className="text-4xl font-bold text-amber-400 tracking-wider">قید بیلانس مشتری</h2>
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-8 space-y-6">
@@ -83,7 +83,7 @@ const CreateBalanceEntryModal: React.FC<CreateBalanceEntryModalProps> = ({ isOpe
                                 return balance !== 0 && (
                                     <div key={curr} className="flex justify-between items-center bg-black/20 p-2 rounded">
                                         <span className="text-slate-400">{curr}:</span>
-                                        <span className={`font-mono ${balance > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                                        <span className={`font-mono ${balance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                                             {new Intl.NumberFormat('en-US').format(balance)}
                                         </span>
                                     </div>
@@ -92,7 +92,7 @@ const CreateBalanceEntryModal: React.FC<CreateBalanceEntryModalProps> = ({ isOpe
                             {rentedBalance !== 0 && (
                                 <div className="flex justify-between items-center bg-black/20 p-2 rounded col-span-2">
                                     <span className="text-teal-400">IRT_BANK (کرایی):</span>
-                                    <span className={`font-mono ${rentedBalance > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                                    <span className={`font-mono ${rentedBalance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                                         {new Intl.NumberFormat('en-US').format(rentedBalance)}
                                     </span>
                                 </div>
@@ -106,7 +106,7 @@ const CreateBalanceEntryModal: React.FC<CreateBalanceEntryModalProps> = ({ isOpe
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             className="w-full text-xl px-4 py-3 bg-slate-900/50 border-2 border-slate-600/50 rounded-md text-slate-100 focus:outline-none focus:border-amber-400 h-32"
-                            placeholder="توضیحات مربوط به این بیلان..."
+                            placeholder="توضیحات مربوط به این بیلانس..."
                         />
                     </div>
 
@@ -127,7 +127,7 @@ const CreateBalanceEntryModal: React.FC<CreateBalanceEntryModalProps> = ({ isOpe
                                 boxShadow: '0 0 25px rgba(245, 158, 11, 0.5)'
                             }}
                         >
-                            {isSubmitting ? 'در حال ثبت...' : 'تایید و ثبت بیلان'}
+                            {isSubmitting ? 'در حال ثبت...' : 'تایید و ثبت بیلانس'}
                         </button>
                     </div>
                 </form>
