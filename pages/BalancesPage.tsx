@@ -88,8 +88,8 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
                 <tr>
                     <td style="border: 1px solid #ddd; padding: 5px; text-align: center;">${new Date(tx.timestamp).toLocaleDateString('fa-IR')}</td>
                     <td style="border: 1px solid #ddd; padding: 5px;">${tx.description || (isRented ? 'تراکنش حساب K' : '')}</td>
-                    <td style="border: 1px solid #ddd; padding: 5px; text-align: center; color: ${tx.type === 'credit' || tx.type === 'withdrawal' ? 'red' : 'green'}">
-                        ${(tx.type === 'credit' || tx.type === 'withdrawal') ? 'برد' : 'رسید'}
+                    <td style="border: 1px solid #ddd; padding: 5px; text-align: center; color: ${tx.type === 'debit' || tx.type === 'withdrawal' ? 'red' : 'green'}">
+                        ${(tx.type === 'debit' || tx.type === 'withdrawal') ? 'برد' : 'رسید'}
                     </td>
                     <td style="border: 1px solid #ddd; padding: 5px; text-align: left;">${tx.amount.toLocaleString()}</td>
                     <td style="border: 1px solid #ddd; padding: 5px; text-align: center;">${tx.currency || 'تومان'} ${isRented ? '(K)' : ''}</td>
@@ -255,7 +255,7 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
         if (currentPeriodTxs.length > 0) {
             shareText += `\n📥 تراکنش‌های ارزی اخیر:\n`;
             currentPeriodTxs.slice(0, 5).forEach(tx => {
-                shareText += `▫️ ${new Date(tx.timestamp).toLocaleDateString('fa-IR')} | ${tx.description.substring(0, 20)}... | ${tx.amount.toLocaleString()} ${tx.currency} (${tx.type === 'credit' ? 'برد' : 'رسید'})\n`;
+                shareText += `▫️ ${new Date(tx.timestamp).toLocaleDateString('fa-IR')} | ${tx.description.substring(0, 20)}... | ${tx.amount.toLocaleString()} ${tx.currency} (${tx.type === 'debit' ? 'برد' : 'رسید'})\n`;
             });
         }
         if (currentPeriodRentedTxs.length > 0) {
@@ -286,7 +286,7 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
                     if (periodTxs.length > 0) {
                         shareText += `\n📝 ریز تراکنش‌های ارزی این دوره:\n`;
                         periodTxs.slice(0, 3).forEach(tx => {
-                            shareText += `▪️ ${new Date(tx.timestamp).toLocaleDateString('fa-IR')} | ${tx.amount.toLocaleString()} ${tx.currency} (${tx.type === 'credit' ? 'برد' : 'رسید'})\n`;
+                            shareText += `▪️ ${new Date(tx.timestamp).toLocaleDateString('fa-IR')} | ${tx.amount.toLocaleString()} ${tx.currency} (${tx.type === 'debit' ? 'برد' : 'رسید'})\n`;
                         });
                     }
                     if (periodRentedTxs.length > 0) {
@@ -387,7 +387,7 @@ const BalanceCard: React.FC<{ customer: Customer; snapshots: BalanceSnapshot[] }
                             </div>
                         </div>
                     ) : (
-                        <div className="text-slate-500 italic text-center py-4">هیچ بیلانی ثبت نشده است.</div>
+                        <div className="text-slate-500 italic text-center py-4">هیچ بیلانس ثبت نشده است.</div>
                     )}
                 </div>
 
