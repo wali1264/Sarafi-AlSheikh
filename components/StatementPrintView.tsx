@@ -109,7 +109,7 @@ const StatementPrintView: React.FC<StatementPrintViewProps> = ({ entityId, type,
                                 <td className="p-3 border-gray-300 border text-left font-mono text-red-700">
                                     {tx.type === 'debit' ? new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.amount) : '---'}
                                 </td>
-                                <td className={`p-3 border-gray-300 border text-left font-mono font-bold whitespace-nowrap ${(tx.balanceAfter as number) >= 0 ? 'text-gray-800' : 'text-red-700'}`}>
+                                <td className={`p-3 border-gray-300 border text-left font-mono font-bold whitespace-nowrap ${(tx.balanceAfter as number) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                                     {new Intl.NumberFormat('fa-IR-u-nu-latn').format(tx.balanceAfter as number)} {tx.currency}
                                 </td>
                             </tr>
@@ -130,7 +130,7 @@ const StatementPrintView: React.FC<StatementPrintViewProps> = ({ entityId, type,
                         return (
                             <React.Fragment key={currency}>
                                 <span className="font-bold text-right">{currency}:</span>
-                                <span className={`font-bold text-xl font-mono ${(Number(balance) || 0) >= 0 ? 'text-black' : 'text-red-700'}`}>
+                                <span className={`font-bold text-xl font-mono ${(Number(balance) || 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                                     {new Intl.NumberFormat('fa-IR-u-nu-latn').format(Number(balance) || 0)}
                                 </span>
                             </React.Fragment>
