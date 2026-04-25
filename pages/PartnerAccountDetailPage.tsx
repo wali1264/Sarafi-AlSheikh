@@ -177,8 +177,8 @@ const PartnerAccountDetailPage: React.FC = () => {
     }
 
     const getBalanceStyle = (balance: number) => {
-        if (balance > 0) return 'text-red-400'; // We owe them (Sarrafi is in debt - danger)
-        if (balance < 0) return 'text-green-400'; // They owe us (Sarrafi is owed - asset)
+        if (balance > 0) return 'text-green-400'; // Positive balance / Creditor (Asset)
+        if (balance < 0) return 'text-red-400'; // Negative balance / Debtor (Liability)
         return 'text-slate-300';
     };
 

@@ -20,7 +20,7 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
     const { addToast } = useToast();
     const [formData, setFormData] = useState({
         fromAmount: '',
-        fromCurrency: (Object.keys(customer.balances).find(c => (customer.balances[c as Currency] || 0) !== 0) as Currency) || CURRENCIES[0],
+        fromCurrency: (Object.keys(customer.balances).find(c => (customer.balances[c as Currency] || 0) > 0) as Currency) || CURRENCIES[0],
         toCurrency: CURRENCIES[1] || CURRENCIES[0],
         rate: '',
     });
@@ -57,7 +57,7 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
     const resetForm = () => {
         setFormData({
             fromAmount: '',
-            fromCurrency: (Object.keys(customer.balances).find(c => (customer.balances[c as Currency] || 0) !== 0) as Currency) || CURRENCIES[0],
+            fromCurrency: (Object.keys(customer.balances).find(c => (customer.balances[c as Currency] || 0) > 0) as Currency) || CURRENCIES[0],
             toCurrency: CURRENCIES[1] || CURRENCIES[0],
             rate: '',
         });
@@ -120,7 +120,7 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
     
     // FIX: Fix for TS error on line 107. Explicitly cast value to Number to handle 'unknown' type.
     const availableFromCurrencies = Object.entries(customer.balances)
-        .filter(([, balance]) => (Number(balance) || 0) !== 0)
+        .filter(([, balance]) => (Number(balance) || 0) > 0)
         .map(([currency]) => currency as Currency);
 
     return ReactDOM.createPortal(
@@ -142,7 +142,7 @@ const InternalExchangeModal: React.FC<InternalExchangeModalProps> = ({ isOpen, o
                                     {availableFromCurrencies.length > 0 ? (
                                         availableFromCurrencies.map(c => <option key={c} value={c}>{c}</option>)
                                     ) : (
-                                        <option disabled>موجودی غیر صفر یافت نشد</option>
+                                        <option disabled>موجودی مثبت یافت نشد</option>
                                     )}
                                 </select>
                                 <span className="text-sm text-slate-400">موجودی: {new Intl.NumberFormat().format(customer.balances[formData.fromCurrency as Currency] || 0)}</span>

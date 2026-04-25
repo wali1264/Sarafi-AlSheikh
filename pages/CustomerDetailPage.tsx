@@ -155,8 +155,8 @@ const CustomerDetailPage: React.FC = () => {
     }
 
     const getBalanceStyle = (balance: number) => {
-        if (balance > 0) return 'text-red-400'; // We owe customer (Sarrafi is in debt - danger)
-        if (balance < 0) return 'text-green-400'; // Customer owes us (Sarrafi is owed - asset)
+        if (balance > 0) return 'text-green-400'; // Customer owes us / Positive balance (Asset)
+        if (balance < 0) return 'text-red-400'; // We owe customer / Negative balance (Liability)
         return 'text-slate-300';
     };
 
